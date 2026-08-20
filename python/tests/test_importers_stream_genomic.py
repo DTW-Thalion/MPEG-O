@@ -81,6 +81,20 @@ def test_blocks_cut_at_chromosome_boundaries_with_reference(tmp_path):
         assert int(rows[2]["sequences_codec"]) != int(Compression.REF_DIFF_V2)
 
 
+def test_fastq_encode_bench_tool(tmp_path):
+    from ttio.tools import fastq_encode_bench
+    fq = tmp_path / "in.fastq"
+    with open(fq, "w") as f:
+        for i in range(400):
+            f.write(f"@r{i} extra\n{'ACGT' * 25}\n+\n{'I' * 50}{'#' * 50}\n")
+    out = tmp_path / "o.tio"
+    assert fastq_encode_bench.main([str(fq), str(out), "0", "65536"]) == 0
+    with SpectralDataset.open(str(out)) as ds:
+        g = ds.genomic_runs["genomic_0001"]
+        assert genomic_run_fastq_md5(g) == fastq_md5(fq)
+    assert fastq_encode_bench.main([]) == 1
+
+
 def test_fastq_iter_batches_and_registry_stream(tmp_path):
     fq = tmp_path / "in.fastq"
     with open(fq, "w") as f:
