@@ -305,6 +305,22 @@ void testQualitiesV5(void)
             PASS(r != nil && [r[@"qualities"] isEqualToData:gqual],
                  "golden V5 stream decodes bit-exactly");
         }
+
+        NSString *p6 = v5FixturePath(@"qualities_v6_golden.bin");
+        NSString *q6 = v5FixturePath(@"qualities_v6_golden_qual.bin");
+        PASS(p6 != nil && q6 != nil, "V6 golden fixture located");
+        if (p6 && q6) {
+            NSData *blob6 = [NSData dataWithContentsOfFile:p6];
+            NSData *qual6 = [NSData dataWithContentsOfFile:q6];
+            PASS(((const uint8_t *)blob6.bytes)[4] == 6,
+                 "V6 golden carries version byte 6");
+            err = nil;
+            NSDictionary *r6 = [TTIOFqzcompNx16Z decodeData:blob6
+                                               revcompFlags:v5Fill(300, 0)
+                                                      error:&err];
+            PASS(r6 != nil && [r6[@"qualities"] isEqualToData:qual6],
+                 "golden V6 stream decodes bit-exactly");
+        }
     }
 
     // ── File level: writer gate + reader ordering ──────────────────

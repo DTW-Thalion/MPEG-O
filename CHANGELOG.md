@@ -11,6 +11,26 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added
+- **M94.Z V6, a segmented qualities variant.** V4 and V5 code a block
+  as one adaptive chain, so a 64 MiB block cannot be split across
+  compute units, and the qualities codec is about 73% of encode CPU.
+  V6 splits a block into independent segments at read boundaries, each
+  with its own model and coder, so one block spreads across cores now
+  and across GPU lanes in a later phase. It is reached only by strategy
+  hint 8 (`HINT_V6` in Python and Java, `TTIOM94ZHintV6` in
+  Objective-C); auto-tune never selects it and V5 remains the CPU
+  default, so nothing already written changes. Output bytes are
+  identical for any thread count, and a cross-SDK golden fixture pins
+  them across Python, Java and Objective-C. V6 decodes without the
+  sequences channel.
+
+  It trades ratio for that parallelism: measured against V4 at the
+  default 256 Ki segment, +5.98% on NovaSeq WGS, +7.62% on HiFi,
+  +7.91% on low-coverage chr22 and +8.49% on 2x250 chr22. The cost is
+  per-segment model warm-up and falls as segments grow. Full table and
+  method in `docs/codecs/m94z_v6.md`.
+
 ### Fixed
 - **Exports stream their output.** The FASTQ and FASTA exporters in all
   three SDKs built the whole output in memory before one write, so

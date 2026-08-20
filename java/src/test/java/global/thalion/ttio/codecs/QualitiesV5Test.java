@@ -256,4 +256,14 @@ class QualitiesV5Test {
         FqzcompNx16Z.DecodeResult dr = FqzcompNx16Z.decode(v6, flags);
         assertArrayEquals(c[0], dr.qualities());
     }
+
+    @Test
+    void v6GoldenFixtureDecodes() throws Exception {
+        byte[] blob = res("/ttio/fixtures/qualities_v6_golden.bin");
+        byte[] expected = res("/ttio/fixtures/qualities_v6_golden_qual.bin");
+        assertEquals(6, blob[4]);
+        FqzcompNx16Z.DecodeResult dr =
+            FqzcompNx16Z.decode(blob, new int[300]);
+        assertArrayEquals(expected, dr.qualities());
+    }
 }

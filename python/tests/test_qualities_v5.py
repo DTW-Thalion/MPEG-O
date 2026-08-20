@@ -110,6 +110,14 @@ class TestGolden:
         assert bytes(back) == expected
         assert lens == [100] * 300
 
+    def test_v6_golden_decodes(self):
+        blob = (FIXDIR / "qualities_v6_golden.bin").read_bytes()
+        expected = (FIXDIR / "qualities_v6_golden_qual.bin").read_bytes()
+        assert blob[4] == 6
+        back, lens, _rc = fz.decode_with_metadata(blob, [0] * 300)
+        assert bytes(back) == expected
+        assert lens == [100] * 300
+
 
 def _written_run(*, n_reads: int, length: int = 100, disable: bool = False):
     from ttio.enums import Compression
