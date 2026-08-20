@@ -187,6 +187,13 @@ target_link_libraries(test_fqzcomp_seqctx ttio_rans)
 target_compile_options(test_fqzcomp_seqctx PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME fqzcomp_seqctx COMMAND test_fqzcomp_seqctx)
 
+add_subdirectory(gpu)
+
+add_executable(test_gpu_engine_probe tests/test_gpu_engine_probe.c)
+target_link_libraries(test_gpu_engine_probe PRIVATE ttio_rans Threads::Threads)
+target_compile_options(test_gpu_engine_probe PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME gpu_engine_probe COMMAND test_gpu_engine_probe)
+
 add_executable(test_engine_selection tests/test_engine_selection.c)
 target_link_libraries(test_engine_selection PRIVATE ttio_rans Threads::Threads)
 target_compile_options(test_engine_selection PRIVATE -Wall -Wextra -Wpedantic)
