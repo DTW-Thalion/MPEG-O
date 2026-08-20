@@ -446,3 +446,41 @@ engine by under a third while moving the CPU by a factor of three. What
 remains is memory traffic per chain: a smaller resident model, or a
 device with several times this one's bandwidth. Nothing else measured so
 far changes the picture.
+
+## What the CPU actually does, and the reference number
+
+Sweeping threads-per-block against blocks-in-flight, best of three,
+same tool and same data:
+
+| threads per block | 1 writer | 2 | 4 | 8 |
+| --- | --- | --- | --- | --- |
+| 4 | 283 MB/s | 522 | 849 | 1240 |
+| 8 | 262 MB/s | 511 | 870 | 1247 |
+| 24 | 262 MB/s | 377 | 651 | 948 |
+
+Best measured per corpus:
+
+| Corpus | Best CPU | Configuration | Blocks available |
+| --- | --- | --- | --- |
+| NovaSeq WGS | 1256 MB/s | 2 threads, 9 writers | 9 |
+| HiFi | 616 MB/s | 4 threads, 4 writers | 5 |
+| lowcov chr22 | 488 MB/s | 2 threads, 3 writers | 3 |
+
+Two things to read from the table. Concurrency across blocks beats
+threads within a block, and 24 threads per block is worse than 4:
+that is oversubscription on a 32-thread machine, not a codec limit.
+HiFi and lowcov peak lower only because the samples hold 5 and 3
+blocks, so they run out of block-level concurrency before they run out
+of cores.
+
+**1256 MB/s is the CPU reference for V6 encode on this machine.** It is
+a pure encode loop over in-memory data, with no parse, no I/O and no
+writer, so it bounds the codec rather than describing a pipeline; the
+318 MB/s machine-wide figure quoted elsewhere includes all of that.
+
+Against it the engine's best is 225 MB/s, or 0.18x. Every time the CPU
+has been given a fairer comparison it has pulled further ahead, because
+segmentation is precisely what a many-core CPU exploits for free while
+the GPU saturates on model memory traffic at about 512 chains. Closing
+that would take roughly a fivefold improvement, and nothing measured
+here offers one.
