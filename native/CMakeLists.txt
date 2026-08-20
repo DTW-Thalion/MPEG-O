@@ -418,6 +418,10 @@ if(NOT TTIO_COVERAGE)
     target_link_libraries(bench_throughput PRIVATE ttio_rans)
     target_compile_options(bench_throughput PRIVATE -O3)
 
+    add_executable(v6_fixture_dump tools/v6_fixture_dump.c)
+    target_link_libraries(v6_fixture_dump PRIVATE ttio_rans)
+    target_compile_options(v6_fixture_dump PRIVATE -O2)
+
     add_executable(bench_v6_ratio bench/bench_v6_ratio.c)
     target_link_libraries(bench_v6_ratio PRIVATE ttio_rans Threads::Threads)
     target_compile_options(bench_v6_ratio PRIVATE -O3)
