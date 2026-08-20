@@ -1,0 +1,199 @@
+#version 450
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+#extension GL_EXT_shader_8bit_storage : require
+
+/* Phase 2 spike: the real V6 segment encoder on the GPU.
+ *
+ * This is a line-by-line port of native/src/sm_model.h (sm_encode,
+ * sm_normalize) and native/src/rc_cram.c (rc_cram_encode, shift_low,
+ * rc_cram_encoder_finish). Everything is 32-bit integer arithmetic with
+ * wraparound, which GLSL matches exactly, so the output is expected to
+ * be byte-identical to the CPU coder rather than merely equivalent.
+ *
+ * One chain per invocation. A model entry is packed into a uint as
+ * (symbol << 16) | freq, which is the same 4 bytes sm_symfreq occupies.
+ */
+
+layout(local_size_x_id = 0) in;
+
+layout(std430, binding = 0) readonly  buffer Q      { uint8_t qidx[]; };
+layout(std430, binding = 1) readonly  buffer L      { uint     lens[]; };
+layout(std430, binding = 2) readonly  buffer Ch     { uint     chain[]; };
+layout(std430, binding = 3)           buffer M      { uint     model[]; };
+layout(std430, binding = 4)           buffer TF     { uint     totf[]; };
+layout(std430, binding = 5)           buffer O      { uint8_t  obuf[]; };
+layout(std430, binding = 6)           buffer OL     { uint     olen[]; };
+layout(std430, binding = 7) readonly  buffer T      { uint     tmpl[]; };
+
+layout(push_constant) uniform P {
+    uint n_ctx;
+    uint nsym;
+    uint stride;      /* nsym + 2 */
+    uint seed_total;
+    uint qbits;
+    uint qshift;
+    uint pbits;
+    uint pshift;
+    uint dbits;
+    uint out_stride;
+    uint n_chains;
+} pc;
+
+const uint SM_MAX_FREQ = (1u << 16) - 17u;
+const uint SM_STEP     = 16u;
+const uint TOP         = 1u << 24;
+const uint THRES       = 255u * (1u << 24);
+
+uint e_low, e_range, e_carry, e_ffnum, e_cache, e_pos, e_err;
+uint obase, ocap;
+uint mbase, tbase;
+
+void emit(uint b)
+{
+    if (e_pos < ocap) {
+        obuf[obase + e_pos] = uint8_t(b & 0xFFu);
+        e_pos++;
+    } else {
+        e_err = 1u;
+    }
+}
+
+/* rc_cram.c shift_low */
+void shift_low()
+{
+    if (e_low < THRES || e_carry != 0u) {
+        emit(e_cache + e_carry);
+        while (e_ffnum != 0u) {
+            emit(e_carry - 1u);
+            e_ffnum--;
+        }
+        e_cache = e_low >> 24;
+        e_carry = 0u;
+    } else {
+        e_ffnum++;
+    }
+    e_low = e_low << 8;
+}
+
+/* rc_cram.c rc_cram_encode */
+void rc_encode(uint cf, uint f, uint T)
+{
+    uint tmp = e_low;
+    e_range = e_range / T;
+    e_low   = e_low + cf * e_range;
+    e_range = e_range * f;
+    e_carry = e_carry + (e_low < tmp ? 1u : 0u);
+    while (e_range < TOP) {
+        e_range = e_range << 8;
+        shift_low();
+    }
+}
+
+/* sm_model.h sm_encode, with sm_normalize inlined */
+void sm_encode(uint ctx, uint sym)
+{
+    uint base = mbase + ctx * pc.stride;
+    uint i    = 1u;
+    uint acc  = 0u;
+    uint ent  = model[base + i];
+    while ((ent >> 16) != sym) {
+        acc += (ent & 0xFFFFu);
+        i++;
+        ent = model[base + i];
+    }
+
+    uint tf = totf[tbase + ctx];
+    rc_encode(acc, ent & 0xFFFFu, tf);
+
+    model[base + i] = (ent & 0xFFFF0000u) + ((ent & 0xFFFFu) + SM_STEP);
+    tf += SM_STEP;
+
+    if (tf > SM_MAX_FREQ) {
+        tf = 0u;
+        uint j  = 1u;
+        uint e2 = model[base + j];
+        while ((e2 & 0xFFFFu) != 0u) {
+            uint fr = e2 & 0xFFFFu;
+            fr = fr - (fr >> 1);
+            model[base + j] = (e2 & 0xFFFF0000u) | fr;
+            tf += fr;
+            j++;
+            e2 = model[base + j];
+        }
+    }
+    totf[tbase + ctx] = tf;
+
+    uint cur  = model[base + i];
+    uint prev = model[base + i - 1u];
+    if ((cur & 0xFFFFu) > (prev & 0xFFFFu)) {
+        model[base + i]      = prev;
+        model[base + i - 1u] = cur;
+    }
+}
+
+void main()
+{
+    uint c = gl_GlobalInvocationID.x;
+    if (c >= pc.n_chains) return;
+
+    uint first  = chain[c * 4u + 0u];
+    uint nreads = chain[c * 4u + 1u];
+    uint qoff   = chain[c * 4u + 2u];
+
+    mbase = c * pc.n_ctx * pc.stride;
+    tbase = c * pc.n_ctx;
+    obase = c * pc.out_stride;
+    ocap  = pc.out_stride;
+
+    /* Cold model per segment, seeded from the block histogram. The
+     * template is built host-side so the ordering cannot drift. */
+    for (uint ctx = 0u; ctx < pc.n_ctx; ctx++) {
+        uint base = mbase + ctx * pc.stride;
+        for (uint j = 0u; j < pc.stride; j++) {
+            model[base + j] = tmpl[j];
+        }
+        totf[tbase + ctx] = pc.seed_total;
+    }
+
+    e_low   = 0u;
+    e_range = 0xFFFFFFFFu;
+    e_carry = 0u;
+    e_ffnum = 0u;
+    e_cache = 0u;
+    e_pos   = 0u;
+    e_err   = 0u;
+
+    uint qmask = (1u << pc.qbits) - 1u;
+    uint pmax  = (1u << pc.pbits) - 1u;
+    uint dmax  = (1u << pc.dbits) - 1u;
+    uint ploc  = pc.qbits;
+    uint dloc  = pc.qbits + pc.pbits;
+
+    uint k = qoff;
+    for (uint r = 0u; r < nreads; r++) {
+        uint len  = lens[first + r];
+        uint qctx = 0u, qp = 0u, qpp = 0u;
+        for (uint i = 0u; i < len; i++, k++) {
+            uint pos = (len - 1u - i) >> pc.pshift;
+            pos = min(pmax, pos);
+            uint d = 0u;
+            if (i >= 2u) {
+                uint ad = qp > qpp ? qp - qpp : qpp - qp;
+                d = min(dmax, ad);
+            }
+            uint ctx = (qctx & qmask) | (pos << ploc) | (d << dloc);
+            uint sym = uint(qidx[k]);
+            sm_encode(ctx, sym);
+            qctx = (qctx << pc.qshift) + sym;
+            qpp = qp;
+            qp  = sym;
+        }
+    }
+
+    /* rc_cram_encoder_finish */
+    for (uint i = 0u; i < 5u; i++) {
+        shift_low();
+    }
+
+    olen[c] = e_err != 0u ? 0xFFFFFFFFu : e_pos;
+}

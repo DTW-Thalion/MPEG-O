@@ -100,3 +100,90 @@ There is enough headroom to absorb a real range coder.
   the output buffer, and the harness fails if a row produces nothing.
 - Nothing here measures compressed output, so nothing here bears on the
   ratio gate.
+
+
+## Phase 2 spike: the real coder on the GPU
+
+Phase 0 measured a skeleton with no entropy coding and projected
+7.1 GB/s. This spike runs the actual V6 segment encoder: a line-by-line
+GLSL port of `sm_encode` and `rc_cram_encode`, one chain per invocation,
+checked against the shipped CPU coder byte for byte.
+`tools/perf/gpu_spike/v6_ref_dump.c` dumps a fixture from the real
+library (parameters, alphabet, seeds, read lengths, and the CPU's output
+per segment); `v6_spike.c` runs the kernel and diffs the result.
+
+### Byte-identity holds
+
+Every configuration run produced output byte-identical to the CPU
+coder: 8 to 4068 chains, segments of 16 Ki, 64 Ki and 256 Ki symbols,
+and alphabets of 6 and 49 symbols. Zero length mismatches, zero byte
+mismatches, across roughly twelve thousand chains in total. It worked on
+the first run of the ported kernel.
+
+That was the design's riskiest fixed decision, and it is now evidence
+rather than assumption. It holds because the coder is entirely 32-bit
+integer arithmetic with wraparound, which GLSL reproduces exactly; there
+is no floating point anywhere in the model or the range coder.
+
+### Throughput is conditional, and Phase 0 was optimistic
+
+Measured on the RTX 4000 Ada, 64 Mi symbols per run, best of three.
+The CPU reference is 318 MB/s machine-wide on the 50 GB corpus.
+
+| Corpus | Alphabet | Segment | Chains | Encode |
+| --- | --- | --- | --- | --- |
+| lowcov | 49 | 256 Ki | 256 | 58.5 MB/s |
+| lowcov | 49 | 64 Ki | 256 | 50.3 MB/s |
+| lowcov | 49 | 64 Ki | 512 | 81.2 MB/s |
+| lowcov | 49 | 64 Ki | 1024 | 140.3 MB/s |
+| NovaSeq | 6 | 64 Ki | 256 | 242.9 MB/s |
+| NovaSeq | 6 | 64 Ki | 1024 | 700.2 MB/s |
+| NovaSeq | 6 | 16 Ki | 2048 | 484.2 MB/s |
+| NovaSeq | 6 | 16 Ki | 4068 | 562.8 MB/s |
+
+The best measured configuration is 2.2x the CPU. The worst is 0.44x,
+slower than the CPU it is meant to relieve. Phase 0's 7.1 GB/s
+projection is 10x optimistic against the best row and 50x against the
+worst, so it should not be quoted again.
+
+Three effects explain the spread:
+
+- **Alphabet size dominates.** `sm_encode` finds a symbol by walking the
+  frequency array from the front, so it costs on average half the
+  alphabet in dependent loads per coded symbol, and the walk length
+  varies per lane so a warp waits for its slowest member. Going from 49
+  symbols to 6 is worth 5x at equal chain count and segment size. This
+  is the single biggest lever and it is a property of the model, not of
+  the range coder.
+- **Model initialisation is a fixed cost per segment.** Every segment
+  writes 2^C entries before coding anything, independent of how long the
+  segment is, so short segments amortise it badly: at 16 Ki symbols the
+  4068-chain run is slower than the 1024-chain run at 64 Ki. Segment
+  size therefore has an optimum rather than being monotonic in either
+  direction.
+- **Model memory caps concurrency.** At C = 14 and a 49-symbol alphabet
+  a chain needs 3.34 MB, so this 12 GB card runs out at roughly 1500
+  chains. At 6 symbols it is 524 KB and 4068 chains fit in 2 GB.
+
+### Other constraints found
+
+- A display-attached GPU applies the Windows TDR watchdog: the
+  2048-chain lowcov run was killed with `VK_ERROR_DEVICE_LOST` after
+  about two seconds. Phase 2 must either bound per-dispatch work or run
+  on a GPU with no display attached.
+- Host-visible buffers were used throughout here, so these numbers
+  include no separate upload step. Phase 0 measured host-to-device at
+  12.27 GB/s, which is not the constraint at these rates.
+
+### What this means for Phase 2
+
+The engine is worth building only if the symbol search changes. A model
+that costs O(1) or O(log A) per symbol instead of O(A) would lift the
+large-alphabet corpora, which are exactly the ones the current design
+loses on. That is a change to the coder itself, so the CPU and GPU
+implementations have to change together and the wire changes with them
+-- which is affordable precisely because V6 is new and unshipped, and
+would stop being affordable once anything ships on it.
+
+Failing that, the honest scope for a GPU engine is small-alphabet
+corpora only, at a bit over 2x, which does not justify a Vulkan backend.
