@@ -47,6 +47,7 @@ add_library(ttio_rans SHARED
     src/rc_cram.c
     src/fqzcomp_qual.c
     src/fqzcomp_seqctx.c
+    src/m94z_v6.c
     src/m94z_qual.c
     src/m94z_v4_wire.c
     src/mate_info_v2.c
@@ -184,6 +185,11 @@ add_executable(test_fqzcomp_seqctx tests/test_fqzcomp_seqctx.c)
 target_link_libraries(test_fqzcomp_seqctx ttio_rans)
 target_compile_options(test_fqzcomp_seqctx PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME fqzcomp_seqctx COMMAND test_fqzcomp_seqctx)
+
+add_executable(test_m94z_v6_chain tests/test_m94z_v6_chain.c)
+target_link_libraries(test_m94z_v6_chain ttio_rans)
+target_compile_options(test_m94z_v6_chain PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME m94z_v6_chain COMMAND test_m94z_v6_chain)
 
 add_executable(test_m94z_qual_umbrella tests/test_m94z_qual_umbrella.c)
 target_link_libraries(test_m94z_qual_umbrella ttio_rans)
