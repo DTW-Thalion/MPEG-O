@@ -31,6 +31,19 @@ public API is stable from onward.
   per-segment model warm-up and falls as segments grow. Full table and
   method in `docs/codecs/m94z_v6.md`.
 
+- **A GPU engine for V6 qualities encode, off by default.** V6 blocks
+  can encode on a Vulkan compute device, one segment chain per GPU
+  invocation, producing bytes identical to the CPU coder; a CI gate
+  compares the two on every change rather than taking it on trust. It
+  is reached only by setting `TTIO_GPU=force`: a GPU being present is
+  not evidence that using it helps, and on this development machine it
+  is slower than the CPU path on three of four corpora. Blocks spill to
+  the CPU whenever a slot is unavailable, the device is lost, or the
+  engine declines, so enabling it cannot produce a wrong or failed
+  encode. Enabling it does mean the writer emits V6, which is 6 to 7%
+  larger than V4, and that cost is permanent per file rather than per
+  machine. `engine_name()` reports the active engine in all three SDKs.
+
 ### Fixed
 - **Exports stream their output.** The FASTQ and FASTA exporters in all
   three SDKs built the whole output in memory before one write, so

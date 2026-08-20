@@ -263,3 +263,34 @@ the resident model per chain helps both. Worth trying before committing
 to an engine: sharing one model across several segments of the same
 block, which would break segment independence and needs a design
 decision rather than a spike.
+
+## Phase 2: the engine as built
+
+The engine is implemented and byte-identical on both a software
+rasteriser and real hardware. Measured with the shipped defaults
+(Q 6, qshift 7, P 4, pshift 4, D 1, seed 256, C = 11), 64 Mi symbols
+per run, one chain per invocation, 32 per workgroup.
+
+| Corpus | Alphabet | Chains | GPU encode | CPU encode, 24 threads |
+| --- | --- | --- | --- | --- |
+| lowcov chr22 | 49 | 256 | 90.1 MB/s | 623 MB/s |
+| lowcov chr22 | 49 | 1024 | 228.6 MB/s | 623 MB/s |
+| NovaSeq WGS | 6 | 256 | 199.2 MB/s | 522 MB/s |
+| NovaSeq WGS | 6 | 1024 | 691.6 MB/s | 522 MB/s |
+
+Every row was byte-identical to the CPU coder: zero length mismatches,
+zero byte mismatches, on the RTX 4000 Ada and on lavapipe.
+
+The verdict has not moved. On this machine the engine wins on NovaSeq
+and loses by a factor of nearly three on low-coverage chr22, which is
+the corpus shape that matters most. Under block-level spill it adds
+capacity rather than replacing it, so it is not a regression to enable,
+but it does not earn a Vulkan backend on this hardware alone.
+
+What has changed is that the question is now cheap to answer elsewhere.
+The engine is behind a knob that defaults to off, the byte-identity
+contract is enforced by a CI gate rather than asserted, and running the
+acceptance on a server GPU is a configuration change rather than a
+project. Memory bandwidth is the variable to watch: the kernel is
+model-memory-bound, this part has about 256 GB/s, and an L40S has
+roughly 3.4x that.
