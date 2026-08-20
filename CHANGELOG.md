@@ -22,6 +22,25 @@ public API is stable from onward.
   most 4 blocks, which a serial consumer cannot outrun anyway.
 
 ### Changed
+- **Qualities strategy is decided once per run.** The M94.Z auto-tune
+  encoded every block three times (V4, V5-S5, V5-S6; smallest wins).
+  The streaming writers now tune block 0 only, read the winner from
+  the encoded stream and pin it for the rest of the run; later blocks
+  encode once. The pin is taken from block 0 by index (a block that
+  arrives at the encoder before the verdict waits for it), so repeated
+  runs and all three SDKs stay byte-identical for identical input.
+   (Java also )
+  restores the every-block tune. Wire format and decoders unchanged;
+  on a corpus whose winner drifts mid-run the pinned stream is still
+  valid, merely up to about a percent larger on the affected blocks.
+  New kernel entry points: strategy hint 7 (V4 with its internal
+  preset selection) and  (the wire
+  sniffer), exposed in all three SDKs.
+- **In-flight block estimate halved.** The writers budgeted raw*4
+  bytes per in-flight block; the marginal resident cost measured on
+  64 MiB HiFi blocks is near raw*1.5, so the old estimate halved the
+  encode concurrency the memory budget admits. Now raw*2. The 50 GB
+  HiFi import: 5m 40s -> 5m 11s (153 MB/s) at a 20.1 GB peak.
 - **The Python import producer parallelises.** The third phase of
   the parallel producer: shard ranges for plain FASTQ, sliced records
   for gzip, numpy-vectorised boundary scanning and slice parsing

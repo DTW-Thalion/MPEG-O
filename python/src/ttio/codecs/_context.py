@@ -27,6 +27,9 @@ class CodecContext:
     # carries a base-parallel sequences channel and V5 is not opted out.
     sequences_provider: "Callable[[], bytes] | None" = None
     sequences: "bytes | None" = None
+    # fqzcomp encode strategy: -1 auto, 0..4 V4 preset, 5/6 forced V5,
+    # 7 V4 with internal preset selection (fqzcomp_nx16_z.HINT_V4_AUTO).
+    qual_strategy_hint: int = -1
     element_size: "int | None" = None                # delta_rans encode
     read_count: "int | None" = None                  # == index.count
     positions: "np.ndarray | None" = None            # ref_diff

@@ -252,6 +252,53 @@ def test_threaded_writer_is_byte_identical_to_serial(tmp_path):
         assert g[59_999].sequence == run.sequences.tobytes()[59_999 * 100:].decode()
 
 
+def _sticky_bytes(tmp_path, run, sub, threads=6):
+    d = tmp_path / sub
+    d.mkdir()
+    return _run_bytes(_write_with_threads(d, run, threads))
+
+
+def test_sticky_pin_matches_exhaustive(tmp_path, monkeypatch):
+    from ttio.codecs import ref_diff_v2 as rdv2
+    if not rdv2.HAVE_NATIVE_LIB:
+        pytest.skip("native lib")
+    run = _big_synthetic_run(n=40_000)
+    a = _sticky_bytes(tmp_path, run, "sticky")
+    monkeypatch.setenv("TTIO_M94Z_EXHAUSTIVE", "1")
+    b = _sticky_bytes(tmp_path, run, "exhaustive")
+    assert a.keys() == b.keys()
+    for k in a:
+        assert a[k] == b[k], f"{k} differs between sticky and exhaustive"
+
+
+def test_sticky_deterministic_across_runs(tmp_path):
+    from ttio.codecs import ref_diff_v2 as rdv2
+    if not rdv2.HAVE_NATIVE_LIB:
+        pytest.skip("native lib")
+    run = _big_synthetic_run(n=40_000)
+    assert _sticky_bytes(tmp_path, run, "r1") == \
+        _sticky_bytes(tmp_path, run, "r2")
+
+
+def test_pin_is_set_after_first_block(tmp_path):
+    from ttio.codecs import ref_diff_v2 as rdv2
+    if not rdv2.HAVE_NATIVE_LIB:
+        pytest.skip("native lib")
+    run = _big_synthetic_run(n=40_000)
+    out = tmp_path / "pin.tio"
+    SpectralDataset.write_minimal(out, title="t", isa_investigation_id="i", runs={})
+    ds = SpectralDataset.open(out, writable=True)
+    with GenomicStreamWriter(ds.study_group, "g", acquisition_mode=7,
+                             reference_uri="synthetic", platform="ILLUMINA",
+                             sample_name="s",
+                             reference_chrom_seqs=run.reference_chrom_seqs,
+                             embed_reference=True, block_reads=20_000,
+                             threads=2) as w:
+        w.append_batch(run)
+    ds.close()
+    assert w._qual_hint != -1
+
+
 def _mini(chroms, mates):
     return make_written_genomic_run(len(chroms), 8, chromosomes=chroms, mate_chromosomes=mates)
 

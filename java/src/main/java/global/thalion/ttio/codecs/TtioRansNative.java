@@ -95,6 +95,10 @@ public final class TtioRansNative {
     public static native void setAutotuneThreads(int n);
     public static native int getAutotuneThreads();
 
+    /** Strategy of an encoded M94.Z stream: 4 = V4, 5/6 = V5 S5/S6;
+     *  negative on a stream that is not M94.Z qualities. */
+    public static native int qualStreamStrategy(byte[] stream);
+
     /**
      * Per-symbol context resolver used by {@link #decodeBlockStreaming}.
      *

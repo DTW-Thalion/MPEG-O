@@ -564,6 +564,52 @@ static void gswBudgetBounded(void)
     PASS(same, "pp: budget-stalled file identical to serial (%lu objects)", (unsigned long)ma.count);
 }
 
+static void gswStickyMatchesExhaustive(void)
+{
+    TTIOWrittenGenomicRun *run = gswBigSyntheticRun(40000, 21);
+    id<TTIOStorageGroup> a = gswWriteThreads([NSString stringWithFormat:@"memory://gsw-st-a-%d", (int)getpid()], run, 6, 20000);
+    setenv("TTIO_M94Z_EXHAUSTIVE", "1", 1);
+    id<TTIOStorageGroup> b = gswWriteThreads([NSString stringWithFormat:@"memory://gsw-st-b-%d", (int)getpid()], run, 6, 20000);
+    unsetenv("TTIO_M94Z_EXHAUSTIVE");
+    if (!a || !b) return;
+    NSMutableDictionary *ma = [NSMutableDictionary dictionary], *mb = [NSMutableDictionary dictionary];
+    gswCollect(a, @"", ma);
+    gswCollect(b, @"", mb);
+    PASS([ma isEqualToDictionary:mb],
+         "sticky: pinned file identical to exhaustive (%lu objects)",
+         (unsigned long)ma.count);
+}
+
+static void gswStickyDeterministic(void)
+{
+    TTIOWrittenGenomicRun *run = gswBigSyntheticRun(40000, 22);
+    id<TTIOStorageGroup> a = gswWriteThreads([NSString stringWithFormat:@"memory://gsw-sd-a-%d", (int)getpid()], run, 6, 20000);
+    id<TTIOStorageGroup> b = gswWriteThreads([NSString stringWithFormat:@"memory://gsw-sd-b-%d", (int)getpid()], run, 6, 20000);
+    if (!a || !b) return;
+    NSMutableDictionary *ma = [NSMutableDictionary dictionary], *mb = [NSMutableDictionary dictionary];
+    gswCollect(a, @"", ma);
+    gswCollect(b, @"", mb);
+    PASS([ma isEqualToDictionary:mb],
+         "sticky: repeated runs identical (%lu objects)",
+         (unsigned long)ma.count);
+}
+
+static void gswStickyPinSet(void)
+{
+    TTIOWrittenGenomicRun *run = gswBigSyntheticRun(40000, 23);
+    id<TTIOStorageGroup> study = gswStudy([NSString stringWithFormat:@"memory://gsw-sp-%d", (int)getpid()]);
+    NSError *err = nil;
+    TTIOGenomicStreamWriterOptions *o = [TTIOGenomicStreamWriterOptions optionsFromRun:run];
+    o.blockReads = 20000;
+    o.threads = 2;
+    TTIOGenomicStreamWriter *w = [[TTIOGenomicStreamWriter alloc]
+        initWithStudyGroup:study runName:@"g" options:o];
+    BOOL ok = [w appendBatch:run error:&err] && [w close:&err];
+    PASS(ok && w.qualStrategyHint != -1,
+         "sticky: pin set after the first block (hint %ld)",
+         (long)w.qualStrategyHint);
+}
+
 void testGenomicStreamWriterThreads(void);
 void testGenomicStreamWriterThreads(void)
 {
@@ -571,4 +617,7 @@ void testGenomicStreamWriterThreads(void)
     gswThreadedIdentical();
     gswIterReadsThreaded();
     gswBudgetBounded();
+    gswStickyMatchesExhaustive();
+    gswStickyDeterministic();
+    gswStickyPinSet();
 }

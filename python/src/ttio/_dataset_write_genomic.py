@@ -324,12 +324,18 @@ def _write_sequences_ref_diff_v2(sc, run: WrittenGenomicRun) -> None:
 SAM_REVERSE_FLAG = 16
 
 
-def _write_qualities_fqzcomp_nx16_z(sc, run: WrittenGenomicRun) -> None:
+def _write_qualities_fqzcomp_nx16_z(sc, run: WrittenGenomicRun,
+                                    qual_strategy_hint: int = -1) -> None:
     """Write the ``qualities`` channel through the FQZCOMP_NX16_Z codec.
 
     M94.Z is the CRAM-mimic rANS-Nx16 variant — parallel to v1, same
     sibling-channel inputs (read_lengths + revcomp_flags) but a different
     on-wire format (magic ``M94Z`` instead of ``FQZN``). Codec id 12.
+
+    ``qual_strategy_hint``: -1 auto (default, today's 3-way tune), 5/6
+    forced V5, 7 V4 with internal preset selection — the streaming
+    writers pass their per-run pin here; -1 keeps every existing call
+    site byte-identical.
     """
     from .codecs._registry import CODEC_REGISTRY
     from .codecs._context import CodecContext, DecodedChannel
@@ -360,6 +366,7 @@ def _write_qualities_fqzcomp_nx16_z(sc, run: WrittenGenomicRun) -> None:
             read_lengths=np.asarray(read_lengths),
             revcomp_flags=np.asarray(revcomp_flags),
             sequences=v5_sequences,
+            qual_strategy_hint=qual_strategy_hint,
         ),
     ).dataset_bytes
 
@@ -378,7 +385,8 @@ def _write_qualities_fqzcomp_nx16_z(sc, run: WrittenGenomicRun) -> None:
     )
 
 
-def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
+def _write_genomic_run(parent, name: str, run: WrittenGenomicRun,
+                       qual_strategy_hint: int = -1) -> None:
     """Write one /study/genomic_runs/<name>/ subtree.
 
     Mirrors :func:`_write_run` but for the genomic data model. Uses the
@@ -672,7 +680,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         and _is_valid_compression(_qual_codec)
         and _Compression(_qual_codec) == _Compression.FQZCOMP_NX16_Z
     ):
-        _write_qualities_fqzcomp_nx16_z(sc, run)
+        _write_qualities_fqzcomp_nx16_z(sc, run, qual_strategy_hint)
     else:
         io._write_byte_channel_with_codec(
             sc, "qualities", run.qualities, run.signal_compression,

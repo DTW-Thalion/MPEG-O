@@ -477,6 +477,23 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
                                    error:error];
 }
 
++ (nullable NSData *)encodeWithQualities:(NSData *)qualities
+                              readLengths:(NSArray<NSNumber *> *)readLengths
+                             revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                                sequences:(nullable NSData *)sequences
+                             strategyHint:(NSInteger)strategyHint
+                                    error:(NSError * _Nullable *)error
+{
+    uint8_t padCount = (uint8_t)((-(NSInteger)qualities.length) & 0x3);
+    return [self encodeQualWithQualities:qualities
+                             readLengths:readLengths
+                            revcompFlags:revcompFlags
+                               sequences:sequences
+                            strategyHint:strategyHint
+                                padCount:padCount
+                                   error:error];
+}
+
 + (nullable NSDictionary *)decodeV4Data:(NSData *)data
                              revcompFlags:(nullable NSArray<NSNumber *> *)revcompFlags
                                     error:(NSError * _Nullable *)error
@@ -598,6 +615,28 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
 // Mirrors Python's get_backend_name() and Java's FqzcompNx16Z.getBackendName().
 // Returns "native-<kernel>" when libttio_rans is linked (the only build
 // in which encode/decode work), else "pure-objc" (encode/decode error).
+
++ (NSInteger)strategyOfEncodedStream:(NSData *)stream
+{
+#if TTIO_HAS_NATIVE_RANS
+    return (NSInteger)ttio_m94z_qual_stream_strategy(
+        (const uint8_t *)stream.bytes, (size_t)stream.length);
+#else
+    /* Wire-layout mirror of ttio_m94z_qual_stream_strategy
+     * (m94z_v4_wire.c) for builds without libttio_rans. */
+    const uint8_t *in = (const uint8_t *)stream.bytes;
+    size_t in_len = (size_t)stream.length;
+    if (in == NULL || in_len < 30) return -1;
+    if (memcmp(in, "M94Z", 4) != 0) return -2;
+    if (in[4] == 4) return 4;
+    if (in[4] != 5) return -2;
+    uint32_t rlt_len;
+    memcpy(&rlt_len, in + 22, 4);
+    if (in_len < (size_t)30 + rlt_len + 2) return -3;
+    uint8_t sid = in[30 + (size_t)rlt_len + 1];
+    return (sid == 5 || sid == 6) ? (NSInteger)sid : -3;
+#endif
+}
 
 + (NSString *)backendName
 {

@@ -96,6 +96,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 extern NSString * const TTIOFqzcompNx16ZErrorDomain;
 
+/** Strategy hint: V4 with its internal preset selection, sequences
+ *  ignored (kernel TTIO_M94Z_HINT_V4_AUTO). -1 auto, 0..4 V4 preset,
+ *  5..6 forced V5. */
+#define TTIOM94ZHintV4Auto 7
+
 @interface TTIOFqzcompNx16Z : NSObject
 
 /**
@@ -242,6 +247,18 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
                                     error:(NSError * _Nullable *)error;
 
 /**
+ * Sequences-aware encode with an explicit strategy: -1 auto, 0..4 V4
+ * preset, 5..6 forced sequence strategy, TTIOM94ZHintV4Auto V4 with
+ * internal preset selection.
+ */
++ (nullable NSData *)encodeWithQualities:(NSData *)qualities
+                              readLengths:(NSArray<NSNumber *> *)readLengths
+                             revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                                sequences:(nullable NSData *)sequences
+                             strategyHint:(NSInteger)strategyHint
+                                    error:(NSError * _Nullable *)error;
+
+/**
  * Designated encode core: V4 presets plus S5/S6 when sequences is
  * non-nil, exact-size pick, forced sequence strategy via
  * strategyHint 5 or 6.
@@ -274,6 +291,13 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
                              revcompFlags:(nullable NSArray<NSNumber *> *)revcompFlags
                                 sequences:(NSData *)sequences
                                     error:(NSError * _Nullable *)error;
+
+/**
+ * Strategy of an encoded M94.Z stream: 4 = V4, 5/6 = V5 S5/S6.
+ * Negative on a stream that is not M94.Z qualities (-1 args, -2
+ * magic/version, -3 truncated or unknown id).
+ */
++ (NSInteger)strategyOfEncodedStream:(NSData *)stream;
 
 + (NSString *)backendName;
 

@@ -24,7 +24,8 @@ public record CodecContext(
         String referenceUri,
         Integer readsPerSlice,
         byte[] sequences,
-        Supplier<byte[]> sequencesProvider) {
+        Supplier<byte[]> sequencesProvider,
+        Integer qualStrategyHint) {
 
     public static CodecContext empty() { return builder().build(); }
 
@@ -50,6 +51,7 @@ public record CodecContext(
         private Integer readsPerSlice;
         private byte[] sequences;
         private Supplier<byte[]> sequencesProvider;
+        private Integer qualStrategyHint;
 
         public Builder readLengths(int[] v) { this.readLengths = v; return this; }
         public Builder revcompFlags(int[] v) { this.revcompFlags = v; return this; }
@@ -70,13 +72,14 @@ public record CodecContext(
         public Builder readsPerSlice(Integer v) { this.readsPerSlice = v; return this; }
         public Builder sequences(byte[] v) { this.sequences = v; return this; }
         public Builder sequencesProvider(Supplier<byte[]> v) { this.sequencesProvider = v; return this; }
+        public Builder qualStrategyHint(Integer v) { this.qualStrategyHint = v; return this; }
 
         public CodecContext build() {
             return new CodecContext(readLengths, revcompFlags, elementSize, readCount,
                 positions, cigarsProvider, totalBases, chromosomes, ownChromIds,
                 ownPositions, nRecords, referenceResolver, offsets, reference,
                 referenceMd5, referenceUri, readsPerSlice, sequences,
-                sequencesProvider);
+                sequencesProvider, qualStrategyHint);
         }
     }
 }

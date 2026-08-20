@@ -19,6 +19,7 @@
 #import "Providers/TTIOProviderRegistry.h"
 #import "Providers/TTIOStorageProtocols.h"
 #import "ValueClasses/TTIOEnums.h"
+#import "Codecs/TTIOFqzcompNx16Z.h"
 #include <unistd.h>
 
 static NSString *gbBamPath(void)
@@ -225,6 +226,32 @@ static void gbRunCopies(void)
          "genomic blocks: copyWithProvenance keeps the overrides");
 }
 
+static void gbQualStrategyHint(void)
+{
+    TTIOWrittenGenomicRun *run = gbM87Run(@"chr1");
+    if (!run) return;
+    NSError *err = nil;
+    TTIOBlockBlobs *def = [TTIOGenomicBlocks encodeBlock:run
+        context:[TTIOGenomicWriteContext none] error:&err];
+    PASS(def != nil
+         && [TTIOFqzcompNx16Z strategyOfEncodedStream:def.blobs[@"qualities"]] == 4,
+         "genomic blocks: default qualities strategy is V4 on the small block");
+    TTIOGenomicWriteContext *c5 = [TTIOGenomicWriteContext none];
+    c5.qualStrategyHint = 5;
+    TTIOBlockBlobs *forced = [TTIOGenomicBlocks encodeBlock:run
+        context:c5 error:&err];
+    PASS(forced != nil
+         && [TTIOFqzcompNx16Z strategyOfEncodedStream:forced.blobs[@"qualities"]] == 5,
+         "genomic blocks: context hint 5 forces a V5-S5 qualities stream");
+    TTIOGenomicWriteContext *cm1 = [TTIOGenomicWriteContext none];
+    cm1.qualStrategyHint = -1;
+    TTIOBlockBlobs *expl = [TTIOGenomicBlocks encodeBlock:run
+        context:cm1 error:&err];
+    PASS(expl != nil
+         && [expl.blobs[@"qualities"] isEqualToData:def.blobs[@"qualities"]],
+         "genomic blocks: explicit hint -1 is the default path byte for byte");
+}
+
 void testGenomicBlocks(void)
 {
     @autoreleasepool {
@@ -232,6 +259,7 @@ void testGenomicBlocks(void)
         gbSharedChromMap();
         gbSliceConcat();
         gbEncodeBlock();
+        gbQualStrategyHint();
         gbRunCopies();
     }
 }

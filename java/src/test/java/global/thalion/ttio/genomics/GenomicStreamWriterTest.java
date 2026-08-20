@@ -312,6 +312,52 @@ class GenomicStreamWriterTest {
     }
 
     @Test
+    void stickyPinMatchesExhaustive() throws Exception {
+        WrittenGenomicRun run = bigSyntheticRun(40_000, 11);
+        StorageGroup a = writeWithThreads("memory://gsw-sticky", run, 6, 20_000);
+        System.setProperty("ttio.m94z.exhaustive", "1");
+        StorageGroup b;
+        try {
+            b = writeWithThreads("memory://gsw-exh", run, 6, 20_000);
+        } finally {
+            System.clearProperty("ttio.m94z.exhaustive");
+        }
+        Map<String, String> ma = new java.util.TreeMap<>(), mb = new java.util.TreeMap<>();
+        collect(a, "", ma);
+        collect(b, "", mb);
+        assertEquals(ma.keySet(), mb.keySet());
+        for (String k : ma.keySet())
+            assertEquals(ma.get(k), mb.get(k), k + " differs between sticky and exhaustive");
+    }
+
+    @Test
+    void stickyDeterministicAcrossRuns() throws Exception {
+        WrittenGenomicRun run = bigSyntheticRun(40_000, 12);
+        StorageGroup a = writeWithThreads("memory://gsw-r1", run, 6, 20_000);
+        StorageGroup b = writeWithThreads("memory://gsw-r2", run, 6, 20_000);
+        Map<String, String> ma = new java.util.TreeMap<>(), mb = new java.util.TreeMap<>();
+        collect(a, "", ma);
+        collect(b, "", mb);
+        assertEquals(ma.keySet(), mb.keySet());
+        for (String k : ma.keySet())
+            assertEquals(ma.get(k), mb.get(k), k + " differs between repeated runs");
+    }
+
+    @Test
+    void pinIsSetAfterFirstBlock() throws Exception {
+        WrittenGenomicRun run = bigSyntheticRun(40_000, 13);
+        StorageGroup study = study("memory://gsw-pin");
+        GenomicStreamWriter.Options o = GenomicStreamWriter.Options.fromRun(run)
+            .withBlockPolicy(20_000, Long.MAX_VALUE)
+            .withReference(run.referenceChromSeqs(), true);
+        try (GenomicStreamWriter w = new GenomicStreamWriter(study, "g", o, 2)) {
+            w.appendBatch(run);
+            w.flush();
+            assertTrue(w.qualStrategyHintForTests() != -1);
+        }
+    }
+
+    @Test
     void registerBlockChromosomesMatchesEncoderOrder() throws Exception {
         WrittenGenomicRun m87 = m87();
         Map<String, Integer> m = new java.util.LinkedHashMap<>();

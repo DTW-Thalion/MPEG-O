@@ -5,6 +5,7 @@
  */
 package global.thalion.ttio;
 
+import global.thalion.ttio.codecs.FqzcompNx16Z;
 import global.thalion.ttio.genomics.AlignedRead;
 import global.thalion.ttio.genomics.GenomicBlocks;
 import global.thalion.ttio.genomics.GenomicRun;
@@ -125,6 +126,27 @@ class GenomicBlocksTest {
         assertArrayEquals((byte[]) sc.openGroup("mate_info").openDataset("inline_v2").readAll(),
                 blobs.blobs().get("mate_info"));
         MemoryProvider.discardStore("memory://gb-cmp");
+    }
+
+    @Test
+    void encodeBlockForwardsQualStrategyHint() throws Exception {
+        WrittenGenomicRun run = m87();
+        String chr = run.chromosomes().get(0);
+        int stop = 0;
+        while (stop < run.readCount() && run.chromosomes().get(stop).equals(chr)) stop++;
+        WrittenGenomicRun block = GenomicBlocks.sliceRun(run, 0, stop);
+        GenomicBlocks.BlockBlobs def = GenomicBlocks.encodeBlock(block,
+                new GenomicWriteContext(new LinkedHashMap<>(), null));
+        // Small block: the size floor keeps auto on V4.
+        assertEquals(4, FqzcompNx16Z.streamStrategy(def.blobs().get("qualities")));
+        GenomicBlocks.BlockBlobs forced = GenomicBlocks.encodeBlock(block,
+                new GenomicWriteContext(new LinkedHashMap<>(), null, 5));
+        assertEquals(5, FqzcompNx16Z.streamStrategy(forced.blobs().get("qualities")));
+        // An explicit -1 is the default path, byte for byte.
+        GenomicBlocks.BlockBlobs explicit = GenomicBlocks.encodeBlock(block,
+                new GenomicWriteContext(new LinkedHashMap<>(), null, -1));
+        assertArrayEquals(def.blobs().get("qualities"),
+                explicit.blobs().get("qualities"));
     }
 
     @Test

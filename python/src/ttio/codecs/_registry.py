@@ -114,6 +114,7 @@ class _FqzcompNx16ZCodec:
             [int(x) for x in ctx.read_lengths],
             [int(x) for x in ctx.revcomp_flags],
             sequences=ctx.sequences,
+            v4_strategy_hint=ctx.qual_strategy_hint,
         )
         return EncodedChannel.of_dataset(blob)
 

@@ -129,10 +129,13 @@ static pthread_once_t gOnce = PTHREAD_ONCE_INIT;
         if (e) *e = _TTIOCodecError(@"FQZCOMP_NX16_Z encode requires context.readLengths and context.revcompFlags");
         return nil;
     }
+    NSInteger hint = ctx.qualStrategyHint != nil
+        ? [ctx.qualStrategyHint integerValue] : -1;
     NSData *out = [TTIOFqzcompNx16Z encodeWithQualities:((TTIODecodedBytes *)v).data
                                             readLengths:ctx.readLengths
                                            revcompFlags:ctx.revcompFlags
                                               sequences:ctx.sequences
+                                           strategyHint:hint
                                                   error:e];
     return out ? [[TTIOEncodedDatasetBytes alloc] initWithBytes:out] : nil;
 }

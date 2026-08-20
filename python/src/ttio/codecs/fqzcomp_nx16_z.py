@@ -37,6 +37,10 @@ VERSION_V5_SEQCTX = 5   # M94.Z V5: sequence-context body; emitted only
                         # when it beats V4 by exact size (spec at
                         # docs/superpowers/specs/2026-08-16-qualities-v5-design.md)
 
+# Strategy hint: V4 with its internal preset selection, sequences ignored
+# (kernel TTIO_M94Z_HINT_V4_AUTO). -1 auto, 0..4 V4 preset, 5..6 forced V5.
+HINT_V4_AUTO = 7
+
 
 # ── libttio_rans native library loader ──────────────────────────────────
 #
@@ -354,6 +358,13 @@ if _HAVE_NATIVE_LIB:
         ctypes.c_size_t,                     # n_qualities
     ]
     _lib.ttio_m94z_qual_decode.restype = ctypes.c_int
+
+    # int ttio_m94z_qual_stream_strategy(const uint8_t *in, size_t in_len);
+    _lib.ttio_m94z_qual_stream_strategy.argtypes = [
+        ctypes.c_char_p,                     # in
+        ctypes.c_size_t,                     # in_len
+    ]
+    _lib.ttio_m94z_qual_stream_strategy.restype = ctypes.c_int
 else:
     _lib = None
     _TTIORansContextResolver = None
@@ -376,6 +387,20 @@ def get_autotune_threads() -> int:
         return 1
     _native_lib.ttio_m94z_get_autotune_threads.restype = ctypes.c_int
     return int(_native_lib.ttio_m94z_get_autotune_threads())
+
+
+def stream_strategy(blob: bytes) -> int:
+    """Strategy of an encoded M94.Z stream: 4 = V4, 5/6 = V5 S5/S6."""
+    if not _HAVE_NATIVE_LIB:
+        raise RuntimeError(
+            "FQZCOMP_NX16_Z stream_strategy requires libttio_rans (set "
+            "TTIO_RANS_LIB_PATH or install the native library)."
+        )
+    blob = bytes(blob)
+    rc = _lib.ttio_m94z_qual_stream_strategy(blob, len(blob))
+    if rc < 0:
+        raise ValueError(f"not an M94.Z qualities stream (rc={rc})")
+    return int(rc)
 
 
 def _native_kernel_name() -> str:
@@ -656,7 +681,8 @@ def encode(
         revcomp_flags: parallel list of 0/1.
         v4_strategy_hint: -1 = auto-tune (default), 0..4 = V4 preset,
             5..6 = forced V5 sequence strategy (requires
-            ``sequences``).
+            ``sequences``), ``HINT_V4_AUTO`` (7) = V4 with its
+            internal preset selection, sequences ignored.
         sequences: base bytes parallel to ``qualities`` position for
             position. When supplied (and the channel is at least
             ``TTIO_M94Z_V5_MIN_QUALITIES`` bytes, or the hint forces

@@ -1731,9 +1731,13 @@ static BOOL _TTIO_M94Z_WriteQualitiesFqzcompNx16Z(TTIOHDF5Group *sc,
                                          error);
 }
 
-/** Storage-protocol twin of _TTIO_M94Z_WriteQualitiesFqzcompNx16Z. */
+/** Storage-protocol twin of _TTIO_M94Z_WriteQualitiesFqzcompNx16Z.
+ *  qualStrategyHint: -1 auto (the 3-way tune), 5/6 forced V5,
+ *  TTIOM94ZHintV4Auto V4 with internal preset selection; the stream
+ *  writer passes its per-run pin through the write context. */
 static BOOL _TTIO_M94Z_WriteQualitiesFqzcompNx16ZStorage(id<TTIOStorageGroup> sc,
                                                            TTIOWrittenGenomicRun *run,
+                                                           NSInteger qualStrategyHint,
                                                            NSError **error)
 {
     NSUInteger n = run.lengthsData.length / sizeof(uint32_t);
@@ -1749,6 +1753,7 @@ static BOOL _TTIO_M94Z_WriteQualitiesFqzcompNx16ZStorage(id<TTIOStorageGroup> sc
     TTIOCodecContext *fqzCtx = [TTIOCodecContext emptyContext];
     fqzCtx.readLengths = readLengths;
     fqzCtx.revcompFlags = revcompFlags;
+    fqzCtx.qualStrategyHint = @(qualStrategyHint);
     if (!run.optDisableQualitiesV5
         && run.sequencesData.length == run.qualitiesData.length) {
         fqzCtx.sequences = run.sequencesData;
@@ -2023,7 +2028,9 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                         ?: _TTIO_M94_DefaultQualitiesCodec(run);
     if (qualOvr != nil
         && (TTIOCompression)[qualOvr unsignedIntegerValue] == TTIOCompressionFqzcompNx16Z) {
-        if (!_TTIO_M94Z_WriteQualitiesFqzcompNx16ZStorage(sc, run, error)) return NO;
+        if (!_TTIO_M94Z_WriteQualitiesFqzcompNx16ZStorage(sc, run,
+                                                          ctx.qualStrategyHint,
+                                                          error)) return NO;
     } else if (!_TTIO_M86_WriteByteChannelStorage(sc, @"qualities",
                                                   run.qualitiesData, codec,
                                                   run.signalCodecOverrides[@"qualities"],

@@ -147,6 +147,45 @@ int main(void) {
         free(back); free(back_lens);
     }
 
+    /* 10: hint 7 == V4 with internal preset selection, sequences
+     * present: byte-identical to the no-seq auto stream. */
+    {
+        size_t l7 = cap;
+        rc = ttio_m94z_qual_encode(qual, N, lens, NR, flags, seq,
+                                   TTIO_M94Z_HINT_V4_AUTO, 0, o_v4, &l7);
+        CHECK(rc == 0, "hint 7 encode rc");
+        CHECK(l7 == l_noseq && memcmp(o_v4, o_noseq, l_noseq) == 0,
+              "hint 7 bytes identical to V4-auto");
+    }
+
+    /* 11: stream strategy sniffer. */
+    {
+        CHECK(ttio_m94z_qual_stream_strategy(o_noseq, l_noseq) == 4,
+              "sniffer reads V4");
+        int w = ttio_m94z_qual_stream_strategy(o_seq, l_seq);
+        CHECK(w == 5 || w == 6, "sniffer reads auto V5 winner");
+        enum { NRS2 = 300, NS2 = NRS2 * 100 };
+        size_t l5 = cap, l6 = cap;
+        rc = ttio_m94z_qual_encode(qual, NS2, lens, NRS2, flags, seq,
+                                   5, 0, o_v4, &l5);
+        CHECK(rc == 0 && ttio_m94z_qual_stream_strategy(o_v4, l5) == 5,
+              "sniffer reads S5");
+        rc = ttio_m94z_qual_encode(qual, NS2, lens, NRS2, flags, seq,
+                                   6, 0, o_v4, &l6);
+        CHECK(rc == 0 && ttio_m94z_qual_stream_strategy(o_v4, l6) == 6,
+              "sniffer reads S6");
+        CHECK(ttio_m94z_qual_stream_strategy(NULL, 0) < 0,
+              "sniffer rejects NULL");
+        CHECK(ttio_m94z_qual_stream_strategy(o_noseq, 8) < 0,
+              "sniffer rejects short input");
+        {
+            uint8_t junk[30];
+            memset(junk, 0x58, sizeof junk);
+            CHECK(ttio_m94z_qual_stream_strategy(junk, sizeof junk) < 0,
+                  "sniffer rejects junk");
+        }
+    }
+
     printf("%s: %d failures\n", __FILE__, failures);
     free(qual); free(seq); free(lens); free(flags);
     free(o_seq); free(o_noseq); free(o_v4);

@@ -196,6 +196,55 @@ void testQualitiesV5(void)
             != NSNotFound,
          "version 5 without sequences fails naming sequences");
 
+    // ── Sticky-strategy primitives: hint 7 + the stream sniffer ────
+    {
+        err = nil;
+        uint8_t pad = (uint8_t)((-(NSInteger)qual.length) & 0x3);
+        NSData *pinned = [TTIOFqzcompNx16Z encodeQualWithQualities:qual
+                                                       readLengths:lens
+                                                      revcompFlags:flags
+                                                         sequences:seq
+                                                      strategyHint:TTIOM94ZHintV4Auto
+                                                          padCount:pad
+                                                             error:&err];
+        PASS(pinned != nil && [pinned isEqualToData:v4],
+             "hint 7 with sequences is byte-identical to V4-auto");
+        PASS([TTIOFqzcompNx16Z strategyOfEncodedStream:v4] == 4,
+             "sniffer reads V4");
+        NSInteger autoWin = [TTIOFqzcompNx16Z strategyOfEncodedStream:v5];
+        PASS(autoWin == 5 || autoWin == 6,
+             "sniffer reads the auto V5 winner");
+
+        NSMutableData *sq = [NSMutableData data], *ss = [NSMutableData data];
+        v5MotifCorpus(sq, ss, 300, 100);
+        NSArray *slens = v5Fill(300, 100), *sflags = v5Fill(300, 0);
+        uint8_t sPad = (uint8_t)((-(NSInteger)sq.length) & 0x3);
+        err = nil;
+        NSData *s5 = [TTIOFqzcompNx16Z encodeQualWithQualities:sq
+                                                   readLengths:slens
+                                                  revcompFlags:sflags
+                                                     sequences:ss
+                                                  strategyHint:5
+                                                      padCount:sPad
+                                                         error:&err];
+        PASS(s5 != nil && [TTIOFqzcompNx16Z strategyOfEncodedStream:s5] == 5,
+             "sniffer reads S5");
+        err = nil;
+        NSData *s6 = [TTIOFqzcompNx16Z encodeQualWithQualities:sq
+                                                   readLengths:slens
+                                                  revcompFlags:sflags
+                                                     sequences:ss
+                                                  strategyHint:6
+                                                      padCount:sPad
+                                                         error:&err];
+        PASS(s6 != nil && [TTIOFqzcompNx16Z strategyOfEncodedStream:s6] == 6,
+             "sniffer reads S6");
+        uint8_t junk[2] = {88, 88};
+        PASS([TTIOFqzcompNx16Z strategyOfEncodedStream:
+                  [NSData dataWithBytes:junk length:2]] < 0,
+             "sniffer rejects a non-M94Z stream");
+    }
+
     // ── Golden fixture — the cross-language decode contract ────────
     {
         NSString *pb = v5FixturePath(@"qualities_v5_golden.bin");

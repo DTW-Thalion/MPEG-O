@@ -107,6 +107,32 @@ class QualitiesV5Test {
     }
 
     @Test
+    void hintV4AutoIgnoresSequences() {
+        byte[][] c = motifCorpus(11000, 100);
+        int[] lens = fill(11000, 100), flags = fill(11000, 0);
+        byte[] pinned = FqzcompNx16Z.encode(c[0], lens, flags, c[1],
+            new FqzcompNx16Z.EncodeOptions()
+                .v4StrategyHint(FqzcompNx16Z.HINT_V4_AUTO));
+        assertArrayEquals(FqzcompNx16Z.encode(c[0], lens, flags), pinned);
+    }
+
+    @Test
+    void streamStrategySniffer() {
+        byte[][] c = motifCorpus(300, 100);
+        int[] lens = fill(300, 100), flags = fill(300, 0);
+        byte[] v4 = FqzcompNx16Z.encode(c[0], lens, flags);
+        assertEquals(4, FqzcompNx16Z.streamStrategy(v4));
+        byte[] s5 = FqzcompNx16Z.encode(c[0], lens, flags, c[1],
+            new FqzcompNx16Z.EncodeOptions().v4StrategyHint(5));
+        assertEquals(5, FqzcompNx16Z.streamStrategy(s5));
+        byte[] s6 = FqzcompNx16Z.encode(c[0], lens, flags, c[1],
+            new FqzcompNx16Z.EncodeOptions().v4StrategyHint(6));
+        assertEquals(6, FqzcompNx16Z.streamStrategy(s6));
+        assertThrows(IllegalArgumentException.class,
+            () -> FqzcompNx16Z.streamStrategy(new byte[]{'X', 'X'}));
+    }
+
+    @Test
     void goldenFixtureDecodes() throws Exception {
         byte[] blob = res("/ttio/fixtures/qualities_v5_golden.bin");
         byte[] seq = res("/ttio/fixtures/qualities_v5_golden_seq.bin");

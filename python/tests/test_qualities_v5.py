@@ -80,6 +80,25 @@ class TestWrapper:
             blob, flags, sequences_provider=lambda: seq)
         assert bytes(back) == qual
 
+    def test_hint_v4_auto_ignores_sequences(self):
+        qual, seq, lens, flags = _motif_corpus()
+        pinned = fz.encode(qual, lens, flags, sequences=seq,
+                           v4_strategy_hint=fz.HINT_V4_AUTO)
+        assert pinned == fz.encode(qual, lens, flags)
+
+    def test_stream_strategy_sniffer(self):
+        qual, seq, lens, flags = _motif_corpus(n_reads=300)
+        v4 = fz.encode(qual, lens, flags)
+        assert fz.stream_strategy(v4) == 4
+        s5 = fz.encode(qual, lens, flags, sequences=seq,
+                       v4_strategy_hint=5)
+        assert fz.stream_strategy(s5) == 5
+        s6 = fz.encode(qual, lens, flags, sequences=seq,
+                       v4_strategy_hint=6)
+        assert fz.stream_strategy(s6) == 6
+        with pytest.raises(ValueError):
+            fz.stream_strategy(b"XX")
+
 
 class TestGolden:
     def test_golden_decodes(self):

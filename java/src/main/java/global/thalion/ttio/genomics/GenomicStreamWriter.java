@@ -142,6 +142,20 @@ public final class GenomicStreamWriter implements AutoCloseable {
                             java.util.concurrent.Future<GenomicBlocks.BlockBlobs> blobs,
                             long estimatedBytes) {}
 
+    /** Per-run sticky qualities strategy: block 0 auto-tunes, the winner
+     *  is pinned for the rest of the run (spec docs/superpowers/plans/
+     *  2026-08-19-fqz-v5-sticky-strategy-spec.md). -1 = not yet pinned. */
+    private int qualStrategyHint = -1;
+    private final boolean qualExhaustive = exhaustiveTune();
+
+    private static boolean exhaustiveTune() {
+        String raw = System.getProperty("ttio.m94z.exhaustive");
+        if (raw == null || raw.isBlank()) raw = System.getenv("TTIO_M94Z_EXHAUSTIVE");
+        return "1".equals(raw);
+    }
+
+    int qualStrategyHintForTests() { return qualStrategyHint; }
+
     /** Append reads to run {@code runName} of the {@code /study} group
      *  {@code studyGroup} (the writer creates {@code genomic_runs} when
      *  absent and maintains {@code @_run_names}). */
@@ -180,7 +194,7 @@ public final class GenomicStreamWriter implements AutoCloseable {
 
     private static long estimateBlockBytes(WrittenGenomicRun b) {
         long raw = (long) b.sequences().length + b.qualities().length + (long) b.offsets().length * 24L;
-        return raw * 4L;
+        return raw * 2L;
     }
 
     /** Assign ids for every chromosome name the block introduces, in the
@@ -256,7 +270,15 @@ public final class GenomicStreamWriter implements AutoCloseable {
             embedded = true;
         }
         registerBlockChromosomes(block, chromMap);
-        GenomicWriteContext ctx = new GenomicWriteContext(chromMap, referenceMd5);
+        if (!qualExhaustive && qualStrategyHint == -1
+                && (blockCount > 0 || !inflight.isEmpty())) {
+            // Block-0 gate: the pin comes from the earliest written M94Z
+            // block; hold later submissions until it is known so the
+            // choice is timing-independent.
+            drain(0);
+        }
+        GenomicWriteContext ctx =
+            new GenomicWriteContext(chromMap, referenceMd5, qualStrategyHint);
         if (scope.executor() == null) {
             writeEncoded(block, GenomicBlocks.encodeBlock(block, ctx));
             return;
@@ -265,7 +287,8 @@ public final class GenomicStreamWriter implements AutoCloseable {
         // The worker reads the map while later flushes mutate it: give each
         // block a snapshot (registration above fixed every id it needs).
         GenomicWriteContext bctx =
-            new GenomicWriteContext(new java.util.LinkedHashMap<>(chromMap), referenceMd5);
+            new GenomicWriteContext(new java.util.LinkedHashMap<>(chromMap),
+                                    referenceMd5, qualStrategyHint);
         drainToBudget();
         WrittenGenomicRun fb = block;
         long est = estimateBlockBytes(block);
@@ -333,6 +356,14 @@ public final class GenomicStreamWriter implements AutoCloseable {
         readCount += blobs.nReads();
         baseCount += blobs.nBases();
         blockCount++;
+        Integer qc = blobs.codecs().get("qualities");
+        if (qualStrategyHint == -1 && !qualExhaustive && qc != null
+                && qc == global.thalion.ttio.Enums.Compression.FQZCOMP_NX16_Z.ordinal()) {
+            int strat = global.thalion.ttio.codecs.FqzcompNx16Z
+                .streamStrategy(blobs.blobs().get("qualities"));
+            qualStrategyHint = strat == 4
+                ? global.thalion.ttio.codecs.FqzcompNx16Z.HINT_V4_AUTO : strat;
+        }
         rg.setAttribute("read_count", readCount);
         rg.setAttribute("base_count", baseCount);
     }

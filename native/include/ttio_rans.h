@@ -291,12 +291,18 @@ int ttio_m94z_v4_decode(
  *   seq_in         — n_qualities base bytes parallel to qual_in, or
  *                    NULL for V4-only behaviour
  *   strategy_hint  — -1 auto, 0..4 V4 preset, 5..6 forced sequence
- *                    strategy
+ *                    strategy, 7 V4 with internal preset selection
+ *                    (the no-seq auto path, sequences ignored)
  * Decode dispatches on the version byte: a version-5 stream requires
  * seq_in (the decoded sequences channel) and fails with a distinct
  * error without it; version-4 streams ignore seq_in. */
 #define TTIO_M94Z_V5_VERSION 5
 #define TTIO_M94Z_V5_MIN_QUALITIES (1u << 20)
+#define TTIO_M94Z_HINT_V4_AUTO 7
+
+/* Strategy of an encoded M94.Z stream: 4 = V4, 5/6 = V5 S5/S6.
+ * <0: -1 args, -2 magic/version, -3 truncated or unknown id. */
+int ttio_m94z_qual_stream_strategy(const uint8_t *in, size_t in_len);
 
 /* Threads the FQZCOMP auto-tune uses for its V4/S5/S6 candidate encodes
  * (default 3; <= 1 runs them in sequence). Process-global; the initial

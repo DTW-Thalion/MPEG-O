@@ -306,7 +306,7 @@ public final class SpectralDatasetGenomicWriter {
                     }
                 }
                 if (qualCodec == Enums.Compression.FQZCOMP_NX16_Z) {
-                    writeQualitiesFqzcompNx16Z(sc, run);
+                    writeQualitiesFqzcompNx16Z(sc, run, ctx.qualStrategyHint());
                 } else {
                     writeByteChannelWithCodec(sc, "qualities",
                         run.qualities(), run.signalCompression(),
@@ -990,6 +990,16 @@ public final class SpectralDatasetGenomicWriter {
     static void writeQualitiesFqzcompNx16Z(
             global.thalion.ttio.providers.StorageGroup sc,
             WrittenGenomicRun run) {
+        writeQualitiesFqzcompNx16Z(sc, run, -1);
+    }
+
+    /** {@code qualStrategyHint}: -1 auto (the 3-way tune), 5/6 forced
+     *  V5, {@code FqzcompNx16Z.HINT_V4_AUTO} V4 with internal preset
+     *  selection; the stream writer passes its per-run pin. */
+    static void writeQualitiesFqzcompNx16Z(
+            global.thalion.ttio.providers.StorageGroup sc,
+            WrittenGenomicRun run,
+            int qualStrategyHint) {
         int n = run.readCount();
         int[] readLengths = new int[n];
         for (int i = 0; i < n; i++) readLengths[i] = run.lengths()[i];
@@ -1012,6 +1022,7 @@ public final class SpectralDatasetGenomicWriter {
             .readLengths(readLengths)
             .revcompFlags(revcompFlags)
             .sequences(v5Sequences)
+            .qualStrategyHint(qualStrategyHint)
             .build();
         byte[] encoded = ((global.thalion.ttio.codecs.registry.EncodedChannel.DatasetBytes)
             global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY
