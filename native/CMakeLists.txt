@@ -206,19 +206,6 @@ target_link_libraries(test_fqzcomp_seqctx ttio_rans)
 target_compile_options(test_fqzcomp_seqctx PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME fqzcomp_seqctx COMMAND test_fqzcomp_seqctx)
 
-add_subdirectory(gpu)
-
-add_executable(test_gpu_byte_identity tests/test_gpu_byte_identity.c)
-target_link_libraries(test_gpu_byte_identity PRIVATE ttio_rans Threads::Threads)
-target_compile_options(test_gpu_byte_identity PRIVATE -Wall -Wextra -Wpedantic)
-add_test(NAME gpu_byte_identity COMMAND test_gpu_byte_identity
-         ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/v6_gate_small.v6fx)
-
-add_executable(test_gpu_engine_probe tests/test_gpu_engine_probe.c)
-target_link_libraries(test_gpu_engine_probe PRIVATE ttio_rans Threads::Threads)
-target_compile_options(test_gpu_engine_probe PRIVATE -Wall -Wextra -Wpedantic)
-add_test(NAME gpu_engine_probe COMMAND test_gpu_engine_probe)
-
 add_executable(test_engine_selection tests/test_engine_selection.c)
 target_link_libraries(test_engine_selection PRIVATE ttio_rans Threads::Threads)
 target_compile_options(test_engine_selection PRIVATE -Wall -Wextra -Wpedantic)
@@ -453,10 +440,6 @@ if(NOT TTIO_COVERAGE)
     add_executable(v6_acceptance tools/v6_acceptance.c)
     target_link_libraries(v6_acceptance PRIVATE ttio_rans)
     target_compile_options(v6_acceptance PRIVATE -O2)
-
-    add_executable(v6_fixture_dump tools/v6_fixture_dump.c)
-    target_link_libraries(v6_fixture_dump PRIVATE ttio_rans)
-    target_compile_options(v6_fixture_dump PRIVATE -O2)
 
     add_executable(bench_v6_ratio bench/bench_v6_ratio.c)
     target_link_libraries(bench_v6_ratio PRIVATE ttio_rans Threads::Threads)
