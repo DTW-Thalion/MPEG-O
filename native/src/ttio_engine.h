@@ -52,7 +52,30 @@ typedef struct ttio_engine {
     int  (*qual_v6_encode)(ttio_v6_job *job);
 } ttio_engine;
 
+/* TTIO_GPU selects the engine. It is off unless the caller asks for
+ * the GPU explicitly: presence of a device is not evidence that using
+ * it is an improvement, and on some machines it is a regression in
+ * both speed and output size. Any unrecognised value reads as off,
+ * because a typo in a knob should not change how files are written. */
+typedef enum {
+    TTIO_GPU_OFF   = 0,
+    TTIO_GPU_FORCE = 1
+} ttio_gpu_mode;
+
+ttio_gpu_mode ttio_gpu_mode_get(void);
+
+/* Tests only: forget the cached value so the environment is read
+ * again. Nothing in the library calls this. */
+void ttio_gpu_mode_reset(void);
+
 const ttio_engine *ttio_engine_cpu(void);
+
+/* NULL unless the GPU engine was asked for and came up healthy. */
+const ttio_engine *ttio_engine_gpu(void);
+
+/* Tests only: stand an engine in for the GPU one, so selection and
+ * spill can be exercised without a device. Pass NULL to clear. */
+void ttio_engine_set_test_gpu(const ttio_engine *e);
 
 /* The CPU engine's encode entry, implemented in m94z_v6.c next to the
  * segment pool it drives. Declared here rather than in m94z_v6.h so

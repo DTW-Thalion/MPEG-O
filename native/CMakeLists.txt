@@ -187,6 +187,11 @@ target_link_libraries(test_fqzcomp_seqctx ttio_rans)
 target_compile_options(test_fqzcomp_seqctx PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME fqzcomp_seqctx COMMAND test_fqzcomp_seqctx)
 
+add_executable(test_engine_selection tests/test_engine_selection.c)
+target_link_libraries(test_engine_selection PRIVATE ttio_rans Threads::Threads)
+target_compile_options(test_engine_selection PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME engine_selection COMMAND test_engine_selection)
+
 add_executable(test_engine_api tests/test_engine_api.c)
 target_link_libraries(test_engine_api PRIVATE ttio_rans Threads::Threads)
 target_compile_options(test_engine_api PRIVATE -Wall -Wextra -Wpedantic)

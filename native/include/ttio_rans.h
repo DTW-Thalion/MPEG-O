@@ -310,6 +310,9 @@ int ttio_m94z_v4_decode(
  * Never NULL. */
 const char *ttio_engine_active_name(void);
 
+/* 1 when a GPU engine has been asked for and came up, else 0. */
+int ttio_engine_gpu_available(void);
+
 /* Strategy of an encoded M94.Z stream: 4 = V4, 5/6 = V5 S5/S6,
  * 8 = V6. <0: -1 args, -2 magic/version, -3 truncated or unknown id. */
 int ttio_m94z_qual_stream_strategy(const uint8_t *in, size_t in_len);
