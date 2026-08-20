@@ -81,6 +81,20 @@ def test_blocks_cut_at_chromosome_boundaries_with_reference(tmp_path):
         assert int(rows[2]["sequences_codec"]) != int(Compression.REF_DIFF_V2)
 
 
+def test_fastq_encode_bench_tool(tmp_path):
+    from ttio.tools import fastq_encode_bench
+    fq = tmp_path / "in.fastq"
+    with open(fq, "w") as f:
+        for i in range(400):
+            f.write(f"@r{i} extra\n{'ACGT' * 25}\n+\n{'I' * 50}{'#' * 50}\n")
+    out = tmp_path / "o.tio"
+    assert fastq_encode_bench.main([str(fq), str(out), "0", "65536"]) == 0
+    with SpectralDataset.open(str(out)) as ds:
+        g = ds.genomic_runs["genomic_0001"]
+        assert genomic_run_fastq_md5(g) == fastq_md5(fq)
+    assert fastq_encode_bench.main([]) == 1
+
+
 def test_fastq_iter_batches_and_registry_stream(tmp_path):
     fq = tmp_path / "in.fastq"
     with open(fq, "w") as f:
@@ -106,7 +120,11 @@ def test_fastq_import_memory_ceiling(tmp_path):
             f.write(f"@r{i}\n{'ACGT' * 25}\n+\n{'I' * 50}{'#' * 50}\n")
     before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     out = tmp_path / "big.tio"
-    src = fq_imp.FastqReader(big).stream_source(batch_reads=100_000)
+    # The subject is the serial streaming path's boundedness; the
+    # parallel producer's contract is the byte budget, tested in
+    # test_genomic_stream_writer and measured by the acceptance run.
+    src = fq_imp.FastqReader(big).stream_source(batch_reads=100_000,
+                                                threads=1)
     src.block_reads = 250_000
     SpectralDataset.write_minimal(str(out), title="", isa_investigation_id="", runs={})
     with SpectralDataset.open(str(out), writable=True) as ds:
@@ -144,7 +162,12 @@ def test_fastq_export_memory_ceiling(tmp_path):
             f.write(qual)
             f.write(b"\n")
     out = tmp_path / "big.tio"
-    src = fq_imp.FastqReader(big).stream_source(batch_reads=2_500)
+    # The child's ru_maxrss records the fork-moment snapshot of the
+    # parent's resident pages before exec replaces them, so a large
+    # parent floors the child's reading. The import is setup, not
+    # the measurement: it runs serial to keep the parent small.
+    src = fq_imp.FastqReader(big).stream_source(batch_reads=2_500,
+                                                threads=1)
     src.block_reads = 2_500
     SpectralDataset.write_minimal(str(out), title="", isa_investigation_id="", runs={})
     with SpectralDataset.open(str(out), writable=True) as ds:
@@ -156,7 +179,15 @@ def test_fastq_export_memory_ceiling(tmp_path):
         from ttio.exporters.fastq import FastqWriter
         with SpectralDataset.open(sys.argv[1]) as ds:
             FastqWriter.write(ds.genomic_runs["genomic_0001"], sys.argv[2])
-        print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+        try:
+            # exec resets VmHWM, so this is the export's own peak;
+            # ru_maxrss survives exec and keeps the fork-moment
+            # snapshot of the parent's pages.
+            with open("/proc/self/status") as st:
+                line = next(l for l in st if l.startswith("VmHWM:"))
+            print(int(line.split()[1]))
+        except (OSError, StopIteration):
+            print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
     """)
     exported = tmp_path / "roundtrip.fastq"
     env = dict(os.environ)

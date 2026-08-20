@@ -98,6 +98,57 @@ def detect_phred_offset(qualities: bytes) -> int:
     return 33
 
 
+def _iter_fastq_records(fh) -> Iterator[tuple[str, bytes, bytes]]:
+    """The tolerant four-line record loop over a binary file
+    object: quality bytes verbatim, stray blank lines between
+    records tolerated. Shared by the serial reader and the
+    parallel producer's slow-path slice parser."""
+    line_no = 0
+    while True:
+        hdr = fh.readline()
+        if not hdr:
+            return
+        line_no += 1
+        hdr = hdr.rstrip(b"\r\n")
+        if not hdr:
+            continue  # tolerate stray blank lines between records
+        if not hdr.startswith(b"@"):
+            raise FastqParseError(
+                f"line {line_no}: expected '@<name>' header, "
+                f"got {hdr[:60]!r}"
+            )
+        name = hdr[1:].split(None, 1)[0].decode("utf-8")
+        seq_line = fh.readline()
+        line_no += 1
+        if not seq_line:
+            raise FastqParseError(
+                f"truncated record at line {line_no} "
+                f"(missing sequence)"
+            )
+        seq = seq_line.rstrip(b"\r\n")
+        plus = fh.readline()
+        line_no += 1
+        if not plus or not plus.startswith(b"+"):
+            raise FastqParseError(
+                f"line {line_no}: expected '+' separator, "
+                f"got {plus[:60]!r}"
+            )
+        qual_line = fh.readline()
+        line_no += 1
+        if not qual_line:
+            raise FastqParseError(
+                f"truncated record at line {line_no} "
+                f"(missing qualities)"
+            )
+        qual = qual_line.rstrip(b"\r\n")
+        if len(qual) != len(seq):
+            raise FastqParseError(
+                f"line {line_no}: SEQ/QUAL length mismatch "
+                f"({len(seq)} vs {len(qual)}) for read {name!r}"
+            )
+        yield name, seq, qual
+
+
 class FastqReader:
     """Read a FASTQ file into a :class:`WrittenGenomicRun`.
 
@@ -221,11 +272,17 @@ class FastqReader:
         reference_uri: str = "",
         acquisition_mode: AcquisitionMode = AcquisitionMode.GENOMIC_WGS,
         batch_reads: int = 100_000,
+        batch_bytes: int = 64 * 2**20,
+        threads: int | None = None,
         progress: ProgressSinkLike | None = None,
     ) -> Iterator[WrittenGenomicRun]:
         """Yield the file as consecutive unaligned
         :class:`WrittenGenomicRun` batches of at most ``batch_reads``
-        records with bounded memory. The Phred offset is forced by
+        records (and at most ``batch_bytes`` sequence bytes; the
+        first limit reached cuts) with bounded memory. With more
+        than one resolved thread (``threads`` argument, else
+        ``TTIO_THREADS``) the records are parsed by the parallel
+        producer; the batches are identical to the serial cut. The Phred offset is forced by
         ``force_phred`` or detected from the first batch's qualities
         (Phred+64 files carry no byte below 59, so a batch of 100 k
         reads settles it); it is recorded on
@@ -233,8 +290,34 @@ class FastqReader:
         """
         if batch_reads < 1:
             raise ValueError("batch_reads must be >= 1")
+        if batch_bytes < 1:
+            raise ValueError("batch_bytes must be >= 1")
+        from .._threads import resolve_threads
+        n_threads = resolve_threads(threads)
+        if n_threads > 1:
+            from . import fastq_parallel as _pp
+            mode, ranges = _pp.plan_input(self._path, n_threads, batch_bytes)
+            if mode != "serial":
+                def _detected(off):
+                    self._detected = off
+                meta = dict(sample_name=sample_name, platform=platform,
+                            reference_uri=reference_uri,
+                            acquisition_mode=acquisition_mode)
+                if mode == "shard":
+                    yield from _pp.iter_batches_shard(
+                        self._path, ranges, threads=n_threads,
+                        batch_reads=batch_reads, batch_bytes=batch_bytes,
+                        forced=self._forced, detected_cb=_detected,
+                        meta=meta, progress=progress)
+                else:
+                    yield from _pp.iter_batches_pipeline(
+                        self._path, threads=n_threads, batch_reads=batch_reads,
+                        batch_bytes=batch_bytes, forced=self._forced,
+                        detected_cb=_detected, meta=meta, progress=progress)
+                return
         offset = self._forced
         pending: list[tuple[str, bytes, bytes]] = []
+        pending_bases = 0
         n = 0
 
         def _emit(records):
@@ -252,12 +335,14 @@ class FastqReader:
 
         for rec in self._iter_records_raw():
             pending.append(rec)
+            pending_bases += len(rec[1])
             n += 1
             if n % PROGRESS_INTERVAL_READS == 0:
                 _fire(progress, n, -1)
-            if len(pending) >= batch_reads:
+            if len(pending) >= batch_reads or pending_bases >= batch_bytes:
                 yield _emit(pending)
                 pending = []
+                pending_bases = 0
         if offset is not None:
             self._detected = offset
         _fire(progress, n, n)
@@ -268,6 +353,8 @@ class FastqReader:
                       platform: str = "", reference_uri: str = "",
                       acquisition_mode: AcquisitionMode = AcquisitionMode.GENOMIC_WGS,
                       batch_reads: int = 100_000,
+                      batch_bytes: int = 64 * 2**20,
+                      threads: int | None = None,
                       progress: ProgressSinkLike | None = None):
         """A :class:`~ttio.importers.import_result.GenomicStreamSource`
         over :meth:`iter_batches`."""
@@ -276,56 +363,14 @@ class FastqReader:
             name=name,
             iter_batches=lambda: self.iter_batches(
                 sample_name=sample_name, platform=platform, reference_uri=reference_uri,
-                acquisition_mode=acquisition_mode, batch_reads=batch_reads, progress=progress))
+                acquisition_mode=acquisition_mode, batch_reads=batch_reads,
+                batch_bytes=batch_bytes, threads=threads, progress=progress))
 
     def _iter_records_raw(self) -> Iterator[tuple[str, bytes, bytes]]:
         """Yield ``(name, seq, qual)`` with quality bytes verbatim
         (no Phred conversion)."""
         with _open_maybe_gzip(self._path) as fh:
-            line_no = 0
-            while True:
-                hdr = fh.readline()
-                if not hdr:
-                    return
-                line_no += 1
-                hdr = hdr.rstrip(b"\r\n")
-                if not hdr:
-                    continue  # tolerate stray blank lines between records
-                if not hdr.startswith(b"@"):
-                    raise FastqParseError(
-                        f"line {line_no}: expected '@<name>' header, "
-                        f"got {hdr[:60]!r}"
-                    )
-                name = hdr[1:].split(None, 1)[0].decode("utf-8")
-                seq_line = fh.readline()
-                line_no += 1
-                if not seq_line:
-                    raise FastqParseError(
-                        f"truncated record at line {line_no} "
-                        f"(missing sequence)"
-                    )
-                seq = seq_line.rstrip(b"\r\n")
-                plus = fh.readline()
-                line_no += 1
-                if not plus or not plus.startswith(b"+"):
-                    raise FastqParseError(
-                        f"line {line_no}: expected '+' separator, "
-                        f"got {plus[:60]!r}"
-                    )
-                qual_line = fh.readline()
-                line_no += 1
-                if not qual_line:
-                    raise FastqParseError(
-                        f"truncated record at line {line_no} "
-                        f"(missing qualities)"
-                    )
-                qual = qual_line.rstrip(b"\r\n")
-                if len(qual) != len(seq):
-                    raise FastqParseError(
-                        f"line {line_no}: SEQ/QUAL length mismatch "
-                        f"({len(seq)} vs {len(qual)}) for read {name!r}"
-                    )
-                yield name, seq, qual
+            yield from _iter_fastq_records(fh)
 
     def _iter_with_offset(
         self, offset: int

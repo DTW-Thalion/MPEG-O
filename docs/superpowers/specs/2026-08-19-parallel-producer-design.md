@@ -1,6 +1,10 @@
 # Parallel Producer Design
 
-Date: 2026-08-19. Status: Phases 1 (ObjC) and 2 (Java) implemented;
+Date: 2026-08-19. Status: all three phases implemented. Python
+acceptance 11m 19s on the 50 GB corpus (within 2x of ObjC),
+container identical to the ObjC import in every genomic dataset and
+attribute; the numbers need the `_rans` Cython accelerator built.
+Phases 1 (ObjC) and 2 (Java):
 Java acceptance 8m 13s on the 50 GB corpus (within 1.5x of ObjC), codec
 bytes identical across the two SDKs. Java deviations: BAM stays on the
 serial htsjdk reader (its decode dominates; there is no samtools pipe

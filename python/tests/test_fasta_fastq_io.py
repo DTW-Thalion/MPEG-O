@@ -275,3 +275,15 @@ def test_fastq_parse_error_seq_qual_mismatch(tmp_path: Path) -> None:
     )
     with pytest.raises(FastqParseError, match="length mismatch"):
         FastqReader(fq).read()
+
+
+def test_fastq_batch_bytes_cuts(tmp_path):
+    from ttio.importers.fastq import FastqReader
+    fq = tmp_path / "b.fastq"
+    with open(fq, "wb") as f:
+        for i in range(40):
+            f.write(b"@r%d\n" % i + b"A" * 1000 + b"\n+\n" + b"I" * 1000 + b"\n")
+    batches = list(FastqReader(fq).iter_batches(
+        batch_reads=10**9, batch_bytes=8000))
+    assert [len(b.lengths) for b in batches] == [8] * 5
+    assert b"".join(bytes(b.sequences) for b in batches) == b"A" * 40_000

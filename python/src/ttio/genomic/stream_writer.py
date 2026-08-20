@@ -27,7 +27,7 @@ from .. import _hdf5_io as io
 from ..enums import Compression, Precision
 from ..providers.base import CompoundField, CompoundFieldKind
 from ..written_genomic_run import WrittenGenomicRun
-from .._threads import resolve_threads, pool_context
+from .._threads import resolve_threads, pool_context, resolve_memory_budget
 from . import _blocks
 
 LAYOUT = "blocks_v1"
@@ -94,7 +94,8 @@ class GenomicStreamWriter:
                  signal_compression: str = "gzip",
                  opt_legacy_whole_channel: bool = False,
                  provenance_records=None,
-                 threads: int | None = None):
+                 threads: int | None = None,
+                 memory_budget_bytes: int | None = None):
         self._study = study_group
         self._provenance = list(provenance_records or [])
         self._name = run_name
@@ -131,6 +132,10 @@ class GenomicStreamWriter:
         self._legacy_parts: list[WrittenGenomicRun] = []
         self._threads = resolve_threads(threads)
         self._window = self._threads + 1
+        self._budget = resolve_memory_budget(
+            memory_budget_bytes, self._threads, self._block_bytes)
+        self._inflight_bytes = 0
+        self._max_inflight_bytes = 0
         self._pool = None
         self._pool_ctx = None
         self._inflight: list = []
@@ -144,6 +149,14 @@ class GenomicStreamWriter:
     @property
     def threads(self) -> int:
         return self._threads
+
+    @property
+    def max_inflight_bytes_observed(self) -> int:
+        """High-water mark of the estimated bytes of in-flight
+        (submitted, not yet written) blocks. The writer stalls so
+        this stays at or under half the resolved byte budget
+        (``memory_budget_bytes`` / ``TTIO_MEMORY_BUDGET``)."""
+        return self._max_inflight_bytes
 
     @property
     def read_count(self) -> int:
@@ -228,13 +241,23 @@ class GenomicStreamWriter:
             self._write_encoded(block, _blocks.encode_block(block))
             return
         self._drain(block_until=self._window - 1)
-        self._inflight.append((block, self._pool.submit(_blocks.encode_block, block)))
+        est = int(block.sequences.nbytes + block.qualities.nbytes
+                  + block.offsets.nbytes * 3) * 4
+        half = self._budget // 2
+        while self._inflight and self._inflight_bytes + est > half:
+            self._drain(block_until=len(self._inflight) - 1)
+        self._inflight_bytes += est
+        self._max_inflight_bytes = max(self._max_inflight_bytes, self._inflight_bytes)
+        self._inflight.append((block, est,
+                               self._pool.submit(_blocks.encode_block, block)))
 
     def _drain(self, block_until: int) -> None:
         """Write completed blocks in sequence order; wait on the oldest
         until at most ``block_until`` remain in flight."""
-        while self._inflight and (len(self._inflight) > block_until or self._inflight[0][1].done()):
-            block, fut = self._inflight.pop(0)
+        while self._inflight and (len(self._inflight) > block_until
+                                  or self._inflight[0][2].done()):
+            block, est, fut = self._inflight.pop(0)
+            self._inflight_bytes -= est
             self._write_encoded(block, fut.result())
 
     def _shutdown_pool(self) -> None:
