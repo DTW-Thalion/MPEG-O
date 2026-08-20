@@ -279,13 +279,6 @@ int ttio_v6_chain_decode(const ttio_v6_param *pm,
 
 #define V6_BODY_HDR 16
 
-typedef struct {
-    size_t   first_read;
-    size_t   n_reads;
-    uint64_t qual_off;
-    uint64_t n_qual;
-} v6_seg;
-
 /* Segments hold whole reads: accumulate reads until the symbol count
  * reaches seg_symbols, then close at that read boundary. Determined by
  * the read lengths alone, so encoder and decoder agree without the
@@ -399,7 +392,7 @@ int ttio_v6_encode_job_cpu(ttio_v6_job *job) {
     memset(&j, 0, sizeof j);
     j.pm = job->pm;
     j.ab = job->ab;
-    j.segs = (const v6_seg *)job->segs;
+    j.segs = job->segs;
     j.n_segs = job->n_segs;
     j.lengths = job->read_lengths;
     j.bufs = job->bufs;

@@ -24,6 +24,16 @@
 
 #include "m94z_v6.h"
 
+/* One segment: a run of whole reads. Both engines are handed the same
+ * plan rather than deriving it, so they cannot disagree about where
+ * segments begin. */
+typedef struct {
+    size_t   first_read;
+    size_t   n_reads;
+    uint64_t qual_off;
+    uint64_t n_qual;
+} v6_seg;
+
 /* One block of work. The segment plan is derived from the read lengths
  * and S by v6_plan, so both engines see the same segmentation and
  * neither re-derives it. bufs/lens are caller-allocated, one entry per
@@ -37,7 +47,7 @@ typedef struct {
     size_t                  n_qualities;
     uint32_t                seg_symbols;
     int                     threads;
-    const void             *segs;      /* const v6_seg *, opaque here */
+    const v6_seg           *segs;
     size_t                  n_segs;
     uint8_t               **bufs;
     size_t                 *lens;
