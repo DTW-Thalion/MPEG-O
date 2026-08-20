@@ -355,3 +355,42 @@ falsify them: both of those flattered the engine until this acceptance
 ran. And an engine that fails silently and spills is indistinguishable
 from one that works slowly, which is why the engine now records why it
 declined.
+
+## Phase 2 acceptance across all three read shapes
+
+Same tool, same method, three interleaved rounds each, agreeing to
+within 2%. Every checksum matched its CPU counterpart, and every block
+encoded on the GPU (no silent spills).
+
+| Corpus | Alphabet | Model per chain | CPU | GPU | GPU / CPU |
+| --- | --- | --- | --- | --- | --- |
+| NovaSeq WGS | 6 | 57 KB | 285 MB/s | 171 MB/s | 0.60x |
+| lowcov chr22 | 49 | 410 KB | 217 MB/s | 84.8 MB/s | 0.39x |
+| HiFi | 92 | 762 KB | 214 MB/s | 62.3 MB/s | 0.29x |
+
+**The GPU is slower than the CPU on every corpus**, and the margin
+widens exactly as the alphabet, and therefore the resident model, grows.
+Model bytes per chain are `2^C * (2A + 2) * 2`, so a 92-symbol alphabet
+carries thirteen times the model of a 6-symbol one, and the engine loses
+roughly in proportion. The CPU degrades over the same range too, but
+only from 285 to 214 MB/s, because its cost is instruction count rather
+than memory traffic.
+
+### The chain count is the remaining lever
+
+The kernel microbenchmark reached 692 MB/s on NovaSeq, four times what
+the acceptance measures, and the difference is not overhead: it ran 1024
+chains where a production block yields 256. A 64 MiB block at the
+default 256 Ki segment holds 256 segments, and 256 chains does not fill
+this GPU.
+
+Two ways to raise it, both already measured elsewhere in this document:
+smaller segments give more chains per block but cost ratio (128 Ki was
+about three points worse than 256 Ki), and several blocks in flight give
+more chains at no ratio cost but need a scheduler the engine does not
+have, since one queue and one command buffer mean submissions serialise
+today.
+
+Neither changes the conclusion on this hardware. Both are worth knowing
+before anyone runs this on a server GPU, where the memory bandwidth that
+the model traffic is bound by is three to thirteen times higher.
