@@ -401,4 +401,8 @@ if(NOT TTIO_COVERAGE)
     add_executable(bench_throughput bench/bench_throughput.c)
     target_link_libraries(bench_throughput PRIVATE ttio_rans)
     target_compile_options(bench_throughput PRIVATE -O3)
+
+    add_executable(bench_v6_ratio bench/bench_v6_ratio.c)
+    target_link_libraries(bench_v6_ratio PRIVATE ttio_rans Threads::Threads)
+    target_compile_options(bench_v6_ratio PRIVATE -O3)
 endif()

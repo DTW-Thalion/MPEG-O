@@ -34,6 +34,24 @@ typedef struct {
     uint8_t qbits, qshift, pbits, pshift, dbits;
 } ttio_v6_param;
 
+/* The quality values a block actually uses, mapped to a dense
+ * alphabet. Every segment restarts its model from a cold prior, so the
+ * prior must not spread mass over symbols the block never emits: with
+ * binned Illumina qualities the real alphabet is a handful of values
+ * and a 256-symbol prior costs several bits per symbol that a short
+ * segment never earns back. V4 gets the same effect from its stats
+ * pass; V6 carries the alphabet in the body header so every segment
+ * and both directions agree on it. */
+typedef struct {
+    uint8_t  map[256];    /* quality byte -> dense index */
+    uint8_t  inv[256];    /* dense index -> quality byte, ascending */
+    unsigned n;           /* alphabet size, 1..256 */
+} ttio_v6_alphabet;
+
+/* Build from a block's qualities. n_qualities may be 0, giving n = 1. */
+void ttio_v6_alphabet_build(const uint8_t *qual, size_t n_qualities,
+                            ttio_v6_alphabet *ab);
+
 /* Provisional until the Phase 1 ratio sweep fixes it. */
 extern const ttio_v6_param TTIO_V6_DEFAULT;
 
@@ -44,11 +62,13 @@ extern const ttio_v6_param TTIO_V6_DEFAULT;
  * The chain body is the bare range-coded stream: the parameters live
  * in the block body header, not here. */
 int ttio_v6_chain_encode(const ttio_v6_param *pm,
+                         const ttio_v6_alphabet *ab,
                          const uint8_t *qual,
                          const uint32_t *lengths, size_t n_reads,
                          uint8_t *out, size_t *out_len);
 
 int ttio_v6_chain_decode(const ttio_v6_param *pm,
+                         const ttio_v6_alphabet *ab,
                          const uint8_t *in, size_t in_len,
                          const uint32_t *lengths, size_t n_reads,
                          uint8_t *qual_out, size_t n_qualities);

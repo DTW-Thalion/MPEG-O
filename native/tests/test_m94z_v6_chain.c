@@ -48,17 +48,20 @@ int main(void) {
     uint8_t *enc = malloc(cap), *enc2 = malloc(cap);
     uint8_t *dec = malloc(N);
 
+    ttio_v6_alphabet ab;
+    ttio_v6_alphabet_build(qual, N, &ab);
+
     size_t l1 = cap;
-    int rc = ttio_v6_chain_encode(&TTIO_V6_DEFAULT, qual, lens, NR, enc, &l1);
+    int rc = ttio_v6_chain_encode(&TTIO_V6_DEFAULT, &ab, qual, lens, NR, enc, &l1);
     CHECK(rc == 0, "chain encode rc");
     CHECK(l1 > 0 && l1 < (size_t)N, "chain output is smaller than input");
 
-    rc = ttio_v6_chain_decode(&TTIO_V6_DEFAULT, enc, l1, lens, NR, dec, N);
+    rc = ttio_v6_chain_decode(&TTIO_V6_DEFAULT, &ab, enc, l1, lens, NR, dec, N);
     CHECK(rc == 0, "chain decode rc");
     CHECK(memcmp(qual, dec, N) == 0, "chain round-trips");
 
     size_t l2 = cap;
-    rc = ttio_v6_chain_encode(&TTIO_V6_DEFAULT, qual, lens, NR, enc2, &l2);
+    rc = ttio_v6_chain_encode(&TTIO_V6_DEFAULT, &ab, qual, lens, NR, enc2, &l2);
     CHECK(rc == 0 && l2 == l1 && memcmp(enc, enc2, l1) == 0,
           "second encode is byte-identical");
 
@@ -66,7 +69,7 @@ int main(void) {
     {
         uint8_t small[64];
         size_t  ls = sizeof small;
-        rc = ttio_v6_chain_encode(&TTIO_V6_DEFAULT, qual, lens, NR, small,
+        rc = ttio_v6_chain_encode(&TTIO_V6_DEFAULT, &ab, qual, lens, NR, small,
                                   &ls);
         CHECK(rc != 0, "undersized output buffer is rejected");
     }
@@ -75,12 +78,12 @@ int main(void) {
     {
         ttio_v6_param bad = { 12, 5, 4, 3, 2 };   /* Q+P+D = 18 */
         size_t        lb = cap;
-        rc = ttio_v6_chain_encode(&bad, qual, lens, NR, enc, &lb);
+        rc = ttio_v6_chain_encode(&bad, &ab, qual, lens, NR, enc, &lb);
         CHECK(rc != 0, "Q+P+D over 16 is rejected");
 
         ttio_v6_param bad_shift = { 8, 9, 4, 3, 2 };  /* qshift > 8 */
         lb = cap;
-        rc = ttio_v6_chain_encode(&bad_shift, qual, lens, NR, enc, &lb);
+        rc = ttio_v6_chain_encode(&bad_shift, &ab, qual, lens, NR, enc, &lb);
         CHECK(rc != 0, "qshift over 8 is rejected");
     }
 
@@ -88,18 +91,18 @@ int main(void) {
     {
         uint32_t one = LEN;
         size_t   lo = cap;
-        rc = ttio_v6_chain_encode(&TTIO_V6_DEFAULT, qual, &one, 1, enc, &lo);
+        rc = ttio_v6_chain_encode(&TTIO_V6_DEFAULT, &ab, qual, &one, 1, enc, &lo);
         CHECK(rc == 0, "single-read encode rc");
-        rc = ttio_v6_chain_decode(&TTIO_V6_DEFAULT, enc, lo, &one, 1, dec,
+        rc = ttio_v6_chain_decode(&TTIO_V6_DEFAULT, &ab, enc, lo, &one, 1, dec,
                                   LEN);
         CHECK(rc == 0 && memcmp(qual, dec, LEN) == 0,
               "single read round-trips");
 
         uint32_t tiny = 1;
         lo = cap;
-        rc = ttio_v6_chain_encode(&TTIO_V6_DEFAULT, qual, &tiny, 1, enc, &lo);
+        rc = ttio_v6_chain_encode(&TTIO_V6_DEFAULT, &ab, qual, &tiny, 1, enc, &lo);
         CHECK(rc == 0, "one-symbol encode rc");
-        rc = ttio_v6_chain_decode(&TTIO_V6_DEFAULT, enc, lo, &tiny, 1, dec, 1);
+        rc = ttio_v6_chain_decode(&TTIO_V6_DEFAULT, &ab, enc, lo, &tiny, 1, dec, 1);
         CHECK(rc == 0 && dec[0] == qual[0], "one symbol round-trips");
     }
 

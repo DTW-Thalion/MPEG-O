@@ -18,11 +18,32 @@
  * design document. The Phase 1 ratio sweep replaces these. */
 const ttio_v6_param TTIO_V6_DEFAULT = { 6, 5, 4, 4, 2 };
 
-#define V6_NSYM 256
-
 #ifndef MIN
 #  define MIN(a,b) ((a)<(b)?(a):(b))
 #endif
+
+void ttio_v6_alphabet_build(const uint8_t *qual, size_t n_qualities,
+                            ttio_v6_alphabet *ab) {
+    uint8_t seen[256];
+    memset(seen, 0, sizeof seen);
+    for (size_t i = 0; i < n_qualities; i++) seen[qual[i]] = 1;
+
+    memset(ab->map, 0, sizeof ab->map);
+    memset(ab->inv, 0, sizeof ab->inv);
+    ab->n = 0;
+    for (unsigned q = 0; q < 256; q++) {
+        if (seen[q]) {
+            ab->map[q] = (uint8_t)ab->n;
+            ab->inv[ab->n] = (uint8_t)q;
+            ab->n++;
+        }
+    }
+    if (ab->n == 0) ab->n = 1;   /* an empty block still needs a model */
+}
+
+static int alphabet_valid(const ttio_v6_alphabet *ab) {
+    return ab && ab->n >= 1 && ab->n <= 256;
+}
 
 static int param_valid(const ttio_v6_param *pm) {
     if (!pm) return 0;
@@ -50,9 +71,9 @@ typedef struct {
     sm_symfreq *pool;
 } v6_models;
 
-static int models_init(v6_models *vm, size_t n_ctx) {
-    const size_t stride = V6_NSYM + 2;
-    sm_symfreq   tmpl[V6_NSYM + 2];
+static int models_init(v6_models *vm, size_t n_ctx, unsigned nsym) {
+    const size_t stride = nsym + 2;
+    sm_symfreq   tmpl[256 + 2];
 
     vm->models = (sm_model *)malloc(n_ctx * sizeof(*vm->models));
     vm->pool = (sm_symfreq *)malloc(n_ctx * stride * sizeof(*vm->pool));
@@ -64,21 +85,21 @@ static int models_init(v6_models *vm, size_t n_ctx) {
         return TTIO_SEQCTX_ERR_OOM;
     }
 
-    memset(tmpl, 0, sizeof tmpl);
+    memset(tmpl, 0, stride * sizeof tmpl[0]);
     tmpl[0].symbol = 0;
     tmpl[0].freq = (uint16_t)SM_MAX_FREQ;
-    for (int i = 0; i < V6_NSYM; i++) {
+    for (unsigned i = 0; i < nsym; i++) {
         tmpl[i + 1].symbol = (uint16_t)i;
         tmpl[i + 1].freq = 1;
     }
 
     for (size_t c = 0; c < n_ctx; c++) {
-        vm->models[c].nsym = V6_NSYM;
-        vm->models[c].tot_freq = (uint32_t)V6_NSYM;
+        vm->models[c].nsym = (int)nsym;
+        vm->models[c].tot_freq = nsym;
         vm->models[c].sentinel.freq = 0;
         vm->models[c].sentinel.symbol = 0;
         vm->models[c].F = vm->pool + c * stride;
-        memcpy(vm->models[c].F, tmpl, sizeof tmpl);
+        memcpy(vm->models[c].F, tmpl, stride * sizeof tmpl[0]);
     }
     return 0;
 }
@@ -93,13 +114,14 @@ static void models_free(v6_models *vm) {
 
 /* Shared coding loop. do_encode: qual is input and rc_e is active.
  * Otherwise qual is output and rc_d is active. */
-static int code_pass(const ttio_v6_param *pm, uint8_t *qual,
+static int code_pass(const ttio_v6_param *pm, const ttio_v6_alphabet *ab,
+                     uint8_t *qual,
                      const uint32_t *lengths, size_t n_reads,
                      rc_cram_encoder *rc_e, rc_cram_decoder *rc_d,
                      int do_encode) {
     size_t   n_ctx = (size_t)1 << (pm->qbits + pm->pbits + pm->dbits);
     v6_models vm;
-    int      rc = models_init(&vm, n_ctx);
+    int      rc = models_init(&vm, n_ctx, ab->n);
     if (rc != 0) return rc;
 
     const unsigned qmask = (1u << pm->qbits) - 1u;
@@ -122,11 +144,15 @@ static int code_pass(const ttio_v6_param *pm, uint8_t *qual,
             unsigned ctx = (qctx & qmask) | (pos << ploc) | (d << dloc);
             unsigned q;
             if (do_encode) {
-                q = qual[k];
+                q = ab->map[qual[k]];
                 sm_encode(&vm.models[ctx], rc_e, (uint16_t)q);
             } else {
                 q = sm_decode(&vm.models[ctx], rc_d);
-                qual[k] = (uint8_t)q;
+                if (q >= ab->n) {
+                    models_free(&vm);
+                    return TTIO_SEQCTX_ERR_CORRUPT;
+                }
+                qual[k] = ab->inv[q];
             }
             qctx = (qctx << pm->qshift) + q;
             qpp = qp;
@@ -139,12 +165,14 @@ static int code_pass(const ttio_v6_param *pm, uint8_t *qual,
 }
 
 int ttio_v6_chain_encode(const ttio_v6_param *pm,
+                         const ttio_v6_alphabet *ab,
                          const uint8_t *qual,
                          const uint32_t *lengths, size_t n_reads,
                          uint8_t *out, size_t *out_len) {
     uint64_t n_qualities = 0;
 
     if (!param_valid(pm)) return TTIO_SEQCTX_ERR_PARAM;
+    if (!alphabet_valid(ab)) return TTIO_SEQCTX_ERR_PARAM;
     if (!out || !out_len) return TTIO_SEQCTX_ERR_ARGS;
     if (n_reads > 0 && !lengths) return TTIO_SEQCTX_ERR_ARGS;
     lengths_sum(lengths, n_reads, &n_qualities);
@@ -157,7 +185,7 @@ int ttio_v6_chain_encode(const ttio_v6_param *pm,
 
     rc_cram_encoder e;
     rc_cram_encoder_init(&e, out, *out_len);
-    int rc = code_pass(pm, (uint8_t *)qual, lengths, n_reads, &e, NULL, 1);
+    int rc = code_pass(pm, ab, (uint8_t *)qual, lengths, n_reads, &e, NULL, 1);
     if (rc != 0) return rc;
     size_t body = rc_cram_encoder_finish(&e);
     if (e.err != 0) return TTIO_SEQCTX_ERR_ARGS;
@@ -166,12 +194,14 @@ int ttio_v6_chain_encode(const ttio_v6_param *pm,
 }
 
 int ttio_v6_chain_decode(const ttio_v6_param *pm,
+                         const ttio_v6_alphabet *ab,
                          const uint8_t *in, size_t in_len,
                          const uint32_t *lengths, size_t n_reads,
                          uint8_t *qual_out, size_t n_qualities) {
     uint64_t total = 0;
 
     if (!param_valid(pm)) return TTIO_SEQCTX_ERR_PARAM;
+    if (!alphabet_valid(ab)) return TTIO_SEQCTX_ERR_PARAM;
     if (n_qualities == 0) return 0;
     if (!in || !qual_out || !lengths) return TTIO_SEQCTX_ERR_ARGS;
     lengths_sum(lengths, n_reads, &total);
@@ -179,7 +209,7 @@ int ttio_v6_chain_decode(const ttio_v6_param *pm,
 
     rc_cram_decoder d;
     rc_cram_decoder_init(&d, in, in_len);
-    return code_pass(pm, qual_out, lengths, n_reads, NULL, &d, 0);
+    return code_pass(pm, ab, qual_out, lengths, n_reads, NULL, &d, 0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -223,8 +253,9 @@ static size_t v6_plan(const uint32_t *lengths, size_t n_reads,
 }
 
 typedef struct {
-    const ttio_v6_param *pm;
-    const v6_seg        *segs;
+    const ttio_v6_param    *pm;
+    const ttio_v6_alphabet *ab;
+    const v6_seg           *segs;
     size_t               n_segs;
     const uint32_t      *lengths;
     uint8_t            **bufs;
@@ -241,12 +272,14 @@ static void v6_run_one(v6_job *j, size_t i) {
     const v6_seg *s = &j->segs[i];
     if (j->do_encode) {
         size_t cap = j->lens[i];
-        j->errs[i] = ttio_v6_chain_encode(j->pm, j->qual_in + s->qual_off,
+        j->errs[i] = ttio_v6_chain_encode(j->pm, j->ab,
+                                          j->qual_in + s->qual_off,
                                           j->lengths + s->first_read,
                                           s->n_reads, j->bufs[i], &cap);
         if (j->errs[i] == 0) j->lens[i] = cap;
     } else {
-        j->errs[i] = ttio_v6_chain_decode(j->pm, j->bufs[i], j->lens[i],
+        j->errs[i] = ttio_v6_chain_decode(j->pm, j->ab, j->bufs[i],
+                                          j->lens[i],
                                           j->lengths + s->first_read,
                                           s->n_reads,
                                           j->qual_out + s->qual_off,
@@ -319,6 +352,7 @@ int ttio_m94z_v6_encode(const uint8_t *qual, size_t n_qualities,
                         const ttio_v6_param *pm, uint32_t seg_symbols,
                         int threads, uint8_t *out, size_t *out_len) {
     uint64_t  total = 0, chain_bytes = 0;
+    ttio_v6_alphabet ab;
     v6_seg   *segs = NULL;
     uint8_t **bufs = NULL;
     size_t   *lens = NULL;
@@ -337,6 +371,10 @@ int ttio_m94z_v6_encode(const uint8_t *qual, size_t n_qualities,
 
     n_segs = v6_plan(read_lengths, n_reads, seg_symbols, NULL);
     if (n_segs > 0xFFFFu) return TTIO_SEQCTX_ERR_PARAM;
+
+    /* One alphabet for the whole block: every segment codes against the
+     * same dense symbol set, and it is written once into the header. */
+    ttio_v6_alphabet_build(qual, n_qualities, &ab);
 
     if (n_segs > 0) {
         uint64_t pool_bytes = 0, at = 0;
@@ -375,6 +413,7 @@ int ttio_m94z_v6_encode(const uint8_t *qual, size_t n_qualities,
             j.bufs = bufs;
             j.lens = lens;
             j.errs = errs;
+            j.ab = &ab;
             j.qual_in = qual;
             j.do_encode = 1;
             rc = v6_run(&j, threads);
@@ -383,7 +422,7 @@ int ttio_m94z_v6_encode(const uint8_t *qual, size_t n_qualities,
     }
 
     for (size_t i = 0; i < n_segs; i++) chain_bytes += lens[i];
-    body_len = V6_BODY_HDR + 4u * n_segs + (size_t)chain_bytes;
+    body_len = V6_BODY_HDR + ab.n + 4u * n_segs + (size_t)chain_bytes;
     body = (uint8_t *)malloc(body_len);
     if (!body) {
         rc = TTIO_SEQCTX_ERR_OOM;
@@ -399,8 +438,10 @@ int ttio_m94z_v6_encode(const uint8_t *qual, size_t n_qualities,
     body[10] = pm->pbits;
     body[11] = pm->pshift;
     body[12] = pm->dbits;
+    v6_put_u16(body + 14, (uint16_t)ab.n);
+    memcpy(body + V6_BODY_HDR, ab.inv, ab.n);
     {
-        uint8_t *tab = body + V6_BODY_HDR;
+        uint8_t *tab = body + V6_BODY_HDR + ab.n;
         uint8_t *at = tab + 4u * n_segs;
         for (size_t i = 0; i < n_segs; i++) {
             v6_put_u32(tab + 4u * i, (uint32_t)lens[i]);
@@ -429,9 +470,10 @@ int ttio_m94z_v6_decode(const uint8_t *in, size_t in_len,
     uint64_t       nq = 0, nr = 0;
     uint8_t        pad = 0;
     const uint8_t *body = NULL, *tab = NULL, *at = NULL;
-    size_t         body_len = 0, n_segs, avail;
+    size_t         body_len = 0, n_segs, avail, a_size;
     uint32_t       seg_symbols;
     ttio_v6_param  pm;
+    ttio_v6_alphabet ab;
     v6_seg        *segs = NULL;
     uint8_t      **bufs = NULL;
     size_t        *lens = NULL;
@@ -468,7 +510,25 @@ int ttio_m94z_v6_decode(const uint8_t *in, size_t in_len,
     pm.dbits = body[12];
     if (!param_valid(&pm)) return TTIO_SEQCTX_ERR_PARAM;
     if (seg_symbols == 0) return TTIO_SEQCTX_ERR_CORRUPT;
-    if (body_len < V6_BODY_HDR + 4u * n_segs) return TTIO_SEQCTX_ERR_CORRUPT;
+
+    a_size = v6_get_u16(body + 14);
+    if (a_size < 1 || a_size > 256) return TTIO_SEQCTX_ERR_CORRUPT;
+    if (body_len < V6_BODY_HDR + a_size + 4u * n_segs)
+        return TTIO_SEQCTX_ERR_CORRUPT;
+
+    /* Rebuild the map from the stored alphabet. The values ascend, so a
+     * stream claiming otherwise is corrupt. */
+    memset(ab.map, 0, sizeof ab.map);
+    memset(ab.inv, 0, sizeof ab.inv);
+    ab.n = (unsigned)a_size;
+    for (size_t i = 0; i < a_size; i++) {
+        uint8_t q = body[V6_BODY_HDR + i];
+        if (i > 0 && q <= body[V6_BODY_HDR + i - 1])
+            return TTIO_SEQCTX_ERR_CORRUPT;
+        ab.inv[i] = q;
+        ab.map[q] = (uint8_t)i;
+    }
+
     if (v6_plan(read_lengths, (size_t)nr, seg_symbols, NULL) != n_segs)
         return TTIO_SEQCTX_ERR_CORRUPT;
 
@@ -482,9 +542,9 @@ int ttio_m94z_v6_decode(const uint8_t *in, size_t in_len,
     }
     v6_plan(read_lengths, (size_t)nr, seg_symbols, segs);
 
-    tab = body + V6_BODY_HDR;
+    tab = body + V6_BODY_HDR + a_size;
     at = tab + 4u * n_segs;
-    avail = body_len - V6_BODY_HDR - 4u * n_segs;
+    avail = body_len - V6_BODY_HDR - a_size - 4u * n_segs;
     for (size_t i = 0; i < n_segs; i++) {
         uint32_t sl = v6_get_u32(tab + 4u * i);
         if (sl > avail) {
@@ -507,6 +567,7 @@ int ttio_m94z_v6_decode(const uint8_t *in, size_t in_len,
         j.bufs = bufs;
         j.lens = lens;
         j.errs = errs;
+        j.ab = &ab;
         j.qual_out = qual_out;
         j.do_encode = 0;
         rc = v6_run(&j, threads);
