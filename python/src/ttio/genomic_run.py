@@ -250,11 +250,14 @@ class GenomicRun:
         import concurrent.futures as _cf
         b_first, b_last = t.block_for(i), t.block_for(stop - 1)
         # The serial consumer only needs enough decode-ahead to never
-        # stall; more in flight is pure memory (a window of 
-        # held  decoded blocks resident). Cap the window while
-        # the auto-tune stand-down still keys off .
+        # stall; more in flight is pure memory, since the window is how
+        # many decoded blocks stay resident.
         window = min(nthreads, _READ_AHEAD_BLOCKS)
-        with pool_context(nthreads), _cf.ThreadPoolExecutor(
+        # pool_context sizes V6 segment threads from the number of
+        # workers, so it takes the window and not nthreads: only this
+        # many blocks decode at once, and the rest of the machine is
+        # what the segments of each one are free to use.
+        with pool_context(window), _cf.ThreadPoolExecutor(
                 max_workers=window, thread_name_prefix="ttio-block-decode") as pool:
             pending: dict[int, "_cf.Future"] = {}
 
