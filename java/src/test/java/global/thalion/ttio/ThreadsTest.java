@@ -10,7 +10,7 @@ class ThreadsTest {
     void resolvePrecedence() {
         System.clearProperty("ttio.threads");
         int cores = Runtime.getRuntime().availableProcessors();
-        assertEquals(Math.max(1, cores - 8), Threads.resolveIgnoringEnv(null));
+        assertEquals(Math.max(1, cores - 2), Threads.resolveIgnoringEnv(null));
         System.setProperty("ttio.threads", "6");
         assertEquals(6, Threads.resolve(null));
         assertEquals(2, Threads.resolve(2));

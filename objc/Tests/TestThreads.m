@@ -13,8 +13,8 @@ void testThreads(void)
 {
     unsetenv("TTIO_THREADS");
     NSUInteger cores = (NSUInteger)[[NSProcessInfo processInfo] activeProcessorCount];
-    NSUInteger want = cores > 9 ? cores - 8 : 1;
-    PASS([TTIOThreads resolve:nil] == want, "threads: default is cores minus 8, at least 1");
+    NSUInteger want = cores > 3 ? cores - 2 : 1;
+    PASS([TTIOThreads resolve:nil] == want, "threads: default is cores minus 2, at least 1");
     setenv("TTIO_THREADS", "6", 1);
     PASS([TTIOThreads resolve:nil] == 6, "threads: TTIO_THREADS wins over the default");
     PASS([TTIOThreads resolve:@2] == 2, "threads: an explicit value wins");

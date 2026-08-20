@@ -1,6 +1,6 @@
 """The one thread knob of the SDK.
 
-``TTIO_THREADS`` unset or 0 means ``max(1, cpu_count - 8)``; ``1`` is the
+``TTIO_THREADS`` unset or 0 means ``max(1, cpu_count - 2)``; ``1`` is the
 serial path with no executor; N is the pool size. ``threads=`` on a
 writer or reader overrides the environment for that object.
 """
@@ -20,7 +20,11 @@ def resolve_threads(explicit: int | None = None) -> int:
     except ValueError:
         n = 1
     if n <= 0:
-        n = max(1, (os.cpu_count() or 1) - 8)
+        # Two cores held back rather than eight: throughput measured on
+        # a 32-thread machine kept climbing to roughly one writer per
+        # core, and the wider margin was leaving a quarter of it unused.
+        # The floor keeps a two-core machine from resolving to zero.
+        n = max(1, (os.cpu_count() or 1) - 2)
     return n
 
 

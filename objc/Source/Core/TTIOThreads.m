@@ -47,8 +47,12 @@
         if (end == raw || (end && *end && *end != ' ')) return 1;
     }
     if (n <= 0) {
+        /* Two cores held back rather than eight: measured throughput
+         * kept climbing to roughly one writer per core, and the wider
+         * margin left a quarter of it unused. The floor keeps a
+         * two-core machine from resolving to zero. */
         long cores = (long)[[NSProcessInfo processInfo] activeProcessorCount];
-        n = cores - 8 > 1 ? cores - 8 : 1;
+        n = cores - 2 > 1 ? cores - 2 : 1;
     }
     return (NSUInteger)n;
 }

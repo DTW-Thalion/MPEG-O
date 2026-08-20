@@ -6,9 +6,15 @@ from ttio import _threads
 def test_resolve_threads_precedence(monkeypatch):
     monkeypatch.delenv("TTIO_THREADS", raising=False)
     monkeypatch.setattr(os, "cpu_count", lambda: 32)
-    assert _threads.resolve_threads() == 24
+    assert _threads.resolve_threads() == 30
     monkeypatch.setattr(os, "cpu_count", lambda: 4)
+    assert _threads.resolve_threads() == 2
+    # Two cores would otherwise resolve to zero workers.
+    monkeypatch.setattr(os, "cpu_count", lambda: 2)
     assert _threads.resolve_threads() == 1
+    monkeypatch.setattr(os, "cpu_count", lambda: 1)
+    assert _threads.resolve_threads() == 1
+    # 0 means "use the default", which is still the one-core answer here.
     monkeypatch.setenv("TTIO_THREADS", "0")
     assert _threads.resolve_threads() == 1
     monkeypatch.setenv("TTIO_THREADS", "6")

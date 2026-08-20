@@ -55,6 +55,21 @@ public API is stable from onward.
   most 4 blocks, which a serial consumer cannot outrun anyway.
 
 ### Changed
+- **The default thread count is now `cpu_count - 2`, was `cpu_count - 8`.**
+  `TTIO_THREADS` unset or 0 resolves to this in all three SDKs. Measured
+  on a 32-thread machine encoding a corpus with more blocks than cores,
+  throughput kept climbing to roughly one writer per core: 1487 MB/s at
+  32 writers against 1128 at the 24 the old default chose. The floor of
+  1 stays, so a one or two core machine still resolves to a single
+  worker rather than none. Callers that set `TTIO_THREADS` or pass
+  `threads=` are unaffected.
+
+  The memory budget derives from the thread count when it is not given
+  explicitly (`threads * block_bytes * 16`, capped at half of physical
+  memory), so a machine that was hitting the thread-derived figure
+  rather than the physical cap now allows a proportionally larger
+  budget.
+
 - **Qualities strategy is decided once per run.** The M94.Z auto-tune
   encoded every block three times (V4, V5-S5, V5-S6; smallest wins).
   The streaming writers now tune block 0 only, read the winner from

@@ -27,7 +27,11 @@ public final class Threads {
         if (raw != null && !raw.isBlank()) {
             try { n = Integer.parseInt(raw.trim()); } catch (NumberFormatException e) { return 1; }
         }
-        if (n <= 0) n = Math.max(1, Runtime.getRuntime().availableProcessors() - 8);
+        // Two cores held back rather than eight: measured throughput
+        // kept climbing to roughly one writer per core, and the wider
+        // margin left a quarter of it unused. The floor keeps a
+        // two-core machine from resolving to zero.
+        if (n <= 0) n = Math.max(1, Runtime.getRuntime().availableProcessors() - 2);
         return n;
     }
 
