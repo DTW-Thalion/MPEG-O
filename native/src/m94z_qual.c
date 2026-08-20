@@ -20,6 +20,7 @@
 #include "../include/ttio_rans.h"
 #include "fqzcomp_seqctx.h"
 #include "m94z_v4_wire.h"
+#include "m94z_v6.h"
 
 static int encode_v5_candidate(
     const uint8_t *qual_in, size_t n_qualities,
@@ -108,6 +109,14 @@ int ttio_m94z_qual_encode(
         seq_in = NULL;   /* V4 path with V4's own preset selection */
     }
 
+    if (strategy_hint == TTIO_M94Z_HINT_V6) {
+        return ttio_m94z_v6_encode(qual_in, n_qualities, read_lengths,
+                                   n_reads, &TTIO_V6_DEFAULT,
+                                   TTIO_V6_DEFAULT_SEG_SYMBOLS,
+                                   ttio_m94z_get_autotune_threads(),
+                                   out, out_len);
+    }
+
     if (strategy_hint == 5 || strategy_hint == 6) {
         if (!seq_in) return TTIO_SEQCTX_ERR_NO_SEQ;
         const ttio_seqctx_param *pm =
@@ -187,6 +196,14 @@ int ttio_m94z_qual_decode(
     uint8_t *out_qual, size_t n_qualities)
 {
     if (!in || in_len < 5) return -1;
+    if (in[4] == TTIO_M94Z_V6_WIRE_VERSION) {
+        (void)flags;
+        (void)seq_in;
+        return ttio_m94z_v6_decode(in, in_len, read_lengths, n_reads,
+                                   ttio_m94z_get_autotune_threads(),
+                                   out_qual, n_qualities);
+    }
+
     if (in[4] == TTIO_M94Z_V5_WIRE_VERSION) {
         uint64_t nq = 0, nr = 0;
         uint8_t pad = 0;

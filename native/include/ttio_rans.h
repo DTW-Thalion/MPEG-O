@@ -300,8 +300,13 @@ int ttio_m94z_v4_decode(
 #define TTIO_M94Z_V5_MIN_QUALITIES (1u << 20)
 #define TTIO_M94Z_HINT_V4_AUTO 7
 
-/* Strategy of an encoded M94.Z stream: 4 = V4, 5/6 = V5 S5/S6.
- * <0: -1 args, -2 magic/version, -3 truncated or unknown id. */
+/* 8 forces M94.Z V6, the segmented adaptive variant. V6 needs no
+ * sequences, on either side. Auto-tune never selects it: V6 does not
+ * beat V4 or V5 on size, so it must not enter the size race. */
+#define TTIO_M94Z_HINT_V6 8
+
+/* Strategy of an encoded M94.Z stream: 4 = V4, 5/6 = V5 S5/S6,
+ * 8 = V6. <0: -1 args, -2 magic/version, -3 truncated or unknown id. */
 int ttio_m94z_qual_stream_strategy(const uint8_t *in, size_t in_len);
 
 /* Threads the FQZCOMP auto-tune uses for its V4/S5/S6 candidate encodes
