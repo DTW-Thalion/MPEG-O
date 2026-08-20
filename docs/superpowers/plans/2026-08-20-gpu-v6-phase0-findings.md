@@ -394,3 +394,55 @@ today.
 Neither changes the conclusion on this hardware. Both are worth knowing
 before anyone runs this on a server GPU, where the memory bandwidth that
 the model traffic is bound by is three to thirteen times higher.
+
+## Multiple blocks in flight, and a correction to every earlier ratio
+
+The engine now carries per-slot resources: each concurrent block gets
+its own buffers, descriptor set, command pool, command buffer and
+fence. Submission to the single queue is serialised, but waiting is
+not, so several blocks genuinely overlap on the device. The acceptance
+tool was also changed, because a caller that encodes blocks one after
+another cannot fill an engine with more than one slot no matter how
+many slots it offers; it now keeps a configurable number of blocks
+outstanding and checksums them in block order afterwards.
+
+The engine improved, and saturates almost immediately:
+
+| Corpus | 1 slot | 2 slots | 4 slots |
+| --- | --- | --- | --- |
+| NovaSeq WGS | 170 MB/s | 225 MB/s | 221 MB/s |
+| lowcov chr22 | 84.5 MB/s | 94.7 MB/s | 94.0 MB/s |
+| HiFi | 62.6 MB/s | 72.3 MB/s | 71.9 MB/s |
+
+A second block in flight is worth 15 to 32%; a third and fourth are
+worth nothing. Two blocks is 512 chains, and that fills this device.
+
+### The correction
+
+**Every GPU-to-CPU ratio quoted earlier in this document was measured
+against a CPU encoding blocks sequentially, and is wrong.** Making the
+caller concurrent helped the CPU far more than it helped the GPU:
+
+| Corpus | CPU, 1 writer | CPU, 4 writers | GPU, best | GPU / CPU |
+| --- | --- | --- | --- | --- |
+| NovaSeq WGS | 284.5 MB/s | 879.6 MB/s | 225 MB/s | 0.26x |
+| lowcov chr22 | 222.8 MB/s | 481.2 MB/s | 94.7 MB/s | 0.20x |
+| HiFi | 206.6 MB/s | 445.6 MB/s | 72.3 MB/s | 0.16x |
+
+The real gap is four to six times, not the 1.7 to 3.4 reported before.
+
+The reason is worth stating plainly, because it is the opposite of what
+the design assumed. **V6's segmentation helps the CPU more than it
+helps the GPU.** The CPU turns independent segments into work for
+however many cores it has, and pays nothing extra in memory traffic for
+doing so. The GPU is bound by model bytes per chain, so it saturates at
+about 512 chains and then stops improving, while the CPU keeps scaling.
+
+### What this closes
+
+Chain count is no longer the open question. It was the lever that looked
+most promising, it has been implemented and measured, and it moves the
+engine by under a third while moving the CPU by a factor of three. What
+remains is memory traffic per chain: a smaller resident model, or a
+device with several times this one's bandwidth. Nothing else measured so
+far changes the picture.

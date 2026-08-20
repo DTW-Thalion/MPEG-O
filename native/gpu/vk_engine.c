@@ -216,33 +216,48 @@ typedef struct {
 enum { VK_BUF_Q = 0, VK_BUF_L, VK_BUF_C, VK_BUF_M, VK_BUF_TF, VK_BUF_O,
        VK_BUF_OL, VK_BUF_T, VK_BUF_QM, VK_BUF_COUNT };
 
-/* Everything that survives a block. Building a compute pipeline costs
- * far more than running one, so these are made once and reused; only
- * the buffers follow the job, and even they are only reallocated when
- * a block needs more room than the last one did. */
+#define VK_MAX_SLOTS 8
+
+/* One slot is one block in flight. A 64 MiB block yields only 256
+ * chains at the default segment size, which does not fill this class of
+ * device; running several blots at once is the way to raise the chain
+ * count without shrinking segments and paying for it in ratio.
+ *
+ * Everything a block touches while encoding lives here, because none of
+ * it can be shared between concurrent blocks: buffers hold that block's
+ * data, and command pools are not thread safe. */
+typedef struct {
+    vk_buf          buf[VK_BUF_COUNT];
+    VkDescriptorSet dset;
+    VkCommandPool   cpool;
+    VkCommandBuffer cb;
+    VkFence         fence;
+    int             busy;
+} vk_slot;
+
+/* Immutable once built, so every slot shares them. */
 typedef struct {
     VkDescriptorSetLayout dsl;
     VkDescriptorPool      dpool;
-    VkDescriptorSet       dset;
     VkPipelineLayout      playout;
     VkShaderModule        shader;
     VkPipeline            pipe;
-    VkCommandPool         cpool;
-    VkCommandBuffer       cb;
-    VkFence               fence;
-    vk_buf                buf[VK_BUF_COUNT];
     uint32_t              lsz;
     int                   ready;
-} vk_durable;
+} vk_shared;
 
-static vk_durable      g_d;
-static pthread_mutex_t g_encode_mu = PTHREAD_MUTEX_INITIALIZER;
+static vk_shared       g_sh;
+static vk_slot         g_slot[VK_MAX_SLOTS];
+static pthread_mutex_t g_slot_pick = PTHREAD_MUTEX_INITIALIZER;
+/* vkQueueSubmit on one queue is not thread safe, but waiting is: submit
+ * under the lock, then wait on the slot's own fence outside it, so the
+ * device can run several blocks at once. */
+static pthread_mutex_t g_submit_mu = PTHREAD_MUTEX_INITIALIZER;
+
 static int             g_last_dispatches;
 static long long       g_upload_us, g_kernel_us, g_readback_us;
 static long long       g_total_us;
 static int             g_calls, g_ok;
-/* Why the last encode gave up. Printed once by callers that ask,
- * because a silent decline is indistinguishable from a slow one. */
 static const char     *g_fail = "none";
 static int             g_fail_code;
 
@@ -269,6 +284,11 @@ static int vk_debug_stat(int which) {
     case TTIO_ENGINE_STAT_TOTAL_US:    return (int)g_total_us;
     default:                           return -1;
     }
+}
+
+const char *ttio_vk_last_failure(int *code) {
+    if (code) *code = g_fail_code;
+    return g_fail;
 }
 
 /* A block is split into several dispatches so no single one runs long
@@ -330,8 +350,6 @@ static int buf_ensure(vk_buf *b, VkDeviceSize size, int host_visible) {
                         | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
                      : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     if (!mem_type(mr.memoryTypeBits, want, &type)) {
-        /* A device with no separate device-local heap is fine: fall
-         * back to host-visible rather than declining the block. */
         if (host_visible
             || !mem_type(mr.memoryTypeBits,
                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
@@ -351,23 +369,28 @@ static int buf_ensure(vk_buf *b, VkDeviceSize size, int host_visible) {
     return 1;
 }
 
-/* ---- durable objects ---------------------------------------------- */
+/* ---- shared and per-slot objects ---------------------------------- */
 
-static void durable_destroy(void) {
-    if (g_d.fence) vkDestroyFence(g_vk.dev, g_d.fence, NULL);
-    if (g_d.cpool) vkDestroyCommandPool(g_vk.dev, g_d.cpool, NULL);
-    if (g_d.pipe) vkDestroyPipeline(g_vk.dev, g_d.pipe, NULL);
-    if (g_d.shader) vkDestroyShaderModule(g_vk.dev, g_d.shader, NULL);
-    if (g_d.playout) vkDestroyPipelineLayout(g_vk.dev, g_d.playout, NULL);
-    if (g_d.dpool) vkDestroyDescriptorPool(g_vk.dev, g_d.dpool, NULL);
-    if (g_d.dsl) vkDestroyDescriptorSetLayout(g_vk.dev, g_d.dsl, NULL);
-    for (int i = 0; i < VK_BUF_COUNT; i++) buf_destroy(&g_d.buf[i]);
-    memset(&g_d, 0, sizeof g_d);
+static void shared_destroy(void) {
+    for (int i = 0; i < VK_MAX_SLOTS; i++) {
+        vk_slot *sl = &g_slot[i];
+        if (sl->fence) vkDestroyFence(g_vk.dev, sl->fence, NULL);
+        if (sl->cpool) vkDestroyCommandPool(g_vk.dev, sl->cpool, NULL);
+        for (int b = 0; b < VK_BUF_COUNT; b++) buf_destroy(&sl->buf[b]);
+        memset(sl, 0, sizeof *sl);
+    }
+    if (g_sh.pipe) vkDestroyPipeline(g_vk.dev, g_sh.pipe, NULL);
+    if (g_sh.shader) vkDestroyShaderModule(g_vk.dev, g_sh.shader, NULL);
+    if (g_sh.playout) vkDestroyPipelineLayout(g_vk.dev, g_sh.playout, NULL);
+    if (g_sh.dpool) vkDestroyDescriptorPool(g_vk.dev, g_sh.dpool, NULL);
+    if (g_sh.dsl) vkDestroyDescriptorSetLayout(g_vk.dev, g_sh.dsl, NULL);
+    memset(&g_sh, 0, sizeof g_sh);
 }
 
-static int durable_create(void) {
-    memset(&g_d, 0, sizeof g_d);
-    g_d.lsz = 32;
+static int shared_create(int n_slots) {
+    memset(&g_sh, 0, sizeof g_sh);
+    memset(g_slot, 0, sizeof g_slot);
+    g_sh.lsz = 32;
 
     VkDescriptorSetLayoutBinding bind[VK_BUF_COUNT];
     for (int i = 0; i < VK_BUF_COUNT; i++) {
@@ -382,28 +405,19 @@ static int durable_create(void) {
     };
     dli.bindingCount = VK_BUF_COUNT;
     dli.pBindings = bind;
-    if (vkCreateDescriptorSetLayout(g_vk.dev, &dli, NULL, &g_d.dsl)
+    if (vkCreateDescriptorSetLayout(g_vk.dev, &dli, NULL, &g_sh.dsl)
         != VK_SUCCESS)
         return 0;
 
     VkDescriptorPoolSize ps = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                VK_BUF_COUNT };
+                                (uint32_t)(VK_BUF_COUNT * n_slots) };
     VkDescriptorPoolCreateInfo dpi = {
         VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO
     };
-    dpi.maxSets = 1;
+    dpi.maxSets = (uint32_t)n_slots;
     dpi.poolSizeCount = 1;
     dpi.pPoolSizes = &ps;
-    if (vkCreateDescriptorPool(g_vk.dev, &dpi, NULL, &g_d.dpool) != VK_SUCCESS)
-        return 0;
-
-    VkDescriptorSetAllocateInfo dsa = {
-        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO
-    };
-    dsa.descriptorPool = g_d.dpool;
-    dsa.descriptorSetCount = 1;
-    dsa.pSetLayouts = &g_d.dsl;
-    if (vkAllocateDescriptorSets(g_vk.dev, &dsa, &g_d.dset) != VK_SUCCESS)
+    if (vkCreateDescriptorPool(g_vk.dev, &dpi, NULL, &g_sh.dpool) != VK_SUCCESS)
         return 0;
 
     VkPushConstantRange pcr = { VK_SHADER_STAGE_COMPUTE_BIT, 0,
@@ -412,10 +426,10 @@ static int durable_create(void) {
         VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO
     };
     pli.setLayoutCount = 1;
-    pli.pSetLayouts = &g_d.dsl;
+    pli.pSetLayouts = &g_sh.dsl;
     pli.pushConstantRangeCount = 1;
     pli.pPushConstantRanges = &pcr;
-    if (vkCreatePipelineLayout(g_vk.dev, &pli, NULL, &g_d.playout)
+    if (vkCreatePipelineLayout(g_vk.dev, &pli, NULL, &g_sh.playout)
         != VK_SUCCESS)
         return 0;
 
@@ -424,49 +438,84 @@ static int durable_create(void) {
     };
     smi.codeSize = sizeof v6_spv;
     smi.pCode = v6_spv;
-    if (vkCreateShaderModule(g_vk.dev, &smi, NULL, &g_d.shader) != VK_SUCCESS)
+    if (vkCreateShaderModule(g_vk.dev, &smi, NULL, &g_sh.shader) != VK_SUCCESS)
         return 0;
 
     VkSpecializationMapEntry sme = { 0, 0, sizeof(uint32_t) };
-    VkSpecializationInfo     spec = { 1, &sme, sizeof(uint32_t), &g_d.lsz };
+    VkSpecializationInfo     spec = { 1, &sme, sizeof(uint32_t), &g_sh.lsz };
     VkPipelineShaderStageCreateInfo ss = {
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
     };
     ss.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-    ss.module = g_d.shader;
+    ss.module = g_sh.shader;
     ss.pName = "main";
     ss.pSpecializationInfo = &spec;
     VkComputePipelineCreateInfo cpi = {
         VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO
     };
     cpi.stage = ss;
-    cpi.layout = g_d.playout;
+    cpi.layout = g_sh.playout;
     if (vkCreateComputePipelines(g_vk.dev, VK_NULL_HANDLE, 1, &cpi, NULL,
-                                 &g_d.pipe) != VK_SUCCESS)
+                                 &g_sh.pipe) != VK_SUCCESS)
         return 0;
 
-    VkCommandPoolCreateInfo cpci = {
-        VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO
-    };
-    cpci.queueFamilyIndex = g_vk.qfam;
-    cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    if (vkCreateCommandPool(g_vk.dev, &cpci, NULL, &g_d.cpool) != VK_SUCCESS)
-        return 0;
+    for (int i = 0; i < n_slots; i++) {
+        vk_slot *sl = &g_slot[i];
 
-    VkCommandBufferAllocateInfo cai = {
-        VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
-    };
-    cai.commandPool = g_d.cpool;
-    cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cai.commandBufferCount = 1;
-    if (vkAllocateCommandBuffers(g_vk.dev, &cai, &g_d.cb) != VK_SUCCESS)
-        return 0;
+        VkDescriptorSetAllocateInfo dsa = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO
+        };
+        dsa.descriptorPool = g_sh.dpool;
+        dsa.descriptorSetCount = 1;
+        dsa.pSetLayouts = &g_sh.dsl;
+        if (vkAllocateDescriptorSets(g_vk.dev, &dsa, &sl->dset) != VK_SUCCESS)
+            return 0;
 
-    VkFenceCreateInfo fi = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
-    if (vkCreateFence(g_vk.dev, &fi, NULL, &g_d.fence) != VK_SUCCESS) return 0;
+        VkCommandPoolCreateInfo cpci = {
+            VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO
+        };
+        cpci.queueFamilyIndex = g_vk.qfam;
+        cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        if (vkCreateCommandPool(g_vk.dev, &cpci, NULL, &sl->cpool)
+            != VK_SUCCESS)
+            return 0;
 
-    g_d.ready = 1;
+        VkCommandBufferAllocateInfo cai = {
+            VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
+        };
+        cai.commandPool = sl->cpool;
+        cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cai.commandBufferCount = 1;
+        if (vkAllocateCommandBuffers(g_vk.dev, &cai, &sl->cb) != VK_SUCCESS)
+            return 0;
+
+        VkFenceCreateInfo fi = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+        if (vkCreateFence(g_vk.dev, &fi, NULL, &sl->fence) != VK_SUCCESS)
+            return 0;
+    }
+
+    g_sh.ready = 1;
     return 1;
+}
+
+static vk_slot *slot_claim(void) {
+    vk_slot *sl = NULL;
+    pthread_mutex_lock(&g_slot_pick);
+    for (int i = 0; i < g_vk.slots_total; i++) {
+        if (!g_slot[i].busy) {
+            g_slot[i].busy = 1;
+            sl = &g_slot[i];
+            break;
+        }
+    }
+    pthread_mutex_unlock(&g_slot_pick);
+    return sl;
+}
+
+static void slot_free(vk_slot *sl) {
+    pthread_mutex_lock(&g_slot_pick);
+    sl->busy = 0;
+    pthread_mutex_unlock(&g_slot_pick);
 }
 
 /* ---- encode -------------------------------------------------------- */
@@ -475,7 +524,10 @@ static int vk_encode(ttio_v6_job *job) {
     long long t_all = now_us();
     g_calls++;
     if (job == NULL || job->segs == NULL || job->n_segs == 0) return -1;
-    if (!g_vk.healthy || !g_d.ready) return -1;
+    if (!g_vk.healthy || !g_sh.ready) return -1;
+
+    vk_slot *sl = slot_claim();
+    if (sl == NULL) return -1;
 
     const uint32_t nsym = job->ab->n;
     const uint32_t stride = 2u * nsym + 2u;
@@ -488,30 +540,26 @@ static int vk_encode(ttio_v6_job *job) {
         if (job->lens[c] > out_stride) out_stride = (uint32_t)job->lens[c];
 
     int rc = -1;
-    /* One queue and one command buffer, so submissions serialise. The
-     * slot count is 1 for the same reason: a second concurrent block
-     * should go to the CPU rather than wait here. */
-    pthread_mutex_lock(&g_encode_mu);
 
     g_fail = "buffers";
-    if (!buf_ensure(&g_d.buf[VK_BUF_Q], job->n_qualities, 1)
-        || !buf_ensure(&g_d.buf[VK_BUF_L], 4ull * job->n_reads, 1)
-        || !buf_ensure(&g_d.buf[VK_BUF_C], 16ull * n_ch, 1)
-        || !buf_ensure(&g_d.buf[VK_BUF_M],
+    if (!buf_ensure(&sl->buf[VK_BUF_Q], job->n_qualities, 1)
+        || !buf_ensure(&sl->buf[VK_BUF_L], 4ull * job->n_reads, 1)
+        || !buf_ensure(&sl->buf[VK_BUF_C], 16ull * n_ch, 1)
+        || !buf_ensure(&sl->buf[VK_BUF_M],
                        (uint64_t)n_ch * n_ctx * stride * 2u, 0)
-        || !buf_ensure(&g_d.buf[VK_BUF_TF], 4ull * n_ch * n_ctx, 0)
-        || !buf_ensure(&g_d.buf[VK_BUF_O], (uint64_t)n_ch * out_stride, 1)
-        || !buf_ensure(&g_d.buf[VK_BUF_OL], 4ull * n_ch, 1)
-        || !buf_ensure(&g_d.buf[VK_BUF_T], 2ull * stride, 1)
-        || !buf_ensure(&g_d.buf[VK_BUF_QM], 256, 1))
+        || !buf_ensure(&sl->buf[VK_BUF_TF], 4ull * n_ch * n_ctx, 0)
+        || !buf_ensure(&sl->buf[VK_BUF_O], (uint64_t)n_ch * out_stride, 1)
+        || !buf_ensure(&sl->buf[VK_BUF_OL], 4ull * n_ch, 1)
+        || !buf_ensure(&sl->buf[VK_BUF_T], 2ull * stride, 1)
+        || !buf_ensure(&sl->buf[VK_BUF_QM], 256, 1))
         goto out;
 
     long long t_up = now_us();
-    memcpy(g_d.buf[VK_BUF_Q].mapped, job->qual, job->n_qualities);
-    memcpy(g_d.buf[VK_BUF_QM].mapped, job->ab->map, 256);
-    memcpy(g_d.buf[VK_BUF_L].mapped, job->read_lengths, 4ull * job->n_reads);
+    memcpy(sl->buf[VK_BUF_Q].mapped, job->qual, job->n_qualities);
+    memcpy(sl->buf[VK_BUF_QM].mapped, job->ab->map, 256);
+    memcpy(sl->buf[VK_BUF_L].mapped, job->read_lengths, 4ull * job->n_reads);
     {
-        uint32_t *ch = g_d.buf[VK_BUF_C].mapped;
+        uint32_t *ch = sl->buf[VK_BUF_C].mapped;
         for (uint32_t c = 0; c < n_ch; c++) {
             ch[c * 4 + 0] = (uint32_t)job->segs[c].first_read;
             ch[c * 4 + 1] = (uint32_t)job->segs[c].n_reads;
@@ -522,7 +570,7 @@ static int vk_encode(ttio_v6_job *job) {
     /* The seeded model, built exactly as v6_model_init does so the
      * kernel starts from the state the CPU coder starts from. */
     {
-        uint16_t *t = g_d.buf[VK_BUF_T].mapped;
+        uint16_t *t = sl->buf[VK_BUF_T].mapped;
         memset(t, 0, 2ull * stride);
         for (uint32_t i = 0; i < nsym; i++) t[i] = job->ab->seed[i];
         for (uint32_t i = 1; i <= nsym; i++) t[nsym + i] = t[i - 1];
@@ -532,18 +580,18 @@ static int vk_encode(ttio_v6_job *job) {
                 t[nsym + j] = (uint16_t)(t[nsym + j] + t[nsym + i]);
         }
     }
+    g_upload_us += now_us() - t_up;
 
-    /* Rebind: the buffers may have been reallocated for this block. */
     {
         VkDescriptorBufferInfo dbi[VK_BUF_COUNT];
         VkWriteDescriptorSet   w[VK_BUF_COUNT];
         for (int i = 0; i < VK_BUF_COUNT; i++) {
-            dbi[i].buffer = g_d.buf[i].buf;
+            dbi[i].buffer = sl->buf[i].buf;
             dbi[i].offset = 0;
             dbi[i].range = VK_WHOLE_SIZE;
             memset(&w[i], 0, sizeof w[i]);
             w[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            w[i].dstSet = g_d.dset;
+            w[i].dstSet = sl->dset;
             w[i].dstBinding = (uint32_t)i;
             w[i].descriptorCount = 1;
             w[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -553,13 +601,11 @@ static int vk_encode(ttio_v6_job *job) {
     }
     g_fail = "dispatch";
 
-    g_upload_us += now_us() - t_up;
-
     {
         long long      t_k = now_us();
         const uint32_t per = chains_per_dispatch(n_ch);
         const int      inject = env_int("TTIO_GPU_FAULT_INJECT", 0);
-        g_last_dispatches = 0;
+        int            dispatches = 0;
 
         for (uint32_t base = 0; base < n_ch; base += per) {
             uint32_t count = n_ch - base < per ? n_ch - base : per;
@@ -578,43 +624,44 @@ static int vk_encode(ttio_v6_job *job) {
             pc.n_chains = n_ch;
             pc.chain_base = base;
 
-            vkResetCommandBuffer(g_d.cb, 0);
+            vkResetCommandBuffer(sl->cb, 0);
             VkCommandBufferBeginInfo cbi = {
                 VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
             };
             cbi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-            vkBeginCommandBuffer(g_d.cb, &cbi);
-            vkCmdBindPipeline(g_d.cb, VK_PIPELINE_BIND_POINT_COMPUTE,
-                              g_d.pipe);
-            vkCmdBindDescriptorSets(g_d.cb, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    g_d.playout, 0, 1, &g_d.dset, 0, NULL);
-            vkCmdPushConstants(g_d.cb, g_d.playout,
+            vkBeginCommandBuffer(sl->cb, &cbi);
+            vkCmdBindPipeline(sl->cb, VK_PIPELINE_BIND_POINT_COMPUTE,
+                              g_sh.pipe);
+            vkCmdBindDescriptorSets(sl->cb, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    g_sh.playout, 0, 1, &sl->dset, 0, NULL);
+            vkCmdPushConstants(sl->cb, g_sh.playout,
                                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof pc, &pc);
-            vkCmdDispatch(g_d.cb, (count + g_d.lsz - 1) / g_d.lsz, 1, 1);
-            vkEndCommandBuffer(g_d.cb);
+            vkCmdDispatch(sl->cb, (count + g_sh.lsz - 1) / g_sh.lsz, 1, 1);
+            vkEndCommandBuffer(sl->cb);
 
             VkSubmitInfo si = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
             si.commandBufferCount = 1;
-            si.pCommandBuffers = &g_d.cb;
+            si.pCommandBuffers = &sl->cb;
 
             VkResult sr;
-            if (inject && g_last_dispatches == 0) {
+            if (inject && dispatches == 0) {
                 sr = VK_ERROR_DEVICE_LOST;   /* exercise the loss path */
             } else {
-                sr = vkQueueSubmit(g_vk.queue, 1, &si, g_d.fence);
+                /* Submission to one queue is not thread safe; waiting
+                 * is, and waiting is where the time goes. */
+                pthread_mutex_lock(&g_submit_mu);
+                sr = vkQueueSubmit(g_vk.queue, 1, &si, sl->fence);
+                pthread_mutex_unlock(&g_submit_mu);
                 if (sr == VK_SUCCESS)
-                    sr = vkWaitForFences(g_vk.dev, 1, &g_d.fence, VK_TRUE,
+                    sr = vkWaitForFences(g_vk.dev, 1, &sl->fence, VK_TRUE,
                                          UINT64_MAX);
-                if (sr == VK_SUCCESS) vkResetFences(g_vk.dev, 1, &g_d.fence);
+                if (sr == VK_SUCCESS) vkResetFences(g_vk.dev, 1, &sl->fence);
             }
-            g_last_dispatches++;
-
+            dispatches++;
             g_fail_code = (int)sr;
+
             if (sr == VK_ERROR_DEVICE_LOST) {
                 g_fail = "device lost";
-                /* Gone for this process. Stop offering slots so later
-                 * blocks go straight to the CPU rather than retrying a
-                 * device that is not coming back. */
                 pthread_mutex_lock(&g_vk.slot_mu);
                 g_vk.healthy = 0;
                 pthread_mutex_unlock(&g_vk.slot_mu);
@@ -625,13 +672,14 @@ static int vk_encode(ttio_v6_job *job) {
                 goto out;
             }
         }
+        g_last_dispatches = dispatches;
         g_kernel_us += now_us() - t_k;
     }
 
     {
         long long       t_r = now_us();
-        const uint32_t *ol = g_d.buf[VK_BUF_OL].mapped;
-        const uint8_t  *ob = g_d.buf[VK_BUF_O].mapped;
+        const uint32_t *ol = sl->buf[VK_BUF_OL].mapped;
+        const uint8_t  *ob = sl->buf[VK_BUF_O].mapped;
         for (uint32_t c = 0; c < n_ch; c++) {
             if (ol[c] == 0xFFFFFFFFu || ol[c] > job->lens[c]) {
                 g_fail = "output overflow";
@@ -648,15 +696,10 @@ static int vk_encode(ttio_v6_job *job) {
     g_fail = "none";
 
 out:
-    pthread_mutex_unlock(&g_encode_mu);
+    slot_free(sl);
     g_total_us += now_us() - t_all;
     if (rc == 0) g_ok++;
     return rc;
-}
-
-const char *ttio_vk_last_failure(int *code) {
-    if (code) *code = g_fail_code;
-    return g_fail;
 }
 
 const ttio_engine *ttio_vk_engine_create(void) {
@@ -679,18 +722,18 @@ const ttio_engine *ttio_vk_engine_create(void) {
         return NULL;
     }
 
-    if (!durable_create()) {
-        durable_destroy();
+    g_vk.slots_total = env_int("TTIO_GPU_SLOTS", default_slots());
+    if (g_vk.slots_total > VK_MAX_SLOTS) g_vk.slots_total = VK_MAX_SLOTS;
+    if (g_vk.slots_total < 1) g_vk.slots_total = 1;
+
+    if (!shared_create(g_vk.slots_total)) {
+        shared_destroy();
         vkDestroyDevice(g_vk.dev, NULL);
         vkDestroyInstance(g_vk.inst, NULL);
         memset(&g_vk, 0, sizeof g_vk);
         return NULL;
     }
 
-    /* One queue, one command buffer: submissions serialise, so a
-     * second concurrent block is better served by the CPU than by
-     * waiting here. Overridable for experiments. */
-    g_vk.slots_total = env_int("TTIO_GPU_SLOTS", 1);
     g_vk.slots_free = g_vk.slots_total;
     g_vk.healthy = 1;
 
@@ -706,7 +749,7 @@ const ttio_engine *ttio_vk_engine_create(void) {
 
 void ttio_vk_engine_destroy(void) {
     if (!g_created) return;
-    durable_destroy();
+    shared_destroy();
     if (g_vk.dev != VK_NULL_HANDLE) vkDestroyDevice(g_vk.dev, NULL);
     if (g_vk.inst != VK_NULL_HANDLE) vkDestroyInstance(g_vk.inst, NULL);
     pthread_mutex_destroy(&g_vk.slot_mu);

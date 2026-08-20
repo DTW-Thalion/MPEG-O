@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include <time.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -26,6 +27,42 @@
 #include "../src/ttio_engine.h"
 
 #define BLOCK_BYTES (64u * 1024u * 1024u)
+
+typedef struct {
+    size_t first_read, n_reads, qual_off, n_qual;
+} blk;
+
+typedef struct {
+    const blk       *blocks;
+    size_t           n_blk;
+    size_t           next;
+    const uint8_t   *qual;
+    const uint32_t  *lens;
+    const uint8_t   *flags;
+    uint8_t        **outs;
+    size_t          *outl;
+    int             *rcs;
+    pthread_mutex_t  mu;
+} enc_ctx;
+
+static void *enc_worker(void *arg) {
+    enc_ctx *c = arg;
+    for (;;) {
+        size_t b;
+        pthread_mutex_lock(&c->mu);
+        b = c->next++;
+        pthread_mutex_unlock(&c->mu);
+        if (b >= c->n_blk) break;
+        size_t l = c->outl[b];
+        c->rcs[b] = ttio_m94z_qual_encode(
+            c->qual + c->blocks[b].qual_off, c->blocks[b].n_qual,
+            c->lens + c->blocks[b].first_read, c->blocks[b].n_reads,
+            c->flags + c->blocks[b].first_read, NULL,
+            TTIO_M94Z_HINT_V6, 0, c->outs[b], &l);
+        if (c->rcs[b] == 0) c->outl[b] = l;
+    }
+    return NULL;
+}
 
 /* clock() means different things on different runtimes and counts CPU
  * rather than elapsed time on some, which is useless for a wall-clock
@@ -71,32 +108,37 @@ static uint64_t fnv1a(uint64_t h, const uint8_t *p, size_t n) {
 
 int main(int argc, char **argv) {
     if (argc < 3) {
-        fprintf(stderr, "usage: %s qual.bin lens.bin [threads]\n", argv[0]);
+        fprintf(stderr, "usage: %s qual.bin lens.bin [threads] [writers]\n", argv[0]);
         return 2;
     }
     int threads = argc > 3 ? atoi(argv[3]) : 16;
     /* The umbrella takes its thread count from the autotune knob, so
      * setting it here is what makes the argument mean anything. */
     ttio_m94z_set_autotune_threads(threads);
+    /* How many blocks the caller keeps outstanding. Matching it to the
+     * engine's slot count is what fills the device. */
+    int writers = argc > 4 ? atoi(argv[4]) : 1;
 
     size_t    qn, ln;
     uint8_t  *qual = load(argv[1], &qn);
     uint32_t *lens = load(argv[2], &ln);
     size_t    n_reads = ln / sizeof(uint32_t);
 
-    size_t   cap = BLOCK_BYTES + (4u << 20);
-    uint8_t *out = malloc(cap);
     uint8_t *flags = calloc(n_reads ? n_reads : 1, 1);
-    if (!out || !flags) { fprintf(stderr, "oom\n"); return 1; }
+    if (!flags) { fprintf(stderr, "oom\n"); return 1; }
 
     printf("engine: %s\n", ttio_engine_active_name());
     printf("gpu available: %d\n", ttio_engine_gpu_available());
 
-    uint64_t h = 1469598103934665603ull;
-    uint64_t total_out = 0;
-    size_t   blocks = 0, r = 0, off = 0;
-    double   t0 = now_s();
-
+    /* Plan the blocks first, then encode them concurrently: a writer
+     * with several blocks outstanding is what lets an engine with more
+     * than one slot actually overlap work, and a sequential loop hides
+     * that no matter how many slots the engine offers. Output is
+     * collected per block and checksummed in order afterwards, so the
+     * result does not depend on completion order. */
+    size_t max_blocks = qn / BLOCK_BYTES + 2;
+    blk   *blocks = malloc(max_blocks * sizeof *blocks);
+    size_t n_blk = 0, r = 0, off = 0;
     while (r < n_reads) {
         size_t first = r, acc = 0;
         while (r < n_reads && acc + lens[r] <= BLOCK_BYTES) {
@@ -104,27 +146,68 @@ int main(int argc, char **argv) {
             r++;
         }
         if (acc == 0) { acc = lens[r]; r++; }
-
-        size_t l = cap;
-        int rc = ttio_m94z_qual_encode(qual + off, acc, lens + first,
-                                       r - first, flags + first, NULL,
-                                       TTIO_M94Z_HINT_V6, 0, out, &l);
-        if (rc != 0) {
-            fprintf(stderr, "block %zu failed: %d\n", blocks, rc);
-            return 1;
-        }
-        if (out[4] != 6) {
-            fprintf(stderr, "block %zu is not a V6 stream\n", blocks);
-            return 1;
-        }
-        h = fnv1a(h, out, l);
-        total_out += l;
+        blocks[n_blk].first_read = first;
+        blocks[n_blk].n_reads = r - first;
+        blocks[n_blk].qual_off = off;
+        blocks[n_blk].n_qual = acc;
         off += acc;
-        blocks++;
+        n_blk++;
+    }
+
+    uint8_t **outs = calloc(n_blk, sizeof *outs);
+    size_t   *outl = calloc(n_blk, sizeof *outl);
+    int      *rcs = calloc(n_blk, sizeof *rcs);
+    for (size_t b = 0; b < n_blk; b++) {
+        outl[b] = blocks[b].n_qual + blocks[b].n_qual / 2 + (4u << 20);
+        outs[b] = malloc(outl[b]);
+        if (outs[b] == NULL) { fprintf(stderr, "oom\n"); return 1; }
+    }
+
+    enc_ctx ctx;
+    ctx.blocks = blocks;
+    ctx.n_blk = n_blk;
+    ctx.next = 0;
+    ctx.qual = qual;
+    ctx.lens = lens;
+    ctx.flags = flags;
+    ctx.outs = outs;
+    ctx.outl = outl;
+    ctx.rcs = rcs;
+    pthread_mutex_init(&ctx.mu, NULL);
+
+    int workers = writers;
+    if (workers > (int)n_blk) workers = (int)n_blk;
+    if (workers < 1) workers = 1;
+
+    double t0 = now_s();
+    {
+        pthread_t th[64];
+        int       started = 0;
+        for (int i = 0; i < workers - 1 && i < 64; i++)
+            if (pthread_create(&th[i], NULL, enc_worker, &ctx) == 0) started++;
+        enc_worker(&ctx);
+        for (int i = 0; i < started; i++) pthread_join(th[i], NULL);
+    }
+
+    uint64_t h = 1469598103934665603ull;
+    uint64_t total_out = 0;
+    for (size_t b = 0; b < n_blk; b++) {
+        if (rcs[b] != 0) {
+            fprintf(stderr, "block %zu failed: %d\n", b, rcs[b]);
+            return 1;
+        }
+        if (outs[b][4] != 6) {
+            fprintf(stderr, "block %zu is not a V6 stream\n", b);
+            return 1;
+        }
+        h = fnv1a(h, outs[b], outl[b]);
+        total_out += outl[b];
     }
 
     double secs = now_s() - t0;
-    printf("blocks: %zu\n", blocks);
+    printf("blocks: %zu\n", n_blk);
+    printf("writers: %d, engine slots: %d\n", workers,
+           ttio_engine_gpu() ? ttio_engine_gpu()->slots() : 0);
     printf("qualities: %zu\n", qn);
     printf("output bytes: %llu\n", (unsigned long long)total_out);
     printf("checksum: %016llx\n", (unsigned long long)h);
@@ -162,6 +245,6 @@ int main(int argc, char **argv) {
         }
     }
 
-    free(qual); free(lens); free(out); free(flags);
+    free(qual); free(lens); free(flags);
     return 0;
 }
