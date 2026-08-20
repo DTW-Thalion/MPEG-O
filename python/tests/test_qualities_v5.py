@@ -225,13 +225,6 @@ def test_auto_never_picks_v6():
     assert fz.encode(qual, lens, flags, sequences=seq)[4] in (4, 5)
 
 
-def test_engine_name_defaults_to_cpu(monkeypatch):
-    """Without the knob the encoder must not go looking for a GPU."""
-    monkeypatch.delenv("TTIO_GPU", raising=False)
-    assert fz.engine_name() == "cpu"
-    assert fz.gpu_available() is False
-
-
 class TestSegmentThreadPolicy:
     """Blocks and segments are both V6 parallelism, and the writer has to
     divide its capacity between them."""

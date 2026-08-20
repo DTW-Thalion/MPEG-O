@@ -276,25 +276,6 @@ Java_global_thalion_ttio_codecs_TtioRansNative_kernelName(
     return (*env)->NewStringUTF(env, name);
 }
 
-JNIEXPORT jstring JNICALL
-Java_global_thalion_ttio_codecs_TtioRansNative_engineActiveName(
-    JNIEnv *env, jclass clazz)
-{
-    (void)clazz;
-    const char *name = ttio_engine_active_name();
-    if (!name) name = "cpu";
-    return (*env)->NewStringUTF(env, name);
-}
-
-JNIEXPORT jboolean JNICALL
-Java_global_thalion_ttio_codecs_TtioRansNative_engineGpuAvailable(
-    JNIEnv *env, jclass clazz)
-{
-    (void)env;
-    (void)clazz;
-    return ttio_engine_gpu_available() ? JNI_TRUE : JNI_FALSE;
-}
-
 /* ── Streaming decode (Task 26c) ─────────────────────────────────── */
 
 /*

@@ -90,13 +90,6 @@ public final class TtioRansNative {
      */
     public static native String kernelName();
 
-    /** Name of the engine encoding M94.Z V6 blocks: "cpu" or
-     *  "vulkan:&lt;device&gt;". */
-    public static native String engineActiveName();
-
-    /** Whether a GPU engine was asked for and came up. */
-    public static native boolean engineGpuAvailable();
-
     /** Threads the FQZCOMP auto-tune uses for its candidate encodes
      *  (default 3; {@code n <= 1} runs them in sequence). */
     public static native void setAutotuneThreads(int n);

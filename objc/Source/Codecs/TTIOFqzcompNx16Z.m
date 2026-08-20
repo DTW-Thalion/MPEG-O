@@ -621,31 +621,6 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
 #endif
 }
 
-// ── Backend introspection (Task 17, Phase B) ─────────────────────────
-// Mirrors Python's get_backend_name() and Java's FqzcompNx16Z.getBackendName().
-// Returns "native-<kernel>" when libttio_rans is linked (the only build
-// in which encode/decode work), else "pure-objc" (encode/decode error).
-
-+ (NSString *)engineName
-{
-#if TTIO_HAS_NATIVE_RANS
-    const char *n = ttio_engine_active_name();
-    return (n != NULL && n[0] != '\0') ? [NSString stringWithUTF8String:n]
-                                       : @"cpu";
-#else
-    return @"cpu";
-#endif
-}
-
-+ (BOOL)gpuAvailable
-{
-#if TTIO_HAS_NATIVE_RANS
-    return ttio_engine_gpu_available() != 0;
-#else
-    return NO;
-#endif
-}
-
 + (NSInteger)strategyOfEncodedStream:(NSData *)stream
 {
 #if TTIO_HAS_NATIVE_RANS
@@ -673,6 +648,10 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
     return (sid == 5 || sid == 6) ? (NSInteger)sid : -3;
 #endif
 }
+
+// ── Backend introspection ───────────────────────────────────
+// Returns "native-<kernel>" when libttio_rans is linked (the only build
+// in which encode/decode work), else "pure-objc" (encode/decode error).
 
 + (NSString *)backendName
 {

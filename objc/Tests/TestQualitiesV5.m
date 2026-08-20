@@ -239,11 +239,6 @@ void testQualitiesV5(void)
                                                          error:&err];
         PASS(s6 != nil && [TTIOFqzcompNx16Z strategyOfEncodedStream:s6] == 6,
              "sniffer reads S6");
-        /* Engine reporting: without the knob this stays on the CPU. */
-        PASS([[TTIOFqzcompNx16Z engineName] isEqualToString:@"cpu"],
-             "engine name defaults to cpu");
-        PASS([TTIOFqzcompNx16Z gpuAvailable] == NO,
-             "gpu is not reported available by default");
 
         uint8_t junk[2] = {88, 88};
         PASS([TTIOFqzcompNx16Z strategyOfEncodedStream:

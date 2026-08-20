@@ -339,29 +339,6 @@ public final class FqzcompNx16Z {
                                    sequences, opts);
     }
 
-    /** Name of the engine that encodes M94.Z V6 blocks.
-     *
-     *  <p>Always {@code "cpu"} in this build. The engine interface and
-     *  the {@code TTIO_GPU} selection are still here, but no GPU engine
-     *  ships: a Vulkan compute engine was written, measured 5 to 8
-     *  times slower than the CPU encoder on every corpus, and left out.
-     *  It is kept at the {@code m94z-v6-vulkan-engine} tag. */
-    public static String engineName() {
-        if (!TtioRansNative.isAvailable()) {
-            return "cpu";
-        }
-        return TtioRansNative.engineActiveName();
-    }
-
-    /** True when a GPU engine was asked for and came up. Always
-     *  false in this build; see {@link #engineName()}. */
-    public static boolean gpuAvailable() {
-        if (!TtioRansNative.isAvailable()) {
-            return false;
-        }
-        return TtioRansNative.engineGpuAvailable();
-    }
-
     public static int streamStrategy(byte[] stream) {
         if (!TtioRansNative.isAvailable()) {
             throw new IllegalStateException(

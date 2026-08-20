@@ -842,39 +842,11 @@ def get_v6_threads() -> int:
     lib.ttio_m94z_get_v6_threads.restype = ctypes.c_int
     return int(lib.ttio_m94z_get_v6_threads())
 
-def engine_name() -> str:
-    """Name of the engine that encodes M94.Z V6 blocks.
-
-    Always ``"cpu"`` in this build. The engine interface and the
-    ``TTIO_GPU`` selection are still here, but no GPU engine ships: a
-    Vulkan compute engine was written, measured 5 to 8 times slower
-    than the CPU encoder on every corpus, and left out. It is kept at
-    the ``m94z-v6-vulkan-engine`` tag.
-    """
-    lib = load_ttio_rans()
-    if lib is None:
-        return "cpu"
-    lib.ttio_engine_active_name.restype = ctypes.c_char_p
-    name = lib.ttio_engine_active_name()
-    return name.decode("ascii") if name else "cpu"
-
-
-def gpu_available() -> bool:
-    """True when a GPU engine was asked for and came up. Always
-    False in this build; see :func:`engine_name`."""
-    lib = load_ttio_rans()
-    if lib is None:
-        return False
-    lib.ttio_engine_gpu_available.restype = ctypes.c_int
-    return bool(lib.ttio_engine_gpu_available())
-
 
 __all__ = [
     "encode",
-    "engine_name",
     "set_v6_threads",
     "get_v6_threads",
-    "gpu_available",
     "decode_with_metadata",
     "get_backend_name",
     "MAGIC",

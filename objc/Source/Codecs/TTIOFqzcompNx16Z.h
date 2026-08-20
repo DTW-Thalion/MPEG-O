@@ -110,20 +110,6 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
 
 @interface TTIOFqzcompNx16Z : NSObject
 
-/** Name of the engine that encodes M94.Z V6 blocks.
- *
- *  Always @c "cpu" in this build. The engine interface and the
- *  @c TTIO_GPU selection are still here, but no GPU engine ships: a
- *  Vulkan compute engine was written, measured 5 to 8 times slower than
- *  the CPU encoder on every corpus, and left out. It is kept at the
- *  @c m94z-v6-vulkan-engine tag. */
-+ (NSString *)engineName;
-
-/** YES when a GPU engine was asked for and came up. Always NO in
- *  this build; see @c engineName. */
-+ (BOOL)gpuAvailable;
-
-
 /**
  * Encode a flat quality byte stream with the M94.Z codec.
  *
