@@ -25,6 +25,7 @@ layout(std430, binding = 4)          buffer TF { uint     totf[]; };
 layout(std430, binding = 5)          buffer O  { uint8_t  obuf[]; };
 layout(std430, binding = 6)          buffer OL { uint     olen[]; };
 layout(std430, binding = 7) readonly buffer T  { uint16_t tmpl[]; };
+layout(std430, binding = 8) readonly buffer QM { uint8_t  qmap[]; };
 
 layout(push_constant) uniform P {
     uint n_ctx;
@@ -189,7 +190,14 @@ void main()
             }
             uint ctx  = (qctx & qmask) | (pos << ploc) | (d << dloc);
             uint base = mbase + ctx * pc.stride;
-            uint sym  = uint(qidx[k]);
+            /* qidx carries raw quality bytes; the alphabet map turns
+             * them into dense symbols, exactly as the CPU coder does
+             * inside its own loop. A symbol outside the alphabet would
+             * find a zero frequency, and the coder would then
+             * renormalise a zero range forever, hanging the device.
+             * Clamping costs nothing and makes that unreachable. */
+            uint sym = uint(qmap[uint(qidx[k])]);
+            if (sym >= pc.nsym) sym = 0u;
 
             rc_encode(model_prefix(base, sym), uint(model[base + sym]),
                       totf[tbase + ctx]);

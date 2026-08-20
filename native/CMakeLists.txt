@@ -78,6 +78,25 @@ else()
     target_link_libraries(ttio_rans PRIVATE Threads::Threads m ZLIB::ZLIB)
 endif()
 
+# x86_64 detection. CMAKE_SYSTEM_PROCESSOR is empty under some
+# toolchains (MSYS2 ucrt64 among them), which silently dropped the
+# SIMD sources and left dispatch.c referencing symbols that were never
+# built. Ask the compiler instead, and keep the old match as well so
+# cross builds that set the processor explicitly still work.
+include(CheckCSourceCompiles)
+check_c_source_compiles("
+#if !defined(__x86_64__) && !defined(_M_X64)
+#error not x86_64
+#endif
+int main(void) { return 0; }
+" TTIO_TARGET_IS_X86_64)
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64" OR TTIO_TARGET_IS_X86_64)
+    set(TTIO_X86_64 TRUE)
+else()
+    set(TTIO_X86_64 FALSE)
+endif()
+
 # x86_64: build SSE4.1 / AVX2 kernels.
 #
 # GCC/Clang need explicit per-file -msse4.1 / -mavx2 flags to enable
@@ -91,7 +110,7 @@ endif()
 # library target — accepting the simpler "no per-file flag, intrinsics
 # work via <immintrin.h>" path here gets MSVC compiling; an MSVC-side
 # AVX2 dispatch optimisation is a separate enhancement.
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+if(TTIO_X86_64)
     target_sources(ttio_rans PRIVATE
         src/rans_encode_sse41.c
         src/rans_decode_sse41.c
@@ -397,7 +416,7 @@ if(TTIO_RANS_ENABLE_TSAN)
         -Wall -Wextra -Wpedantic -g -O1 -fsanitize=thread)
     target_link_options(ttio_rans_tsan PRIVATE -fsanitize=thread)
     target_link_libraries(ttio_rans_tsan PRIVATE Threads::Threads)
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+    if(TTIO_X86_64)
         target_sources(ttio_rans_tsan PRIVATE
             src/rans_encode_sse41.c
             src/rans_decode_sse41.c
@@ -430,6 +449,10 @@ if(NOT TTIO_COVERAGE)
     add_executable(bench_throughput bench/bench_throughput.c)
     target_link_libraries(bench_throughput PRIVATE ttio_rans)
     target_compile_options(bench_throughput PRIVATE -O3)
+
+    add_executable(v6_acceptance tools/v6_acceptance.c)
+    target_link_libraries(v6_acceptance PRIVATE ttio_rans)
+    target_compile_options(v6_acceptance PRIVATE -O2)
 
     add_executable(v6_fixture_dump tools/v6_fixture_dump.c)
     target_link_libraries(v6_fixture_dump PRIVATE ttio_rans)

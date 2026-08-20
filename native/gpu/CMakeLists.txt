@@ -12,19 +12,36 @@ endif()
 
 message(STATUS "ttio: building GPU engine against ${Vulkan_LIBRARIES}")
 
-find_program(GLSLANG_VALIDATOR NAMES glslangValidator)
-if(NOT GLSLANG_VALIDATOR)
-    message(STATUS "ttio: glslangValidator not found, GPU engine will not be built")
-    return()
+# SPIR-V is host independent: the same bytes run on any conformant
+# device. So a platform with no working GLSL compiler can be handed a
+# header generated elsewhere instead of being unable to build at all.
+# -DTTIO_GPU_SPV_HEADER=/path/to/v6_spv.h takes that route.
+if(TTIO_GPU_SPV_HEADER)
+    if(NOT EXISTS "${TTIO_GPU_SPV_HEADER}")
+        message(FATAL_ERROR
+                "ttio: TTIO_GPU_SPV_HEADER does not exist: ${TTIO_GPU_SPV_HEADER}")
+    endif()
+    message(STATUS "ttio: using prebuilt SPIR-V ${TTIO_GPU_SPV_HEADER}")
+    add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/v6_spv.h
+        COMMAND ${CMAKE_COMMAND} -E copy
+                "${TTIO_GPU_SPV_HEADER}" ${CMAKE_CURRENT_BINARY_DIR}/v6_spv.h
+        DEPENDS "${TTIO_GPU_SPV_HEADER}"
+        COMMENT "Using prebuilt SPIR-V for v6_chain.comp")
+else()
+    find_program(GLSLANG_VALIDATOR NAMES glslangValidator)
+    if(NOT GLSLANG_VALIDATOR)
+        message(STATUS "ttio: no glslangValidator and no TTIO_GPU_SPV_HEADER, "
+                       "GPU engine will not be built")
+        return()
+    endif()
+    add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/v6_spv.h
+        COMMAND ${GLSLANG_VALIDATOR} -V ${CMAKE_CURRENT_SOURCE_DIR}/v6_chain.comp
+                --vn v6_spv -o ${CMAKE_CURRENT_BINARY_DIR}/v6_spv.h
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/v6_chain.comp
+        COMMENT "Compiling v6_chain.comp to SPIR-V")
 endif()
-
-# SPIR-V is host independent, so this is generated once and compiled in.
-add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/v6_spv.h
-    COMMAND ${GLSLANG_VALIDATOR} -V ${CMAKE_CURRENT_SOURCE_DIR}/v6_chain.comp
-            --vn v6_spv -o ${CMAKE_CURRENT_BINARY_DIR}/v6_spv.h
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/v6_chain.comp
-    COMMENT "Compiling v6_chain.comp to SPIR-V")
 
 add_library(ttio_gpu_vk MODULE vk_engine.c
             ${CMAKE_CURRENT_BINARY_DIR}/v6_spv.h)

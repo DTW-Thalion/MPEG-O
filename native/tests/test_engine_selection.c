@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "test_env.h"
 #include "../include/ttio_rans.h"
 #include "../src/m94z_v6.h"
 #include "../src/ttio_engine.h"
@@ -75,7 +76,7 @@ static void make_corpus(uint8_t *qual, uint32_t *lens, size_t n_reads,
 }
 
 int main(void) {
-    unsetenv("TTIO_GPU");
+    test_unsetenv("TTIO_GPU");
     ttio_gpu_mode_reset();
     CHECK(ttio_gpu_mode_get() == TTIO_GPU_OFF, "default mode is off");
     CHECK(ttio_engine_gpu() == NULL, "no gpu engine when off");
@@ -83,16 +84,16 @@ int main(void) {
     CHECK(strcmp(ttio_engine_active_name(), "cpu") == 0,
           "active engine is cpu when off");
 
-    setenv("TTIO_GPU", "force", 1);
+    test_setenv("TTIO_GPU", "force");
     ttio_gpu_mode_reset();
     CHECK(ttio_gpu_mode_get() == TTIO_GPU_FORCE, "force is parsed");
 
-    setenv("TTIO_GPU", "nonsense", 1);
+    test_setenv("TTIO_GPU", "nonsense");
     ttio_gpu_mode_reset();
     CHECK(ttio_gpu_mode_get() == TTIO_GPU_OFF,
           "an unrecognised value is off, not an error");
 
-    unsetenv("TTIO_GPU");
+    test_unsetenv("TTIO_GPU");
     ttio_gpu_mode_reset();
 
     ttio_engine_set_test_gpu(&k_stub);

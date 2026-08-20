@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "test_env.h"
 #include "../include/ttio_rans.h"
 #include "../src/ttio_engine.h"
 
@@ -21,14 +22,14 @@ static int failures = 0;
 int main(void) {
     ttio_engine_set_test_gpu(NULL);
 
-    unsetenv("TTIO_GPU");
+    test_unsetenv("TTIO_GPU");
     ttio_gpu_mode_reset();
     CHECK(ttio_engine_gpu() == NULL,
           "off means no engine and no attempt to load one");
     CHECK(strcmp(ttio_engine_active_name(), "cpu") == 0,
           "active engine stays cpu when off");
 
-    setenv("TTIO_GPU", "force", 1);
+    test_setenv("TTIO_GPU", "force");
     ttio_gpu_mode_reset();
     const ttio_engine *g = ttio_engine_gpu();
 

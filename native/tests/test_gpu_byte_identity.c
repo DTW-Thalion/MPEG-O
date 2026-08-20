@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "test_env.h"
 #include "../include/ttio_rans.h"
 #include "../src/m94z_v6.h"
 #include "../src/ttio_engine.h"
@@ -92,7 +93,7 @@ int main(int argc, char **argv) {
            fx.n_ch, fx.nsym, fx.ctx_bits);
 
     ttio_engine_set_test_gpu(NULL);
-    setenv("TTIO_GPU", "force", 1);
+    test_setenv("TTIO_GPU", "force");
     ttio_gpu_mode_reset();
     const ttio_engine *g = ttio_engine_gpu();
     if (g == NULL) {
@@ -181,7 +182,7 @@ int main(int argc, char **argv) {
      * runs too long, so a block is split into several. Splitting must
      * be invisible in the output. */
     {
-        setenv("TTIO_GPU_MAX_CHAINS_PER_DISPATCH", "2", 1);
+        test_setenv("TTIO_GPU_MAX_CHAINS_PER_DISPATCH", "2");
         for (uint32_t c = 0; c < fx.n_ch; c++) {
             lens[c] = fx.nqual[c] + fx.nqual[c] / 2 + 4096;
             errs[c] = 0;
@@ -205,13 +206,13 @@ int main(int argc, char **argv) {
             printf("#    dispatches: %d for %u chains, 2 per dispatch\n",
                    d, fx.n_ch);
         }
-        unsetenv("TTIO_GPU_MAX_CHAINS_PER_DISPATCH");
+        test_unsetenv("TTIO_GPU_MAX_CHAINS_PER_DISPATCH");
     }
 
     /* Device loss must be reported so the caller can spill, not hidden
      * and not fatal. The spill itself is covered by the routing test. */
     {
-        setenv("TTIO_GPU_FAULT_INJECT", "1", 1);
+        test_setenv("TTIO_GPU_FAULT_INJECT", "1");
         for (uint32_t c = 0; c < fx.n_ch; c++) {
             lens[c] = fx.nqual[c] + fx.nqual[c] / 2 + 4096;
             errs[c] = 0;
@@ -220,7 +221,7 @@ int main(int argc, char **argv) {
         CHECK(rc3 != 0, "an injected device loss is reported to the caller");
         CHECK(g->try_acquire() == 0,
               "a lost device stops offering slots");
-        unsetenv("TTIO_GPU_FAULT_INJECT");
+        test_unsetenv("TTIO_GPU_FAULT_INJECT");
     }
 
     printf("%s\n", failures ? "FAILURES" : "all passed");

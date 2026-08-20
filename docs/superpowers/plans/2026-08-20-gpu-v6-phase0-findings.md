@@ -294,3 +294,64 @@ acceptance on a server GPU is a configuration change rather than a
 project. Memory bandwidth is the variable to watch: the kernel is
 model-memory-bound, this part has about 256 GB/s, and an L40S has
 roughly 3.4x that.
+
+## Phase 2 acceptance: the engine end to end on Windows
+
+`libttio_rans` and the Vulkan module now build natively on Windows via
+MSYS2 ucrt64, and `native/tools/v6_acceptance.c` encodes a corpus
+through `ttio_m94z_qual_encode` exactly as a writer does, reporting a
+checksum of every byte produced. Run with `TTIO_GPU=off` and again with
+`force`, the checksums must match.
+
+Corpus: 512 MB sampled from 70 GB into the real NovaSeq run
+(SRR12898326), 6-symbol binned alphabet, nine 64 MiB blocks.
+
+| | CPU | GPU |
+| --- | --- | --- |
+| encode | 285 MB/s | 171 MB/s |
+| checksum | abd0fc856cb01826 | abd0fc856cb01826 |
+
+Byte identity holds through the production path on real hardware, not
+only in the fixture harness. Three interleaved rounds agreed to within
+1%.
+
+### Two defects the acceptance found that nothing else did
+
+**The kernel hung the device.** The codec passes raw quality bytes in
+the job and the CPU coder maps them to dense symbols inside its own
+loop; the kernel assumed the mapping had already happened. The fixture
+generator writes dense indices, so every earlier test agreed with the
+kernel and none of them caught it. Fed a raw byte outside a 6-symbol
+alphabet, the model returns a zero frequency, the range coder
+multiplies its range by zero, and the renormalisation loop never
+terminates: the GPU hangs, the watchdog fires, and the first block dies
+with `VK_ERROR_DEVICE_LOST` after 19 seconds. The engine then marks
+itself unhealthy and every later block silently goes to the CPU, which
+is why the whole run still produced correct output at almost exactly
+CPU speed. The kernel now applies the alphabet map itself and clamps
+out-of-range symbols, which makes the hang unreachable rather than
+merely unlikely.
+
+**The model lived in host memory.** Every buffer was host-visible. The
+model and its running totals are pure device-side scratch, touched two
+or three times per coded symbol and never by the host, so that put a
+PCIe round trip in the coder's inner loop. Making those two device-local
+took kernel time from 12.0 s to 2.26 s for the same work, a factor of
+5.3, and brought the end-to-end rate from 41.6 MB/s to 171 MB/s. The
+remaining kernel time now matches the standalone microbenchmark, so the
+engine is no longer paying anything the kernel does not.
+
+### Where the numbers stand
+
+On this machine the engine reaches 0.6x the CPU path. Under block-level
+spill that is additive rather than competing, so it raises machine
+throughput, but it does not relieve the CPU the way a GPU engine is
+supposed to.
+
+Two measurement lessons worth carrying forward. A microbenchmark that
+sets up once and dispatches repeatedly hides per-block cost, and a
+fixture built by the same assumptions as the code under test cannot
+falsify them: both of those flattered the engine until this acceptance
+ran. And an engine that fails silently and spills is indistinguishable
+from one that works slowly, which is why the engine now records why it
+declined.

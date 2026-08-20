@@ -16,9 +16,12 @@
 #include "../include/ttio_rans.h"
 #include "ttio_engine.h"
 
+/* The build gives the module a "lib" prefix on every platform, so the
+ * Windows name is libttio_gpu_vk.dll rather than the bare form the
+ * platform would normally use. */
 #ifndef TTIO_GPU_VK_SONAME
 #ifdef _WIN32
-#define TTIO_GPU_VK_SONAME "ttio_gpu_vk.dll"
+#define TTIO_GPU_VK_SONAME "libttio_gpu_vk.dll"
 #else
 #define TTIO_GPU_VK_SONAME "libttio_gpu_vk.so"
 #endif

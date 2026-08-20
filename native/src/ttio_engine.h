@@ -57,7 +57,16 @@ typedef struct {
 /* Counters an engine may expose so tests can check that work was done
  * the way it was meant to be, rather than only that the answer came
  * out right. */
-#define TTIO_ENGINE_STAT_DISPATCHES 0
+#define TTIO_ENGINE_STAT_DISPATCHES  0
+/* Cumulative microseconds since the engine was created, so a caller
+ * can see where an encode actually spends its time instead of
+ * inferring it. */
+#define TTIO_ENGINE_STAT_UPLOAD_US   1
+#define TTIO_ENGINE_STAT_KERNEL_US   2
+#define TTIO_ENGINE_STAT_READBACK_US 3
+#define TTIO_ENGINE_STAT_CALLS       4
+#define TTIO_ENGINE_STAT_OK          5
+#define TTIO_ENGINE_STAT_TOTAL_US    6
 
 typedef struct ttio_engine {
     const char *name;              /* "cpu" or "vulkan:<device>" */

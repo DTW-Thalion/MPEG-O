@@ -22,6 +22,11 @@ const ttio_engine *ttio_vk_engine_create(void);
 
 void ttio_vk_engine_destroy(void);
 
+/* Why the most recent encode declined, and a code whose meaning
+ * depends on the reason (a VkResult, or an output length). A silent
+ * decline is otherwise indistinguishable from a slow one. */
+const char *ttio_vk_last_failure(int *code);
+
 #ifdef __cplusplus
 }
 #endif
