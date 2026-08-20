@@ -191,6 +191,11 @@ target_link_libraries(test_m94z_v6_chain ttio_rans)
 target_compile_options(test_m94z_v6_chain PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME m94z_v6_chain COMMAND test_m94z_v6_chain)
 
+add_executable(test_m94z_v6_block tests/test_m94z_v6_block.c)
+target_link_libraries(test_m94z_v6_block PRIVATE ttio_rans Threads::Threads)
+target_compile_options(test_m94z_v6_block PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME m94z_v6_block COMMAND test_m94z_v6_block)
+
 add_executable(test_m94z_qual_umbrella tests/test_m94z_qual_umbrella.c)
 target_link_libraries(test_m94z_qual_umbrella ttio_rans)
 target_compile_options(test_m94z_qual_umbrella PRIVATE -Wall -Wextra -Wpedantic)

@@ -53,6 +53,27 @@ int ttio_v6_chain_decode(const ttio_v6_param *pm,
                          const uint32_t *lengths, size_t n_reads,
                          uint8_t *qual_out, size_t n_qualities);
 
+/* Provisional until the Phase 1 ratio sweep fixes it. */
+#define TTIO_V6_DEFAULT_SEG_SYMBOLS (256u * 1024u)
+
+/* Whole-block coder, including the outer M94Z container. threads <= 1
+ * codes sequentially; output bytes are identical for any thread count,
+ * because segments are assembled in segment order regardless of the
+ * order in which they finish.
+ *
+ * decode fills read_lengths from the container's read-length table;
+ * the caller must size it for n_reads, and n_reads and n_qualities
+ * must match the container or the call is rejected. */
+int ttio_m94z_v6_encode(const uint8_t *qual, size_t n_qualities,
+                        const uint32_t *read_lengths, size_t n_reads,
+                        const ttio_v6_param *pm, uint32_t seg_symbols,
+                        int threads, uint8_t *out, size_t *out_len);
+
+int ttio_m94z_v6_decode(const uint8_t *in, size_t in_len,
+                        uint32_t *read_lengths, size_t n_reads,
+                        int threads, uint8_t *qual_out,
+                        size_t n_qualities);
+
 #ifdef __cplusplus
 }
 #endif
