@@ -44,10 +44,23 @@ class FastqParallelProducerTest {
         return study;
     }
 
+    /** The parallel side pins {@code ttio.threads}: the default resolver
+     *  yields 1 on small CI hosts, which would silently compare the
+     *  serial path against itself. */
+    static StorageGroup writeViaThreads(Path fq, String url, long batchBytes,
+                                        String threads) {
+        System.setProperty("ttio.threads", threads);
+        try {
+            return writeVia(fq, url, batchBytes);
+        } finally {
+            System.clearProperty("ttio.threads");
+        }
+    }
+
     @Test
     void pipelineIdenticalToSerial(@TempDir Path tmp) throws Exception {
         Path fq = writeGzFixture(tmp, 20_000, 4096);
-        StorageGroup a = writeVia(fq, "memory://fpp-a", 4L << 20);
+        StorageGroup a = writeViaThreads(fq, "memory://fpp-a", 4L << 20, "3");
         System.setProperty("ttio.threads", "1");
         StorageGroup b;
         try {
@@ -111,7 +124,7 @@ class FastqParallelProducerTest {
     void shardIdenticalToSerial(@TempDir Path tmp) throws Exception {
         // Mixed lengths: mostly 120 B with a 100 KiB read every 500.
         Path fq = writePlainFixture(tmp, "shard.fastq", 30_000, 500, 100 * 1024);
-        StorageGroup a = writeVia(fq, "memory://fps-a", 1L << 20);
+        StorageGroup a = writeViaThreads(fq, "memory://fps-a", 1L << 20, "3");
         System.setProperty("ttio.threads", "1");
         StorageGroup b;
         try {
@@ -127,7 +140,7 @@ class FastqParallelProducerTest {
         // Two 200 KiB records with a 64 KiB batch limit: the file
         // shards, most ranges are empty, order still holds.
         Path fq = writePlainFixture(tmp, "shard2.fastq", 2, 1, 200 * 1024);
-        StorageGroup a = writeVia(fq, "memory://fps2-a", 64L << 10);
+        StorageGroup a = writeViaThreads(fq, "memory://fps2-a", 64L << 10, "3");
         System.setProperty("ttio.threads", "1");
         StorageGroup b;
         try {
