@@ -483,6 +483,9 @@ int ttio_m94z_v6_encode(const uint8_t *qual, size_t n_qualities,
 
         {
             ttio_v6_job job;
+            const ttio_engine *gpu = ttio_engine_gpu();
+            int                done_on_gpu = 0;
+
             memset(&job, 0, sizeof job);
             job.pm = pm;
             job.ab = &ab;
@@ -497,7 +500,26 @@ int ttio_m94z_v6_encode(const uint8_t *qual, size_t n_qualities,
             job.bufs = bufs;
             job.lens = lens;
             job.errs = errs;
-            rc = ttio_engine_cpu()->qual_v6_encode(&job);
+
+            /* Try the GPU for this block; a refused slot or any failure
+             * means the CPU takes it immediately. Both engines produce
+             * the same bytes, so which one ran is not observable. */
+            if (gpu != NULL && gpu->try_acquire()) {
+                done_on_gpu = (gpu->qual_v6_encode(&job) == 0);
+                gpu->release();
+            }
+            if (!done_on_gpu) {
+                /* A partial GPU run may have written lengths, so put the
+                 * capacities back before handing the job to the CPU. */
+                for (size_t i = 0; i < n_segs; i++) {
+                    lens[i] = (size_t)segs[i].n_qual
+                            + (size_t)segs[i].n_qual / 2 + 4096;
+                    errs[i] = 0;
+                }
+                rc = ttio_engine_cpu()->qual_v6_encode(&job);
+            } else {
+                rc = 0;
+            }
         }
         if (rc != 0) goto done;
     }
