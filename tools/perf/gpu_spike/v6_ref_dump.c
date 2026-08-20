@@ -63,7 +63,13 @@ int main(int argc, char **argv) {
     }
     if (blk_reads == 0) { fprintf(stderr, "first read exceeds block\n"); return 1; }
 
-    const ttio_v6_param *pm = &TTIO_V6_DEFAULT;
+    /* Context bits overridable so the spike can trade ratio against
+     * model size: V6_QBITS / V6_PBITS / V6_DBITS. */
+    ttio_v6_param pmv = TTIO_V6_DEFAULT;
+    if (getenv("V6_QBITS")) pmv.qbits = (uint8_t)atoi(getenv("V6_QBITS"));
+    if (getenv("V6_PBITS")) pmv.pbits = (uint8_t)atoi(getenv("V6_PBITS"));
+    if (getenv("V6_DBITS")) pmv.dbits = (uint8_t)atoi(getenv("V6_DBITS"));
+    const ttio_v6_param *pm = &pmv;
     ttio_v6_alphabet ab;
     ttio_v6_alphabet_build(qual, blk_qual, pm->seed_total, &ab);
 

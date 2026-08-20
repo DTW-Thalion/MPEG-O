@@ -1,34 +1,35 @@
 #version 450
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
 #extension GL_EXT_shader_8bit_storage : require
+#extension GL_EXT_shader_16bit_storage : require
 
 /* Phase 2 spike: the real V6 segment encoder on the GPU.
  *
- * This is a line-by-line port of native/src/sm_model.h (sm_encode,
- * sm_normalize) and native/src/rc_cram.c (rc_cram_encode, shift_low,
- * rc_cram_encoder_finish). Everything is 32-bit integer arithmetic with
- * wraparound, which GLSL matches exactly, so the output is expected to
- * be byte-identical to the CPU coder rather than merely equivalent.
+ * Port of native/src/v6_model.h (Fenwick-backed adaptive model) and
+ * native/src/rc_cram.c (rc_cram_encode, shift_low, encoder_finish).
+ * All 32-bit integer arithmetic with wraparound, which GLSL matches
+ * exactly, so output is expected byte-identical to the CPU coder.
  *
- * One chain per invocation. A model entry is packed into a uint as
- * (symbol << 16) | freq, which is the same 4 bytes sm_symfreq occupies.
+ * One chain per invocation. Per context the model is 2*nsym+2 u16:
+ * freq[0..nsym-1] then a 1-based Fenwick tree of nsym+1 entries.
  */
 
 layout(local_size_x_id = 0) in;
 
-layout(std430, binding = 0) readonly  buffer Q      { uint8_t qidx[]; };
-layout(std430, binding = 1) readonly  buffer L      { uint     lens[]; };
-layout(std430, binding = 2) readonly  buffer Ch     { uint     chain[]; };
-layout(std430, binding = 3)           buffer M      { uint     model[]; };
-layout(std430, binding = 4)           buffer TF     { uint     totf[]; };
-layout(std430, binding = 5)           buffer O      { uint8_t  obuf[]; };
-layout(std430, binding = 6)           buffer OL     { uint     olen[]; };
-layout(std430, binding = 7) readonly  buffer T      { uint     tmpl[]; };
+layout(std430, binding = 0) readonly buffer Q  { uint8_t  qidx[]; };
+layout(std430, binding = 1) readonly buffer L  { uint     lens[]; };
+layout(std430, binding = 2) readonly buffer Ch { uint     chain[]; };
+layout(std430, binding = 3)          buffer M  { uint16_t model[]; };
+layout(std430, binding = 4)          buffer TF { uint     totf[]; };
+layout(std430, binding = 5)          buffer O  { uint8_t  obuf[]; };
+layout(std430, binding = 6)          buffer OL { uint     olen[]; };
+layout(std430, binding = 7) readonly buffer T  { uint16_t tmpl[]; };
 
 layout(push_constant) uniform P {
     uint n_ctx;
     uint nsym;
-    uint stride;      /* nsym + 2 */
+    uint stride;      /* 2 * nsym + 2 */
     uint seed_total;
     uint qbits;
     uint qshift;
@@ -48,6 +49,8 @@ uint e_low, e_range, e_carry, e_ffnum, e_cache, e_pos, e_err;
 uint obase, ocap;
 uint mbase, tbase;
 
+uint lsb(uint i) { return i & (~i + 1u); }
+
 void emit(uint b)
 {
     if (e_pos < ocap) {
@@ -58,7 +61,6 @@ void emit(uint b)
     }
 }
 
-/* rc_cram.c shift_low */
 void shift_low()
 {
     if (e_low < THRES || e_carry != 0u) {
@@ -75,7 +77,6 @@ void shift_low()
     e_low = e_low << 8;
 }
 
-/* rc_cram.c rc_cram_encode */
 void rc_encode(uint cf, uint f, uint T)
 {
     uint tmp = e_low;
@@ -89,46 +90,51 @@ void rc_encode(uint cf, uint f, uint T)
     }
 }
 
-/* sm_model.h sm_encode, with sm_normalize inlined */
-void sm_encode(uint ctx, uint sym)
+/* v6_model.h: sum of freq[0 .. s-1] */
+uint model_prefix(uint base, uint s)
 {
-    uint base = mbase + ctx * pc.stride;
-    uint i    = 1u;
-    uint acc  = 0u;
-    uint ent  = model[base + i];
-    while ((ent >> 16) != sym) {
-        acc += (ent & 0xFFFFu);
-        i++;
-        ent = model[base + i];
+    uint acc = 0u;
+    for (uint i = s; i > 0u; i -= lsb(i)) {
+        acc += uint(model[base + pc.nsym + i]);
     }
+    return acc;
+}
 
-    uint tf = totf[tbase + ctx];
-    rc_encode(acc, ent & 0xFFFFu, tf);
-
-    model[base + i] = (ent & 0xFFFF0000u) + ((ent & 0xFFFFu) + SM_STEP);
-    tf += SM_STEP;
-
-    if (tf > SM_MAX_FREQ) {
-        tf = 0u;
-        uint j  = 1u;
-        uint e2 = model[base + j];
-        while ((e2 & 0xFFFFu) != 0u) {
-            uint fr = e2 & 0xFFFFu;
-            fr = fr - (fr >> 1);
-            model[base + j] = (e2 & 0xFFFF0000u) | fr;
-            tf += fr;
-            j++;
-            e2 = model[base + j];
+void tree_build(uint base)
+{
+    for (uint i = 1u; i <= pc.nsym; i++) {
+        model[base + pc.nsym + i] = model[base + i - 1u];
+    }
+    for (uint i = 1u; i <= pc.nsym; i++) {
+        uint j = i + lsb(i);
+        if (j <= pc.nsym) {
+            model[base + pc.nsym + j] = uint16_t(
+                uint(model[base + pc.nsym + j])
+                + uint(model[base + pc.nsym + i]));
         }
     }
-    totf[tbase + ctx] = tf;
+}
 
-    uint cur  = model[base + i];
-    uint prev = model[base + i - 1u];
-    if ((cur & 0xFFFFu) > (prev & 0xFFFFu)) {
-        model[base + i]      = prev;
-        model[base + i - 1u] = cur;
+void model_update(uint base, uint ctx, uint s)
+{
+    model[base + s] = uint16_t(uint(model[base + s]) + SM_STEP);
+    for (uint i = s + 1u; i <= pc.nsym; i += lsb(i)) {
+        model[base + pc.nsym + i] =
+            uint16_t(uint(model[base + pc.nsym + i]) + SM_STEP);
     }
+    uint tot = totf[tbase + ctx] + SM_STEP;
+
+    if (tot > SM_MAX_FREQ) {
+        tot = 0u;
+        for (uint i = 0u; i < pc.nsym; i++) {
+            uint f = uint(model[base + i]);
+            f -= f >> 1;
+            model[base + i] = uint16_t(f);
+            tot += f;
+        }
+        tree_build(base);
+    }
+    totf[tbase + ctx] = tot;
 }
 
 void main()
@@ -145,8 +151,8 @@ void main()
     obase = c * pc.out_stride;
     ocap  = pc.out_stride;
 
-    /* Cold model per segment, seeded from the block histogram. The
-     * template is built host-side so the ordering cannot drift. */
+    /* Cold model per segment. Every context starts from the same
+     * seeded state, prepared host-side, so this is a copy. */
     for (uint ctx = 0u; ctx < pc.n_ctx; ctx++) {
         uint base = mbase + ctx * pc.stride;
         for (uint j = 0u; j < pc.stride; j++) {
@@ -174,23 +180,26 @@ void main()
         uint len  = lens[first + r];
         uint qctx = 0u, qp = 0u, qpp = 0u;
         for (uint i = 0u; i < len; i++, k++) {
-            uint pos = (len - 1u - i) >> pc.pshift;
-            pos = min(pmax, pos);
+            uint pos = min(pmax, (len - 1u - i) >> pc.pshift);
             uint d = 0u;
             if (i >= 2u) {
                 uint ad = qp > qpp ? qp - qpp : qpp - qp;
                 d = min(dmax, ad);
             }
-            uint ctx = (qctx & qmask) | (pos << ploc) | (d << dloc);
-            uint sym = uint(qidx[k]);
-            sm_encode(ctx, sym);
+            uint ctx  = (qctx & qmask) | (pos << ploc) | (d << dloc);
+            uint base = mbase + ctx * pc.stride;
+            uint sym  = uint(qidx[k]);
+
+            rc_encode(model_prefix(base, sym), uint(model[base + sym]),
+                      totf[tbase + ctx]);
+            model_update(base, ctx, sym);
+
             qctx = (qctx << pc.qshift) + sym;
             qpp = qp;
             qp  = sym;
         }
     }
 
-    /* rc_cram_encoder_finish */
     for (uint i = 0u; i < 5u; i++) {
         shift_low();
     }

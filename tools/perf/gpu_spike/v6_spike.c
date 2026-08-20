@@ -174,23 +174,23 @@ int main(int argc, char **argv)
     uint32_t lsz  = argc > 3 ? (uint32_t)strtoul(argv[3], NULL, 0) : 32;
     if (n_ch > fx.n_ch) n_ch = fx.n_ch;
 
-    uint32_t stride = fx.nsym + 2;
+    uint32_t stride = 2u * fx.nsym + 2u;   /* freq[nsym] + tree[nsym+1] */
     uint32_t n_ctx = 1u << fx.ctx_bits;
 
-    /* Model template, ordered exactly as native/src/m94z_v6.c
-     * models_init does: heaviest first, ties to the lower symbol. */
-    uint32_t *order = malloc(fx.nsym * 4);
-    for (uint32_t i = 0; i < fx.nsym; i++) order[i] = i;
-    for (uint32_t a = 0; a < fx.nsym; a++)
-        for (uint32_t b = a + 1; b < fx.nsym; b++)
-            if (fx.seed[order[b]] > fx.seed[order[a]]) {
-                uint32_t t = order[a]; order[a] = order[b]; order[b] = t;
-            }
-    uint32_t *tmpl = calloc(stride, 4);
-    tmpl[0] = SM_MAX_FREQ;                       /* sentinel: symbol 0 */
+    /* Seeded model template, built exactly as v6_model_init does:
+     * symbols stay in dense alphabet order and the Fenwick tree is
+     * built over their seed frequencies. */
+    uint16_t *tmpl = calloc(stride, sizeof(uint16_t));
     for (uint32_t i = 0; i < fx.nsym; i++)
-        tmpl[i + 1] = (order[i] << 16) | fx.seed[order[i]];
-    /* tmpl[nsym+1] terminal stays 0 */
+        tmpl[i] = (uint16_t)fx.seed[i];
+    for (uint32_t i = 1; i <= fx.nsym; i++)
+        tmpl[fx.nsym + i] = tmpl[i - 1];
+    for (uint32_t i = 1; i <= fx.nsym; i++) {
+        uint32_t j = i + (i & (~i + 1u));
+        if (j <= fx.nsym)
+            tmpl[fx.nsym + j] =
+                (uint16_t)(tmpl[fx.nsym + j] + tmpl[fx.nsym + i]);
+    }
 
     uint64_t sym_total = 0, max_ref = 0;
     for (uint32_t c = 0; c < n_ch; c++) {
@@ -235,13 +235,18 @@ int main(int argc, char **argv)
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES
     };
     f12.storageBuffer8BitAccess = VK_TRUE;
+    VkPhysicalDeviceVulkan11Features f11 = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES
+    };
+    f11.storageBuffer16BitAccess = VK_TRUE;
+    f11.pNext = &f12;
     float prio = 1.0f;
     VkDeviceQueueCreateInfo qi = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
     qi.queueFamilyIndex = qfam;
     qi.queueCount = 1;
     qi.pQueuePriorities = &prio;
     VkDeviceCreateInfo di = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
-    di.pNext = &f12;
+    di.pNext = &f11;
     di.queueCreateInfoCount = 1;
     di.pQueueCreateInfos = &qi;
     VKOK(vkCreateDevice(phys, &di, NULL, &dev));
@@ -257,7 +262,7 @@ int main(int argc, char **argv)
                              | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBufferUsageFlags SB = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 
-    uint64_t model_bytes = (uint64_t)n_ch * n_ctx * stride * 4u;
+    uint64_t model_bytes = (uint64_t)n_ch * n_ctx * stride * 2u;
     uint64_t totf_bytes  = (uint64_t)n_ch * n_ctx * 4u;
     uint64_t out_bytes   = (uint64_t)n_ch * out_stride;
     printf("# chains %u, ctx %u, alphabet %u, model %.0f MiB, out %.0f MiB\n",
@@ -271,11 +276,11 @@ int main(int argc, char **argv)
     buf_t b_tf = mk(totf_bytes, SB, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     buf_t b_o  = mk(out_bytes, SB, HV);
     buf_t b_ol = mk(4u * n_ch, SB, HV);
-    buf_t b_t  = mk(4u * stride, SB, HV);
+    buf_t b_t  = mk(2u * stride, SB, HV);
 
     upload(&b_q, fx.qidx, fx.n_sym_total);
     upload(&b_l, fx.lens, 4u * fx.n_reads);
-    upload(&b_t, tmpl, 4u * stride);
+    upload(&b_t, tmpl, 2u * stride);
     {
         uint32_t *ch = malloc(16u * n_ch);
         for (uint32_t c = 0; c < n_ch; c++) {

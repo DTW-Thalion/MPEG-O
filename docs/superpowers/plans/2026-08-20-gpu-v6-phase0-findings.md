@@ -187,3 +187,79 @@ would stop being affordable once anything ships on it.
 
 Failing that, the honest scope for a GPU engine is small-alphabet
 corpora only, at a bit over 2x, which does not justify a Vulkan backend.
+
+
+## Phase 2 spike, second pass: the symbol search was not the bottleneck
+
+The first pass blamed `sm_encode` walking the frequency array, on the
+evidence that a 6-symbol alphabet ran 5x faster than a 49-symbol one.
+That inference was wrong, or at least incomplete: alphabet size drives
+both the walk length and the model size, and it is the model size that
+matters.
+
+Replacing the walk with a Fenwick tree (`native/src/v6_model.h`,
+O(log A) with a fixed step count) settles it:
+
+| Corpus | Alphabet | Model per chain | sm_model | Fenwick |
+| --- | --- | --- | --- | --- |
+| NovaSeq | 6 | 0.5 MB | 700.2 MB/s | 565.8 MB/s |
+| lowcov | 49 | 3.2 MB | 140.3 MB/s | 134.3 MB/s |
+| HiFi | 92 | 5.9 MB | not measured | 82.7 MB/s at 512 chains |
+
+On the GPU the change is a wash on large alphabets and a 19% loss on
+the small one. The walk is sequential and hits few cache lines; the
+tree walk is scattered and can touch more, and it trades an O(1) update
+for an O(log A) one. Throughput instead tracks model bytes per chain
+almost inversely, which is what pointed at the real lever.
+
+On the CPU the same change is a clear win, because there the cost is
+instruction count rather than scattered access: lowcov +20%, HiFi +8%,
+2x250 +2%, NovaSeq -1.5%. It is kept for that reason, and because it is
+ratio-neutral.
+
+### Ratio neutrality, confirmed exactly
+
+The range coder advances as `range = (range / tot) * freq`, which never
+involves the cumulative frequency, so the interval widths and therefore
+the renormalisation count are identical however symbols are ordered.
+Only the byte values change. Measured on all four corpora at the same
+parameters, the compressed totals are byte-for-byte identical between
+the two models: 120456830, 41348162, 76077633 and 70859180.
+
+### The real lever: context bits
+
+Model size is `2^C * (2A + 2) * 2`, and C was the part nobody had
+questioned. Holding chains at 1024 on lowcov:
+
+| C | Model | GPU encode | Reference bytes |
+| --- | --- | --- | --- |
+| 14 | 3200 MiB | 131.6 MB/s | 27912957 |
+| 12 | 800 MiB | 194.2 MB/s | 27636100 |
+| 10 | 200 MiB | 266.6 MB/s | 26945290 |
+| 8 | 50 MiB | 250.3 MB/s | 28908343 |
+
+Smaller is better on both axes at once, down to about C = 10. The
+reason is the same one segmentation runs into everywhere: a segment is
+a few hundred thousand symbols, and spreading those across 2^14
+contexts leaves each one too sparse to learn. V4 can afford a large
+context space because it models a whole 64 MiB block.
+
+The Phase 1 sweep never saw this because the plan specified
+`Q in 8..12`, so `qbits = 6` was outside the grid from the start. The
+default is now Q 6, C = 12, which improves or matches every corpus and
+cuts model memory fourfold. See `docs/codecs/m94z_v6.md` section 6.1.
+
+### Where that leaves a GPU engine
+
+Still short. At the new default the GPU reaches roughly 194 MB/s on
+lowcov against a CPU that does 318 MB/s machine-wide, and the CPU path
+got faster too. C = 10 would reach 267 MB/s at a 1.3 point ratio cost
+on NovaSeq, and is still below the CPU.
+
+The remaining gap is per-segment model initialisation, which is a fixed
+cost of 2^C entries paid before a segment codes anything, and the
+scattered reads into that model during coding. Anything that shrinks
+the resident model per chain helps both. Worth trying before committing
+to an engine: sharing one model across several segments of the same
+block, which would break segment independence and needs a design
+decision rather than a spike.

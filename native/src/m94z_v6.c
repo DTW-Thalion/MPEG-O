@@ -14,12 +14,20 @@
 #include "rc_cram.h"
 #include "v6_model.h"
 
-/* Fixed by the Phase 1 ratio sweep over the four reference corpora
- * (docs/codecs/m94z_v6.md section 6). Q 8, qshift 7, P 4, pshift 4,
- * D 2 is the single setting whose worst class is smallest; the seed
- * mass is flat between 256 and 384 and falls away sharply above 4096,
- * because a heavy prior stops the per-context model adapting. */
-const ttio_v6_param TTIO_V6_DEFAULT = { 8, 7, 4, 4, 2, 256 };
+/* Fixed by the ratio sweep over the four reference corpora
+ * (docs/codecs/m94z_v6.md section 6).
+ *
+ * C = Q + P + D = 12 is deliberately far below what V4 uses. V4 models
+ * a whole 64 MiB block, so it can afford a large context space; a V6
+ * segment is a few hundred thousand symbols, and spreading those over
+ * 2^14 contexts leaves each one too sparse to learn. Dropping to 2^12
+ * improves or matches every corpus AND cuts model memory fourfold.
+ *
+ * The seed mass is flat between 256 and 384 and falls away sharply
+ * above 4096, because a heavy prior stops the per-context model
+ * adapting. qshift 7 discards quality history at Q = 6, which measures
+ * better than retaining it on three of the four corpora. */
+const ttio_v6_param TTIO_V6_DEFAULT = { 6, 7, 4, 4, 2, 256 };
 
 #ifndef MIN
 #  define MIN(a,b) ((a)<(b)?(a):(b))
