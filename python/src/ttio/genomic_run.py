@@ -220,10 +220,12 @@ class GenomicRun:
 
     def iter_reads(self, start: int = 0, stop: int | None = None, *,
                    threads: int | None = None) -> Iterator[AlignedRead]:
-        """Yield reads ``[start, stop)`` in order. Under ``blocks_v1`` the
-        next ``threads`` blocks decode ahead on a pool (``threads`` from
-        the argument, else TTIO_THREADS, else cores minus 8); one thread
-        keeps the one-block path, holding one decoded block at a time."""
+        """Yield reads ``[start, stop)`` in order. Under ``blocks_v1``
+        the next few blocks decode ahead on a pool, at most
+        ``_READ_AHEAD_BLOCKS`` of them; one thread keeps the one-block
+        path, holding one decoded block at a time. Each block in
+        flight stays resident, so the window costs memory as much as
+        it saves latency."""
         n = len(self)
         if stop is None or stop > n:
             stop = n
