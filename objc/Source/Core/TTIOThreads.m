@@ -34,7 +34,7 @@
     return computed > floor1g ? computed : floor1g;
 }
 
-+ (NSUInteger)resolveV6SegmentThreads:(NSUInteger)poolWorkers
++ (NSUInteger)resolveV6SegmentThreads:(NSUInteger)blocksInFlight
 {
     const char *env = getenv("TTIO_V6_SEGMENT_THREADS");
     if (env && env[0]) {
@@ -42,11 +42,25 @@
         if (v > 0) return (NSUInteger)v;
     }
     NSUInteger cores = (NSUInteger)[[NSProcessInfo processInfo] activeProcessorCount];
-    NSUInteger workers = poolWorkers < 1 ? 1 : poolWorkers;
-    NSUInteger n = cores / workers;
+    NSUInteger blocks = blocksInFlight < 1 ? 1 : blocksInFlight;
+    NSUInteger n = cores / blocks;
     if (n < 2) n = 2;
-    if (n > 8) n = 8;
+    /* Capped at the core count, not at 8: with one block in flight the
+     * segments are the only work there is, and 8 of them leave three
+     * quarters of a 32-thread machine idle. The product blocks x n
+     * stays near the core count at every count. */
+    if (n > cores) n = cores;
     return n;
+}
+
++ (void)applyV6SegmentThreadsForBlocksInFlight:(NSUInteger)blocksInFlight
+{
+#ifdef TTIO_THREADS_HAVE_RANS
+    ttio_m94z_set_v6_threads(
+        (int)[self resolveV6SegmentThreads:blocksInFlight]);
+#else
+    (void)blocksInFlight;
+#endif
 }
 
 + (NSUInteger)resolve:(NSNumber *)explicitCount

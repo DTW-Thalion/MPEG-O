@@ -311,6 +311,10 @@ public final class GenomicStreamWriter implements AutoCloseable {
         drainToBudget();
         WrittenGenomicRun fb = block;
         long est = estimateBlockBytes(block);
+        // Segment threads follow the blocks actually in flight, not the
+        // pool's size; see Threads.resolveV6SegmentThreads.
+        global.thalion.ttio.Threads.applyV6SegmentThreadsForBlocksInFlight(
+            inflight.size() + 1);
         inflight.add(new InFlight(block, scope.executor().submit(() -> GenomicBlocks.encodeBlock(fb, bctx)), est));
         inflightBytes += est;
         if (inflightBytes > maxInFlightBytesObserved) maxInFlightBytesObserved = inflightBytes;

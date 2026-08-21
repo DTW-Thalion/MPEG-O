@@ -423,6 +423,14 @@ static unsigned long long ppEstimateBlockBytes(TTIOWrittenGenomicRun *b)
     [_inflight addObject:f];
     _inflightBytes += f.estimatedBytes;
     if (_inflightBytes > _maxInFlightBytesObserved) _maxInFlightBytesObserved = _inflightBytes;
+    /* Segment threads follow the blocks actually in flight, not the
+     * pool's size. A run with fewer blocks than workers never fills the
+     * pool, and sizing the segments from the worker count leaves the
+     * machine idle in exactly that case: 3 blocks against 30 workers
+     * asked for 2 segment threads each and used 6 cores of 32. The
+     * product stays near the core count as the count settles, and the
+     * pool restores the previous value when it closes. */
+    [TTIOThreads applyV6SegmentThreadsForBlocksInFlight:_inflight.count];
     NSCondition *cond = _cond;
     [_pool.queue addOperationWithBlock:^{
         NSError *e = nil;

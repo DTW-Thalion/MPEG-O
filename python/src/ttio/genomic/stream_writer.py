@@ -28,7 +28,8 @@ from .. import _hdf5_io as io
 from ..enums import Compression, Precision
 from ..providers.base import CompoundField, CompoundFieldKind
 from ..written_genomic_run import WrittenGenomicRun
-from .._threads import resolve_threads, pool_context, resolve_memory_budget
+from .._threads import (resolve_threads, pool_context,
+                        resolve_memory_budget, apply_v6_segment_threads)
 from . import _blocks
 
 LAYOUT = "blocks_v1"
@@ -273,6 +274,9 @@ class GenomicStreamWriter:
             self._drain(block_until=len(self._inflight) - 1)
         self._inflight_bytes += est
         self._max_inflight_bytes = max(self._max_inflight_bytes, self._inflight_bytes)
+        # Segment threads follow the blocks actually in flight, not
+        # the pool's size; see resolve_v6_segment_threads.
+        apply_v6_segment_threads(len(self._inflight) + 1)
         self._inflight.append((block, est,
                                self._pool.submit(_blocks.encode_block, block,
                                                  qual_strategy_hint=self._qual_hint)))

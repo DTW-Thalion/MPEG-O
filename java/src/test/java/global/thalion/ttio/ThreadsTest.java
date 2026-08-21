@@ -10,14 +10,37 @@ class ThreadsTest {
     void v6SegmentThreadsClampToTheCoreCount() {
         int cores = Runtime.getRuntime().availableProcessors();
         int one = Threads.resolveV6SegmentThreads(1);
-        assertEquals(Math.min(8, Math.max(2, cores)), one,
-                     "one worker takes the machine, capped at eight");
+        assertEquals(Math.max(2, cores), one,
+                     "one block in flight takes the whole machine");
         assertEquals(2, Threads.resolveV6SegmentThreads(cores * 2),
-                     "more workers than cores still leaves the floor of two");
+                     "more blocks than cores still leaves the floor of two");
         assertEquals(one, Threads.resolveV6SegmentThreads(0),
-                     "zero workers is read as one");
-        int mid = Threads.resolveV6SegmentThreads(4);
-        assertTrue(mid >= 2 && mid <= 8, "stays inside the clamp");
+                     "zero blocks is read as one");
+        for (int blocks = 1; blocks <= cores; blocks *= 2) {
+            assertTrue(Threads.resolveV6SegmentThreads(blocks) * blocks <= cores
+                       || Threads.resolveV6SegmentThreads(blocks) == 2,
+                       "product stays near the core count at " + blocks);
+        }
+    }
+
+    /** A writer moves the count as blocks come and go. */
+    @Test
+    void applyingForBlocksInFlightSetsTheRulesValue() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+            global.thalion.ttio.codecs.TtioRansNative.isAvailable(),
+            "libttio_rans_jni not loaded");
+        int cores = Runtime.getRuntime().availableProcessors();
+        int saved = global.thalion.ttio.codecs.FqzcompNx16Z.getV6Threads();
+        try {
+            Threads.applyV6SegmentThreadsForBlocksInFlight(1);
+            assertEquals(Threads.resolveV6SegmentThreads(1),
+                         global.thalion.ttio.codecs.FqzcompNx16Z.getV6Threads());
+            Threads.applyV6SegmentThreadsForBlocksInFlight(cores * 2);
+            assertEquals(2, global.thalion.ttio.codecs.FqzcompNx16Z.getV6Threads(),
+                         "more blocks than cores sets the floor");
+        } finally {
+            global.thalion.ttio.codecs.FqzcompNx16Z.setV6Threads(saved);
+        }
     }
 
     /* The override reaches outside the clamp on purpose: a sweep has to

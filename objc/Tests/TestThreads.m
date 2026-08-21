@@ -40,16 +40,26 @@ void testThreads(void)
     [p4 close];
     PASS(ttio_m94z_get_autotune_threads() == before, "threads: restored at close");
 
-    /* clamp(cores / workers, 2, 8). The floor matters most: one segment
-     * thread per block is V6 coding a whole block in sequence. */
+    /* clamp(cores / blocksInFlight, 2, cores). The argument is blocks in
+     * flight, not the pool size: a run with fewer blocks than workers
+     * never fills the pool, and sizing from the pool left 3 blocks
+     * asking for 2 threads each on a 32-thread machine. The product
+     * blocks x n stays near the core count at every count. */
     NSUInteger c = (NSUInteger)[[NSProcessInfo processInfo] activeProcessorCount];
     NSUInteger one = [TTIOThreads resolveV6SegmentThreads:1];
-    PASS(one == (c > 8 ? 8 : (c < 2 ? 2 : c)),
-         "v6 segments: one worker takes the machine, capped at eight");
+    PASS(one == (c < 2 ? 2 : c),
+         "v6 segments: one block in flight takes the whole machine (%lu of %lu)",
+         (unsigned long)one, (unsigned long)c);
     PASS([TTIOThreads resolveV6SegmentThreads:c * 2] == 2,
-         "v6 segments: more workers than cores still leaves the floor of two");
+         "v6 segments: more blocks than cores still leaves the floor of two");
     PASS([TTIOThreads resolveV6SegmentThreads:0] == one,
-         "v6 segments: zero workers is read as one");
+         "v6 segments: zero blocks is read as one");
+    if (c >= 4) {
+        NSUInteger half = [TTIOThreads resolveV6SegmentThreads:2];
+        PASS(half * 2 <= c && half * 2 >= c - 2,
+             "v6 segments: the product stays near the core count (%lu x 2 vs %lu)",
+             (unsigned long)half, (unsigned long)c);
+    }
 
     /* The override exists so the split between blocks and segments can
      * be swept. It sits outside the clamp on purpose: a sweep has to be
@@ -87,8 +97,9 @@ void testThreads(void)
      * segments one after another, which is the defect this replaced. */
     PASS(inPool > 1,
          "v6 segments: a pool never leaves V6 coding its segments in sequence");
-    PASS(inPool >= 2 && inPool <= 8,
-         "v6 segments: a pool sets a value inside the clamp");
+    PASS(inPool >= 2 && inPool <= (int)c,
+         "v6 segments: a pool sets a value inside the clamp (%d of %lu)",
+         inPool, (unsigned long)c);
     TTIOThreadPool *pNested = [TTIOThreadPool poolWithThreads:16];
     PASS(ttio_m94z_get_v6_threads() == inPool,
          "v6 segments: a nested pool leaves the outer count alone");
@@ -98,4 +109,20 @@ void testThreads(void)
     [p8 close];
     PASS(ttio_m94z_get_v6_threads() == beforeV6,
          "v6 segments: restored when the pool that set them closes");
+
+    /* A writer moves the count as blocks come and go, so the value has
+     * to follow what it is given rather than staying where the pool put
+     * it. Done after the pool assertions: this mutates the same global
+     * they are watching. */
+    {
+        int savedV6 = ttio_m94z_get_v6_threads();
+        [TTIOThreads applyV6SegmentThreadsForBlocksInFlight:1];
+        PASS(ttio_m94z_get_v6_threads()
+                 == (int)[TTIOThreads resolveV6SegmentThreads:1],
+             "v6 segments: applying for 1 block in flight sets the rule's value");
+        [TTIOThreads applyV6SegmentThreadsForBlocksInFlight:c * 2];
+        PASS(ttio_m94z_get_v6_threads() == 2,
+             "v6 segments: applying for more blocks than cores sets the floor");
+        ttio_m94z_set_v6_threads(savedV6);
+    }
 }

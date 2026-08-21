@@ -68,14 +68,18 @@ def test_read_ahead_window_env_override(monkeypatch):
 
 
 def test_v6_segment_threads_clamp(monkeypatch):
-    """Parity with Threads.resolveV6SegmentThreads (Java) and
-    +[TTIOThreads resolveV6SegmentThreads:] (ObjC)."""
+    """The argument is blocks in flight, not the pool size, and the
+    cap is the core count. Parity with Threads.resolveV6SegmentThreads
+    (Java) and +[TTIOThreads resolveV6SegmentThreads:] (ObjC)."""
     monkeypatch.setattr(os, "cpu_count", lambda: 32)
-    assert _threads.resolve_v6_segment_threads(1) == 8      # capped
+    assert _threads.resolve_v6_segment_threads(1) == 32     # the machine
     assert _threads.resolve_v6_segment_threads(4) == 8
     assert _threads.resolve_v6_segment_threads(16) == 2
     assert _threads.resolve_v6_segment_threads(64) == 2     # floor
-    assert _threads.resolve_v6_segment_threads(0) == 8      # read as one
+    assert _threads.resolve_v6_segment_threads(0) == 32     # read as one
+    # The product stays near the core count wherever it can.
+    for blocks in (1, 2, 4, 8, 16):
+        assert _threads.resolve_v6_segment_threads(blocks) * blocks <= 32
 
 
 def test_v6_segment_threads_env_override(monkeypatch):

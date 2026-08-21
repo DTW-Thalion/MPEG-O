@@ -54,9 +54,9 @@ def resolve_memory_budget(
     return max(1 << 30, budget)
 
 
-def resolve_v6_segment_threads(pool_workers: int) -> int:
+def resolve_v6_segment_threads(blocks_in_flight: int) -> int:
     """How many segments of one V6 block to encode at once, given how
-    many blocks the writer keeps in flight.
+    many blocks are in flight.
 
     What the measurements say, on a 32-thread machine encoding a corpus
     with more blocks than cores: total concurrency wants to sit near the
@@ -71,8 +71,16 @@ def resolve_v6_segment_threads(pool_workers: int) -> int:
     across blocks. Segments are the way to use cores the blocks cannot:
     a writer near the end of a run, or one whose memory budget caps the
     blocks it can hold, has spare cores and nothing else to do with
-    them. That is what the floor of 2 is for, and why the count is
-    derived from the pool size rather than fixed.
+    them. That is what the floor of 2 is for.
+
+    The argument is the blocks actually in flight, not the pool's
+    size. A run with fewer blocks than workers never fills the pool,
+    and sizing from the worker count leaves the machine idle in
+    exactly that case: 3 blocks against 30 workers asked for 2
+    segment threads each and used 6 cores of 32. Measured on the
+    Objective-C writer, following the blocks is worth 11.5% there.
+    The cap is the core count, not 8, for the same reason: with one
+    block in flight the segments are the only work there is.
 
     ``TTIO_V6_SEGMENT_THREADS`` overrides the rule when it is a positive
     integer, so the split between blocks and segments can be measured
@@ -87,13 +95,23 @@ def resolve_v6_segment_threads(pool_workers: int) -> int:
         if v > 0:
             return v
     cores = os.cpu_count() or 1
-    workers = max(1, int(pool_workers))
-    n = cores // workers
+    blocks = max(1, int(blocks_in_flight))
+    n = cores // blocks
     if n < 2:
         n = 2
-    if n > 8:
-        n = 8
+    if n > cores:
+        n = cores
     return n
+
+
+def apply_v6_segment_threads(blocks_in_flight: int) -> None:
+    """Set the V6 segment thread count from the blocks in flight right
+    now. A writer calls this as it submits, so the count follows the
+    work rather than the pool's size; :func:`pool_context` restores
+    the previous value when it exits. Java:
+    ``Threads.applyV6SegmentThreadsForBlocksInFlight``; Objective-C:
+    ``+[TTIOThreads applyV6SegmentThreadsForBlocksInFlight:]``."""
+    _set_v6_threads(resolve_v6_segment_threads(blocks_in_flight))
 
 
 def _get_autotune() -> int:

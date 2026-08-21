@@ -71,11 +71,28 @@ public final class Threads {
     private static int savedAutotune;
     private static int savedV6;
 
-    /** A pool of {@code n} workers ({@code null} executor when n <= 1) that
-     *  stands the FQZCOMP auto-tune threads down while it exists. */
+    /** Set the V6 segment thread count from the blocks in flight right
+     *  now. A writer calls this as it submits, so the count follows the
+     *  work rather than the pool's size; {@link PoolScope#close} restores
+     *  the previous value. Python:
+     *  {@code ttio._threads.apply_v6_segment_threads}; Objective-C:
+     *  {@code +[TTIOThreads applyV6SegmentThreadsForBlocksInFlight:]}. */
+    public static void applyV6SegmentThreadsForBlocksInFlight(int blocksInFlight) {
+        global.thalion.ttio.codecs.FqzcompNx16Z.setV6Threads(
+            resolveV6SegmentThreads(blocksInFlight));
+    }
+
     /** How many segments of one M94.Z V6 block to code at once, given
-     *  how many blocks the pool keeps in flight: clamp(cores / workers,
-     *  2, 8).
+     *  how many blocks are in flight: clamp(cores / blocksInFlight, 2,
+     *  cores).
+     *
+     *  <p>The argument is the blocks actually in flight, not the pool's
+     *  size. A run with fewer blocks than workers never fills the pool,
+     *  and sizing from the worker count leaves the machine idle in
+     *  exactly that case: 3 blocks against 30 workers asked for 2
+     *  segment threads each and used 6 cores of 32. Measured on the
+     *  Objective-C writer, following the blocks is worth 11.5% there.
+     *  The cap is the core count, not 8, for the same reason.
      *
      *  <p>Total concurrency wants to sit near the core count, and blocks
      *  are worth more than segments where there is a choice, because the
@@ -93,7 +110,7 @@ public final class Threads {
      *
      *  <p>Python: {@code ttio._threads.resolve_v6_segment_threads};
      *  Objective-C: {@code +[TTIOThreads resolveV6SegmentThreads:]}. */
-    public static int resolveV6SegmentThreads(int poolWorkers) {
+    public static int resolveV6SegmentThreads(int blocksInFlight) {
         String raw = System.getProperty("ttio.v6.segmentThreads");
         if (raw == null || raw.isBlank()) raw = System.getenv("TTIO_V6_SEGMENT_THREADS");
         if (raw != null && !raw.isBlank()) {
@@ -105,13 +122,15 @@ public final class Threads {
             }
         }
         int cores = Runtime.getRuntime().availableProcessors();
-        int workers = Math.max(1, poolWorkers);
-        int n = cores / workers;
+        int blocks = Math.max(1, blocksInFlight);
+        int n = cores / blocks;
         if (n < 2) n = 2;
-        if (n > 8) n = 8;
+        if (n > cores) n = cores;
         return n;
     }
 
+    /** A pool of {@code n} workers ({@code null} executor when n <= 1)
+     *  that stands the FQZCOMP auto-tune threads down while it exists. */
     public static PoolScope pool(int n) { return new PoolScope(n); }
 
     public static final class PoolScope implements AutoCloseable {

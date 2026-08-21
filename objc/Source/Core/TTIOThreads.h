@@ -24,8 +24,14 @@ NS_ASSUME_NONNULL_BEGIN
                                   threads:(NSUInteger)threads
                                blockBytes:(unsigned long long)blockBytes;
 
+/** Set the V6 segment thread count from the blocks in flight right now.
+ *  A writer calls this as it submits, so the count follows the work
+ *  rather than the pool's size; the pool restores the previous value
+ *  when it closes. */
++ (void)applyV6SegmentThreadsForBlocksInFlight:(NSUInteger)blocksInFlight;
+
 /** How many segments of one M94.Z V6 block to code at once, given how
- *  many blocks the pool keeps in flight: clamp(cores / workers, 2, 8).
+ *  many blocks are in flight: clamp(cores / blocksInFlight, 2, cores).
  *
  *  Total concurrency wants to sit near the core count, and blocks are
  *  worth more than segments where there is a choice, because the work
