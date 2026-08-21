@@ -34,6 +34,21 @@
     return computed > floor1g ? computed : floor1g;
 }
 
++ (NSUInteger)resolveV6SegmentThreads:(NSUInteger)poolWorkers
+{
+    const char *env = getenv("TTIO_V6_SEGMENT_THREADS");
+    if (env && env[0]) {
+        long v = strtol(env, NULL, 10);
+        if (v > 0) return (NSUInteger)v;
+    }
+    NSUInteger cores = (NSUInteger)[[NSProcessInfo processInfo] activeProcessorCount];
+    NSUInteger workers = poolWorkers < 1 ? 1 : poolWorkers;
+    NSUInteger n = cores / workers;
+    if (n < 2) n = 2;
+    if (n > 8) n = 8;
+    return n;
+}
+
 + (NSUInteger)resolve:(NSNumber *)explicitCount
 {
     if (explicitCount && explicitCount.integerValue > 0) {
@@ -47,8 +62,12 @@
         if (end == raw || (end && *end && *end != ' ')) return 1;
     }
     if (n <= 0) {
+        /* Two cores held back rather than eight: measured throughput
+         * kept climbing to roughly one writer per core, and the wider
+         * margin left a quarter of it unused. The floor keeps a
+         * two-core machine from resolving to zero. */
         long cores = (long)[[NSProcessInfo processInfo] activeProcessorCount];
-        n = cores - 8 > 1 ? cores - 8 : 1;
+        n = cores - 2 > 1 ? cores - 2 : 1;
     }
     return (NSUInteger)n;
 }
@@ -58,6 +77,7 @@
 static pthread_mutex_t g_poolLock = PTHREAD_MUTEX_INITIALIZER;
 static int g_poolDepth = 0;
 static int g_savedAutotune = 3;
+static int g_savedV6 = 0;
 
 @implementation TTIOThreadPool {
     NSOperationQueue *_queue;
@@ -78,6 +98,9 @@ static int g_savedAutotune = 3;
 #ifdef TTIO_THREADS_HAVE_RANS
             g_savedAutotune = ttio_m94z_get_autotune_threads();
             ttio_m94z_set_autotune_threads(1);
+            g_savedV6 = ttio_m94z_get_v6_threads();
+            ttio_m94z_set_v6_threads(
+                (int)[TTIOThreads resolveV6SegmentThreads:p->_threads]);
 #endif
         }
         pthread_mutex_unlock(&g_poolLock);
@@ -97,6 +120,7 @@ static int g_savedAutotune = 3;
     if (--g_poolDepth == 0) {
 #ifdef TTIO_THREADS_HAVE_RANS
         ttio_m94z_set_autotune_threads(g_savedAutotune);
+        ttio_m94z_set_v6_threads(g_savedV6);
 #endif
     }
     pthread_mutex_unlock(&g_poolLock);

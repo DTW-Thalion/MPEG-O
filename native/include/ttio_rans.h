@@ -300,8 +300,21 @@ int ttio_m94z_v4_decode(
 #define TTIO_M94Z_V5_MIN_QUALITIES (1u << 20)
 #define TTIO_M94Z_HINT_V4_AUTO 7
 
-/* Strategy of an encoded M94.Z stream: 4 = V4, 5/6 = V5 S5/S6.
- * <0: -1 args, -2 magic/version, -3 truncated or unknown id. */
+/* 8 forces M94.Z V6, the segmented adaptive variant. V6 needs no
+ * sequences, on either side. Auto-tune never selects it: V6 does not
+ * beat V4 or V5 on size, so it must not enter the size race. */
+#define TTIO_M94Z_HINT_V6 8
+
+/* Name of the engine that encodes M94.Z V6 blocks: "cpu", or
+ * "vulkan:<device>" when a GPU engine has been asked for and came up.
+ * Never NULL. */
+const char *ttio_engine_active_name(void);
+
+/* 1 when a GPU engine has been asked for and came up, else 0. */
+int ttio_engine_gpu_available(void);
+
+/* Strategy of an encoded M94.Z stream: 4 = V4, 5/6 = V5 S5/S6,
+ * 8 = V6. <0: -1 args, -2 magic/version, -3 truncated or unknown id. */
 int ttio_m94z_qual_stream_strategy(const uint8_t *in, size_t in_len);
 
 /* Threads the FQZCOMP auto-tune uses for its V4/S5/S6 candidate encodes
@@ -309,6 +322,20 @@ int ttio_m94z_qual_stream_strategy(const uint8_t *in, size_t in_len);
  * value is 1 when TTIO_M94Z_SEQUENTIAL=1 is set. A caller that already
  * runs blocks on a pool sets 1 for the life of the pool. */
 void ttio_m94z_set_autotune_threads(int n);
+
+/* Segments of one V6 block encoded at once.
+ *
+ * This is a different question from the auto-tune candidate count, and
+ * it wants a different answer. Auto-tune races V4 against two V5
+ * strategies, so a caller that already runs blocks on a pool sets it to
+ * 1 to avoid three candidate encodes per worker. V6 has no candidates:
+ * the same setting would simply switch off intra-block parallelism and
+ * leave the segments to encode one after another.
+ *
+ * 0, the default, means follow the auto-tune count, which is the
+ * behaviour callers had before this existed. */
+void ttio_m94z_set_v6_threads(int n);
+int  ttio_m94z_get_v6_threads(void);
 int  ttio_m94z_get_autotune_threads(void);
 
 int ttio_m94z_qual_encode(

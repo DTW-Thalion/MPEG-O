@@ -11,6 +11,37 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added
+- **M94.Z V6, a segmented qualities variant.** V4 and V5 code a block
+  as one adaptive chain, so a 64 MiB block cannot be split across
+  compute units, and the qualities codec is about 73% of encode CPU.
+  V6 splits a block into independent segments at read boundaries, each
+  with its own model and coder, so one block spreads across cores. It
+  is reached only by strategy hint 8 (`HINT_V6` in Python and Java,
+  `TTIOM94ZHintV6` in Objective-C); auto-tune never selects it and V5
+  remains the default, so nothing already written changes. Output bytes are
+  identical for any thread count, and a cross-SDK golden fixture pins
+  them across Python, Java and Objective-C. V6 decodes without the
+  sequences channel.
+
+  It trades ratio for that parallelism: measured against V4 at the
+  default 256 Ki segment, +5.99% on low-coverage chr22, +6.12% on HiFi,
+  +6.18% on NovaSeq WGS and +6.66% on 2x250 chr22. The cost is
+  per-segment model warm-up and falls as segments grow. Full table and
+  method in `docs/codecs/m94z_v6.md`.
+
+- **Two environment variables that make the writer's thread split
+  measurable.** `TTIO_V6_SEGMENT_THREADS` overrides
+  `clamp(cores / workers, 2, 8)`, and reaches outside that clamp on
+  purpose: a sweep has to be able to ask for one segment thread and for
+  more than eight. `TTIO_M94Z_HINT` pins the qualities strategy before
+  block 0 rather than after it, which is the only way to reach V6
+  through a stream writer, since auto-tune never selects it;
+  `TTIO_M94Z_EXHAUSTIVE` still wins. Both are read in all three SDKs,
+  Java also taking `-Dttio.v6.segmentThreads` and `-Dttio.m94z.hint`. A
+  positive integer wins and anything else falls through to the existing
+  rule, matching `TTIO_READ_AHEAD_BLOCKS`. Defaults are unchanged.
+
 ### Fixed
 - **Exports stream their output.** The FASTQ and FASTA exporters in all
   three SDKs built the whole output in memory before one write, so
@@ -22,6 +53,22 @@ public API is stable from onward.
   most 4 blocks, which a serial consumer cannot outrun anyway.
 
 ### Changed
+- **The default thread count is now `cpu_count - 2`, was `cpu_count - 8`.**
+  `TTIO_THREADS` unset or 0 resolves to this in all three SDKs. Measured
+  on a 32-thread machine encoding a corpus with more blocks than cores,
+  throughput kept climbing to roughly one writer per core: at a fixed
+  two segment threads, 1462 MB/s at 32 writers against 1128 at the 24
+  the old default chose. The floor of
+  1 stays, so a one or two core machine still resolves to a single
+  worker rather than none. Callers that set `TTIO_THREADS` or pass
+  `threads=` are unaffected.
+
+  The memory budget derives from the thread count when it is not given
+  explicitly (`threads * block_bytes * 16`, capped at half of physical
+  memory), so a machine that was hitting the thread-derived figure
+  rather than the physical cap now allows a proportionally larger
+  budget.
+
 - **Qualities strategy is decided once per run.** The M94.Z auto-tune
   encoded every block three times (V4, V5-S5, V5-S6; smallest wins).
   The streaming writers now tune block 0 only, read the winner from

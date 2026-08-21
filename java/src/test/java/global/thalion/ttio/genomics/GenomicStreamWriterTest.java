@@ -357,6 +357,47 @@ class GenomicStreamWriterTest {
         }
     }
 
+    /* The hint knob pins the strategy at construction rather than after
+     * block 0. V6 is reachable no other way, which is what it is for.
+     * Parity with the Python and Objective-C writers. */
+    @Test
+    void hintPropertyPinsBeforeBlockZero() throws Exception {
+        WrittenGenomicRun run = bigSyntheticRun(40_000, 14);
+        StorageGroup study = study("memory://gsw-hint");
+        GenomicStreamWriter.Options o = GenomicStreamWriter.Options.fromRun(run)
+            .withBlockPolicy(20_000, Long.MAX_VALUE)
+            .withReference(run.referenceChromSeqs(), true);
+        try {
+            System.setProperty("ttio.m94z.hint", "8");
+            try (GenomicStreamWriter w = new GenomicStreamWriter(study, "g", o, 2)) {
+                assertEquals(8, w.qualStrategyHintForTests(),
+                             "pinned at construction, before any block");
+                w.appendBatch(run);
+                w.flush();
+                assertEquals(8, w.qualStrategyHintForTests(),
+                             "and the pin survives the run");
+            }
+            int i = 0;
+            for (String bad : new String[] { "junk", "0", "-1", " " }) {
+                System.setProperty("ttio.m94z.hint", bad);
+                try (GenomicStreamWriter w =
+                         new GenomicStreamWriter(study, "gb" + (i++), o, 2)) {
+                    assertEquals(-1, w.qualStrategyHintForTests(),
+                                 "\"" + bad + "\" falls through to the tune");
+                }
+            }
+            System.setProperty("ttio.m94z.hint", "8");
+            System.setProperty("ttio.m94z.exhaustive", "1");
+            try (GenomicStreamWriter w = new GenomicStreamWriter(study, "ge", o, 2)) {
+                assertEquals(-1, w.qualStrategyHintForTests(),
+                             "the exhaustive flag wins over the hint");
+            }
+        } finally {
+            System.clearProperty("ttio.m94z.hint");
+            System.clearProperty("ttio.m94z.exhaustive");
+        }
+    }
+
     @Test
     void registerBlockChromosomesMatchesEncoderOrder() throws Exception {
         WrittenGenomicRun m87 = m87();

@@ -176,11 +176,42 @@ int ttio_m94z_v5_unpack(
                            out_body, out_body_len);
 }
 
+int ttio_m94z_v6_pack(
+    uint64_t num_qualities, uint64_t num_reads,
+    const uint32_t *read_lengths,
+    uint8_t pad_count,
+    const uint8_t *body, size_t body_len,
+    uint8_t *out, size_t *out_len)
+{
+    return m94z_pack_any(TTIO_M94Z_V6_WIRE_VERSION,
+                         (uint8_t)(0x02u | ((pad_count & 0x3u) << 4)),
+                         num_qualities, num_reads, read_lengths,
+                         body, body_len, out, out_len);
+}
+
+int ttio_m94z_v6_unpack(
+    const uint8_t *in, size_t in_len,
+    uint64_t *out_nq, uint64_t *out_nr,
+    uint32_t *out_rl,
+    uint8_t  *out_pad,
+    const uint8_t **out_body, size_t *out_body_len)
+{
+    return m94z_unpack_any(TTIO_M94Z_V6_WIRE_VERSION, 0x02u, 0x01u,
+                           in, in_len, out_nq, out_nr, out_rl, out_pad,
+                           out_body, out_body_len);
+}
+
 int ttio_m94z_qual_stream_strategy(const uint8_t *in, size_t in_len)
 {
     if (in == NULL || in_len < 30) return -1;
     if (memcmp(in, TTIO_M94Z_V4_MAGIC, 4) != 0) return -2;
     if (in[4] == TTIO_M94Z_V4_VERSION) return 4;
+    if (in[4] == TTIO_M94Z_V6_WIRE_VERSION) {
+        uint32_t v6_rlt;
+        memcpy(&v6_rlt, in + 22, 4);
+        if (in_len < (size_t)30 + v6_rlt + 1) return -3;
+        return 8;
+    }
     if (in[4] != TTIO_M94Z_V5_WIRE_VERSION) return -2;
     uint32_t rlt_len;
     memcpy(&rlt_len, in + 22, 4);

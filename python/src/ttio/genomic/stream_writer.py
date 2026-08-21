@@ -128,6 +128,18 @@ class GenomicStreamWriter:
         # docs/superpowers/plans/2026-08-19-fqz-v5-sticky-strategy-spec.md).
         self._qual_hint = -1
         self._qual_exhaustive = os.environ.get("TTIO_M94Z_EXHAUSTIVE") == "1"
+        # A positive TTIO_M94Z_HINT pins the strategy before block 0
+        # instead, skipping the tune. V6 is reachable no other way, so
+        # measuring it through the writer needs this.
+        if not self._qual_exhaustive:
+            raw = os.environ.get("TTIO_M94Z_HINT")
+            if raw:
+                try:
+                    v = int(raw.strip())
+                except ValueError:
+                    v = 0
+                if v > 0:
+                    self._qual_hint = v
         self._rg = None
         self._ds: dict[str, Any] = {}
         self._idx: dict[str, Any] = {}

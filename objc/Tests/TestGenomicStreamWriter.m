@@ -17,6 +17,7 @@
 #import "Genomics/TTIOAlignedRead.h"
 #import "Genomics/TTIOGenomicRun.h"
 #import "Genomics/TTIOLazyReference.h"
+#import "Codecs/TTIOFqzcompNx16Z.h"
 #import "Providers/TTIOMemoryProvider.h"
 #import "Providers/TTIOProviderRegistry.h"
 #import "Providers/TTIOStorageProtocols.h"
@@ -610,6 +611,49 @@ static void gswStickyPinSet(void)
          (long)w.qualStrategyHint);
 }
 
+/* TTIO_M94Z_HINT pins the strategy before block 0 rather than after
+ * it. V6 is reachable no other way, which is what the knob is for. */
+static void gswHintEnvPins(void)
+{
+    TTIOWrittenGenomicRun *run = gswBigSyntheticRun(40000, 24);
+    id<TTIOStorageGroup> study = gswStudy(
+        [NSString stringWithFormat:@"memory://gsw-hint-%d", (int)getpid()]);
+    NSError *err = nil;
+    TTIOGenomicStreamWriterOptions *o = [TTIOGenomicStreamWriterOptions optionsFromRun:run];
+    o.blockReads = 20000;
+    o.threads = 2;
+
+    setenv("TTIO_M94Z_HINT", "8", 1);
+    TTIOGenomicStreamWriter *w = [[TTIOGenomicStreamWriter alloc]
+        initWithStudyGroup:study runName:@"g" options:o];
+    NSInteger atInit = w.qualStrategyHint;
+    BOOL ok = [w appendBatch:run error:&err] && [w close:&err];
+    unsetenv("TTIO_M94Z_HINT");
+    PASS(atInit == TTIOM94ZHintV6,
+         "hint env: pinned at init, before any block (hint %ld)", (long)atInit);
+    PASS(ok && w.qualStrategyHint == TTIOM94ZHintV6,
+         "hint env: the pin survives the run (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+
+    /* Junk and zero leave the tune alone, and the exhaustive flag wins
+     * over the knob rather than fighting it. */
+    setenv("TTIO_M94Z_HINT", "junk", 1);
+    TTIOGenomicStreamWriter *wj = [[TTIOGenomicStreamWriter alloc]
+        initWithStudyGroup:study runName:@"gj" options:o];
+    PASS(wj.qualStrategyHint == -1, "hint env: junk falls through to the tune");
+    setenv("TTIO_M94Z_HINT", "0", 1);
+    TTIOGenomicStreamWriter *wz = [[TTIOGenomicStreamWriter alloc]
+        initWithStudyGroup:study runName:@"gz" options:o];
+    PASS(wz.qualStrategyHint == -1, "hint env: zero falls through to the tune");
+    setenv("TTIO_M94Z_HINT", "8", 1);
+    setenv("TTIO_M94Z_EXHAUSTIVE", "1", 1);
+    TTIOGenomicStreamWriter *we = [[TTIOGenomicStreamWriter alloc]
+        initWithStudyGroup:study runName:@"ge" options:o];
+    PASS(we.qualStrategyHint == -1, "hint env: TTIO_M94Z_EXHAUSTIVE wins over the hint");
+    unsetenv("TTIO_M94Z_EXHAUSTIVE");
+    unsetenv("TTIO_M94Z_HINT");
+}
+
 void testGenomicStreamWriterThreads(void);
 void testGenomicStreamWriterThreads(void)
 {
@@ -620,4 +664,5 @@ void testGenomicStreamWriterThreads(void)
     gswStickyMatchesExhaustive();
     gswStickyDeterministic();
     gswStickyPinSet();
+    gswHintEnvPins();
 }

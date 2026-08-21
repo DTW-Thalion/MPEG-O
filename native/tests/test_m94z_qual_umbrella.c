@@ -186,6 +186,45 @@ int main(void) {
         }
     }
 
+    /* 12: hint 8 forces V6, which needs no sequences either way. */
+    {
+        uint8_t  *o_v6 = malloc(cap);
+        uint8_t  *back = malloc(N);
+        uint32_t *rl = malloc(NR * sizeof(*rl));
+        size_t    l_v6 = cap;
+
+        rc = ttio_m94z_qual_encode(qual, N, lens, NR, flags, NULL,
+                                   TTIO_M94Z_HINT_V6, 0, o_v6, &l_v6);
+        CHECK(rc == 0, "hint 8 encode rc");
+        CHECK(o_v6[4] == 6, "hint 8 emits version 6");
+        CHECK(ttio_m94z_qual_stream_strategy(o_v6, l_v6) == 8,
+              "sniffer reads V6");
+
+        rc = ttio_m94z_qual_decode(o_v6, l_v6, rl, NR, flags, NULL, back, N);
+        CHECK(rc == 0 && memcmp(qual, back, N) == 0,
+              "V6 round-trips without sequences");
+
+        /* Passing sequences must not change the V6 stream. */
+        {
+            size_t   l_v6s = cap;
+            uint8_t *o_v6s = malloc(cap);
+            rc = ttio_m94z_qual_encode(qual, N, lens, NR, flags, seq,
+                                       TTIO_M94Z_HINT_V6, 0, o_v6s, &l_v6s);
+            CHECK(rc == 0 && l_v6s == l_v6 && memcmp(o_v6s, o_v6, l_v6) == 0,
+                  "hint 8 ignores sequences");
+            free(o_v6s);
+        }
+
+        CHECK(ttio_m94z_qual_stream_strategy(o_v6, 31) < 0,
+              "sniffer rejects a truncated V6 stream");
+
+        free(o_v6); free(back); free(rl);
+    }
+
+    /* 13: auto-tune never reaches V6. */
+    CHECK(o_seq[4] == 5 && o_noseq[4] == 4,
+          "auto picks V4 or V5, never V6");
+
     printf("%s: %d failures\n", __FILE__, failures);
     free(qual); free(seq); free(lens); free(flags);
     free(o_seq); free(o_noseq); free(o_v4);

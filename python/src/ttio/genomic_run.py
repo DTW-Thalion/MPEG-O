@@ -9,6 +9,7 @@ Genomic analogue of :class:`ttio.acquisition_run.AcquisitionRun`.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Iterator, TYPE_CHECKING
 
@@ -56,6 +57,28 @@ def _wrap_hdf5_group(obj: object) -> "StorageGroup":
 #: Decoded blocks a threaded sequential walk holds at most (the
 #: decode-ahead window; memory is about this many block working sets).
 _READ_AHEAD_BLOCKS = 4
+
+
+def _read_ahead_blocks() -> int:
+    """The decode-ahead window, with ``TTIO_READ_AHEAD_BLOCKS`` allowed
+    to override it.
+
+    Each block in flight stays resident until it is consumed, so this is
+    a memory setting as much as a latency one, and the two do not pull
+    the same way. The override exists so the trade can be measured
+    rather than argued; see ``ttio.tools.genomic_read_bench``. Java:
+    ``GenomicRun.readAheadBlocks``; Objective-C:
+    ``TTIOReadAheadBlocks``.
+    """
+    raw = os.environ.get("TTIO_READ_AHEAD_BLOCKS")
+    if raw:
+        try:
+            v = int(raw.strip())
+        except ValueError:
+            return _READ_AHEAD_BLOCKS
+        if v > 0:
+            return v
+    return _READ_AHEAD_BLOCKS
 
 
 @dataclass(slots=True)
@@ -220,10 +243,12 @@ class GenomicRun:
 
     def iter_reads(self, start: int = 0, stop: int | None = None, *,
                    threads: int | None = None) -> Iterator[AlignedRead]:
-        """Yield reads ``[start, stop)`` in order. Under ``blocks_v1`` the
-        next ``threads`` blocks decode ahead on a pool (``threads`` from
-        the argument, else TTIO_THREADS, else cores minus 8); one thread
-        keeps the one-block path, holding one decoded block at a time."""
+        """Yield reads ``[start, stop)`` in order. Under ``blocks_v1``
+        the next few blocks decode ahead on a pool, at most
+        ``_READ_AHEAD_BLOCKS`` of them; one thread keeps the one-block
+        path, holding one decoded block at a time. Each block in
+        flight stays resident, so the window costs memory as much as
+        it saves latency."""
         n = len(self)
         if stop is None or stop > n:
             stop = n
@@ -250,11 +275,14 @@ class GenomicRun:
         import concurrent.futures as _cf
         b_first, b_last = t.block_for(i), t.block_for(stop - 1)
         # The serial consumer only needs enough decode-ahead to never
-        # stall; more in flight is pure memory (a window of 
-        # held  decoded blocks resident). Cap the window while
-        # the auto-tune stand-down still keys off .
-        window = min(nthreads, _READ_AHEAD_BLOCKS)
-        with pool_context(nthreads), _cf.ThreadPoolExecutor(
+        # stall; more in flight is pure memory, since the window is how
+        # many decoded blocks stay resident.
+        window = min(nthreads, _read_ahead_blocks())
+        # pool_context sizes V6 segment threads from the number of
+        # workers, so it takes the window and not nthreads: only this
+        # many blocks decode at once, and the rest of the machine is
+        # what the segments of each one are free to use.
+        with pool_context(window), _cf.ThreadPoolExecutor(
                 max_workers=window, thread_name_prefix="ttio-block-decode") as pool:
             pending: dict[int, "_cf.Future"] = {}
 

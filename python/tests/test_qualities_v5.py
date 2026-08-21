@@ -110,6 +110,14 @@ class TestGolden:
         assert bytes(back) == expected
         assert lens == [100] * 300
 
+    def test_v6_golden_decodes(self):
+        blob = (FIXDIR / "qualities_v6_golden.bin").read_bytes()
+        expected = (FIXDIR / "qualities_v6_golden_qual.bin").read_bytes()
+        assert blob[4] == 6
+        back, lens, _rc = fz.decode_with_metadata(blob, [0] * 300)
+        assert bytes(back) == expected
+        assert lens == [100] * 300
+
 
 def _written_run(*, n_reads: int, length: int = 100, disable: bool = False):
     from ttio.enums import Compression
@@ -190,3 +198,69 @@ def test_autotune_threads_setter_round_trips():
         assert fz.get_autotune_threads() == 3
     finally:
         fz.set_autotune_threads(before)
+
+
+def test_v6_round_trips_and_sniffs():
+    qual, _seq, lens, flags = _motif_corpus(n_reads=2000)
+    blob = fz.encode(qual, lens, flags, v4_strategy_hint=fz.HINT_V6)
+    assert blob[4] == 6
+    assert fz.stream_strategy(blob) == 8
+    back, back_lens, _rc = fz.decode_with_metadata(blob, flags)
+    assert bytes(back) == qual
+    assert list(back_lens) == list(lens)
+
+
+def test_v6_decode_needs_no_sequences():
+    """V6 builds its context from qualities alone, so unlike V5 it must
+    decode with no sequences_provider at all."""
+    qual, _seq, lens, flags = _motif_corpus(n_reads=2000)
+    blob = fz.encode(qual, lens, flags, v4_strategy_hint=fz.HINT_V6)
+    back, _lens, _rc = fz.decode_with_metadata(
+        blob, flags, sequences_provider=None)
+    assert bytes(back) == qual
+
+
+def test_auto_never_picks_v6():
+    qual, seq, lens, flags = _motif_corpus()
+    assert fz.encode(qual, lens, flags, sequences=seq)[4] in (4, 5)
+
+
+class TestSegmentThreadPolicy:
+    """Blocks and segments are both V6 parallelism, and the writer has to
+    divide its capacity between them."""
+
+    def test_segments_get_what_the_pool_leaves_spare(self, monkeypatch):
+        from ttio import _threads
+        monkeypatch.setattr(_threads.os, "cpu_count", lambda: 32)
+        assert _threads.resolve_v6_segment_threads(8) == 4
+        assert _threads.resolve_v6_segment_threads(4) == 8
+
+    def test_never_drops_to_one(self, monkeypatch):
+        """One thread per block leaves the segments to encode in
+        sequence, which measured roughly half the throughput of two."""
+        from ttio import _threads
+        monkeypatch.setattr(_threads.os, "cpu_count", lambda: 32)
+        assert _threads.resolve_v6_segment_threads(32) == 2
+        assert _threads.resolve_v6_segment_threads(1000) == 2
+
+    def test_capped_so_the_product_stays_sane(self, monkeypatch):
+        """Total concurrency wants to be near the core count; far above
+        it throughput falls."""
+        from ttio import _threads
+        monkeypatch.setattr(_threads.os, "cpu_count", lambda: 256)
+        assert _threads.resolve_v6_segment_threads(1) == 8
+
+    def test_pool_context_sets_and_restores_both_knobs(self):
+        """Auto-tune wants 1 under a pool; V6 wants the spare capacity.
+        Both must be put back afterwards."""
+        from ttio import _threads
+        from ttio.codecs._native_loader import load_ttio_rans
+        if load_ttio_rans() is None:
+            pytest.skip("native lib")
+        before_auto = fz.get_autotune_threads()
+        before_v6 = fz.get_v6_threads()
+        with _threads.pool_context(8):
+            assert fz.get_autotune_threads() == 1
+            assert fz.get_v6_threads() >= 2
+        assert fz.get_autotune_threads() == before_auto
+        assert fz.get_v6_threads() == before_v6

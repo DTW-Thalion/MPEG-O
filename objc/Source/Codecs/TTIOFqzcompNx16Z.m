@@ -202,6 +202,11 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
     if (version == kZ_VERSION_V4_FQZCOMP) {
         return [self decodeV4Data:data revcompFlags:revcompFlags error:error];
     }
+    if (version == 6) {
+        /* V6 builds its context from qualities alone. */
+        return [self decodeQualData:data revcompFlags:revcompFlags
+                          sequences:nil error:error];
+    }
     if (version == 5) {
         z_set_error(error, 210,
             @"M94Z V5 stream requires sequences: use "
@@ -225,6 +230,11 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
                      sequencesProvider:(NSData * _Nullable (^_Nullable)(void))sequencesProvider
                                  error:(NSError * _Nullable *)error
 {
+    if (data != nil && data.length >= 5
+        && ((const uint8_t *)data.bytes)[4] == 6) {
+        return [self decodeQualData:data revcompFlags:revcompFlags
+                          sequences:nil error:error];
+    }
     if (data != nil && data.length >= 5
         && ((const uint8_t *)data.bytes)[4] == 5) {
         if (sequencesProvider == nil) {
@@ -261,8 +271,8 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
         return nil;
     }
     const uint8_t *p = (const uint8_t *)data.bytes;
-    if (memcmp(p, kZ_MAGIC, 4) != 0 || p[4] != 5) {
-        z_set_error(error, 313, @"not an M94.Z V5 stream");
+    if (memcmp(p, kZ_MAGIC, 4) != 0 || (p[4] != 5 && p[4] != 6)) {
+        z_set_error(error, 313, @"not an M94.Z V5 or V6 stream");
         return nil;
     }
     uint64_t numQualities = le_read_u64(p + 6);
@@ -271,7 +281,7 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
         z_set_error(error, 315, @"M94.Z V5: implausible header counts");
         return nil;
     }
-    if ((uint64_t)sequences.length != numQualities) {
+    if (p[4] == 5 && (uint64_t)sequences.length != numQualities) {
         z_set_error(error, 320,
             @"M94Z V5: sequences length (%lu) != num_qualities (%llu)",
             (unsigned long)sequences.length,
@@ -611,11 +621,6 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
 #endif
 }
 
-// ── Backend introspection (Task 17, Phase B) ─────────────────────────
-// Mirrors Python's get_backend_name() and Java's FqzcompNx16Z.getBackendName().
-// Returns "native-<kernel>" when libttio_rans is linked (the only build
-// in which encode/decode work), else "pure-objc" (encode/decode error).
-
 + (NSInteger)strategyOfEncodedStream:(NSData *)stream
 {
 #if TTIO_HAS_NATIVE_RANS
@@ -629,6 +634,12 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
     if (in == NULL || in_len < 30) return -1;
     if (memcmp(in, "M94Z", 4) != 0) return -2;
     if (in[4] == 4) return 4;
+    if (in[4] == 6) {
+        uint32_t v6_rlt;
+        memcpy(&v6_rlt, in + 22, 4);
+        if (in_len < (size_t)30 + v6_rlt + 1) return -3;
+        return 8;
+    }
     if (in[4] != 5) return -2;
     uint32_t rlt_len;
     memcpy(&rlt_len, in + 22, 4);
@@ -637,6 +648,10 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
     return (sid == 5 || sid == 6) ? (NSInteger)sid : -3;
 #endif
 }
+
+// ── Backend introspection ───────────────────────────────────
+// Returns "native-<kernel>" when libttio_rans is linked (the only build
+// in which encode/decode work), else "pure-objc" (encode/decode error).
 
 + (NSString *)backendName
 {

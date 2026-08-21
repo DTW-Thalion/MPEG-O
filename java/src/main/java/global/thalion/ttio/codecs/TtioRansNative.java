@@ -93,6 +93,17 @@ public final class TtioRansNative {
     /** Threads the FQZCOMP auto-tune uses for its candidate encodes
      *  (default 3; {@code n <= 1} runs them in sequence). */
     public static native void setAutotuneThreads(int n);
+
+    /** Threads M94.Z V6 uses for the segments of one block. 0 defers to
+     *  {@link #setAutotuneThreads}, which is what V6 did before it had a
+     *  count of its own — and which meant a writer pool, correctly
+     *  standing the auto-tune down to 1, also switched V6's segments to
+     *  running in sequence. */
+    public static native void setV6Threads(int n);
+
+    /** @return the V6 segment thread count; 0 means defer to the
+     *  auto-tune knob. */
+    public static native int getV6Threads();
     public static native int getAutotuneThreads();
 
     /** Strategy of an encoded M94.Z stream: 4 = V4, 5/6 = V5 S5/S6;

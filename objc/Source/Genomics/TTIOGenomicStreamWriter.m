@@ -196,6 +196,14 @@ static void ttioBuildIndexFields(void)
         _qualStrategyHint = -1;
         const char *ex = getenv("TTIO_M94Z_EXHAUSTIVE");
         _qualExhaustive = (ex != NULL && strcmp(ex, "1") == 0);
+        /* A hint pinned before block 0 skips the tune and holds for the
+         * run. V6 is reachable no other way, so a benchmark that wants
+         * it has to say so; see TtioGenomicWriteBench. */
+        const char *hint = getenv("TTIO_M94Z_HINT");
+        if (!_qualExhaustive && hint && hint[0]) {
+            long v = strtol(hint, NULL, 10);
+            if (v > 0) _qualStrategyHint = (NSInteger)v;
+        }
     }
     return self;
 }
