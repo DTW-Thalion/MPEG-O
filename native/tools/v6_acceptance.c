@@ -1,16 +1,21 @@
 /* native/tools/v6_acceptance.c
  *
- * End-to-end acceptance for the V6 engine: encodes a corpus through
- * ttio_m94z_qual_encode exactly as a writer does, block by block, and
- * reports a checksum of every byte produced plus the wall clock.
+ * End-to-end acceptance for V6: encodes a corpus through
+ * ttio_m94z_qual_encode exactly as a writer does, block by block,
+ * decodes it back through ttio_m94z_qual_decode exactly as a reader
+ * does, and reports a checksum, the wall clock for each direction, and
+ * whether the round trip returned the input.
  *
- * Run it twice, once with TTIO_GPU=off and once with TTIO_GPU=force.
- * The checksums must match: the two engines are required to produce
- * identical streams, and a block that spills mid-run must not be
- * detectable in the output. The times are what the engine is worth on
- * that machine.
+ * Both directions take the same two knobs, because both are parallel
+ * the same way: `threads` is segments within one block, `blocks` is how
+ * many blocks are in flight at once. Their product is what lands on the
+ * machine, so a reader that holds four blocks and gives each one thread
+ * is using four cores whatever the thread count says.
  *
- *   v6_acceptance qual.bin lens.bin [threads]
+ *   v6_acceptance qual.bin lens.bin [threads] [blocks] [encode|both]
+ *
+ * Default is both. `encode` skips the decode pass, which is the older
+ * behaviour and what the encode-only figures were measured with.
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -62,6 +67,51 @@ static void *enc_worker(void *arg) {
         if (c->rcs[b] == 0) c->outl[b] = l;
     }
     return NULL;
+}
+
+/* Decode is the mirror of the encode pass: the same block-at-a-time
+ * pool, so the two numbers are comparable. Blocks write into disjoint
+ * ranges of one output buffer rather than into per-block buffers, which
+ * keeps the extra memory to one copy of the corpus and lets the whole
+ * result be compared in one go afterwards. */
+typedef struct {
+    const blk       *blocks;
+    size_t           n_blk;
+    size_t           next;
+    uint8_t *const  *outs;
+    const size_t    *outl;
+    uint8_t         *qual_out;
+    uint32_t        *lens_out;
+    int             *rcs;
+    pthread_mutex_t  mu;
+} dec_ctx;
+
+static void *dec_worker(void *arg) {
+    dec_ctx *c = arg;
+    for (;;) {
+        size_t b;
+        pthread_mutex_lock(&c->mu);
+        b = c->next++;
+        pthread_mutex_unlock(&c->mu);
+        if (b >= c->n_blk) break;
+        /* V6 carries its own read-length table and needs no sequences,
+         * so decode fills the lengths rather than being told them. */
+        c->rcs[b] = ttio_m94z_qual_decode(
+            c->outs[b], c->outl[b],
+            c->lens_out + c->blocks[b].first_read, c->blocks[b].n_reads,
+            NULL, NULL,
+            c->qual_out + c->blocks[b].qual_off, c->blocks[b].n_qual);
+    }
+    return NULL;
+}
+
+static void run_pool(void *(*fn)(void *), void *ctx, int workers) {
+    pthread_t th[64];
+    int       started = 0;
+    for (int i = 0; i < workers - 1 && i < 64; i++)
+        if (pthread_create(&th[i], NULL, fn, ctx) == 0) started++;
+    fn(ctx);
+    for (int i = 0; i < started; i++) pthread_join(th[i], NULL);
 }
 
 /* clock() means different things on different runtimes and counts CPU
@@ -120,9 +170,12 @@ static uint64_t fnv1a(uint64_t h, const uint8_t *p, size_t n) {
 
 int main(int argc, char **argv) {
     if (argc < 3) {
-        fprintf(stderr, "usage: %s qual.bin lens.bin [threads] [writers]\n", argv[0]);
+        fprintf(stderr,
+                "usage: %s qual.bin lens.bin [threads] [blocks] "
+                "[encode|both]\n", argv[0]);
         return 2;
     }
+    int do_decode = !(argc > 5 && strcmp(argv[5], "encode") == 0);
     int threads = argc > 3 ? atoi(argv[3]) : 16;
     /* The umbrella takes its thread count from the autotune knob, so
      * setting it here is what makes the argument mean anything. */
@@ -192,14 +245,8 @@ int main(int argc, char **argv) {
     if (workers < 1) workers = 1;
 
     double t0 = now_s();
-    {
-        pthread_t th[64];
-        int       started = 0;
-        for (int i = 0; i < workers - 1 && i < 64; i++)
-            if (pthread_create(&th[i], NULL, enc_worker, &ctx) == 0) started++;
-        enc_worker(&ctx);
-        for (int i = 0; i < started; i++) pthread_join(th[i], NULL);
-    }
+    run_pool(enc_worker, &ctx, workers);
+    double enc_secs = now_s() - t0;
 
     uint64_t h = 1469598103934665603ull;
     uint64_t total_out = 0;
@@ -216,15 +263,63 @@ int main(int argc, char **argv) {
         total_out += outl[b];
     }
 
-    double secs = now_s() - t0;
     printf("blocks: %zu\n", n_blk);
-    printf("writers: %d, engine slots: %d\n", workers,
+    printf("blocks in flight: %d, engine slots: %d\n", workers,
            ttio_engine_gpu() ? ttio_engine_gpu()->slots() : 0);
     printf("qualities: %zu\n", qn);
     printf("output bytes: %llu\n", (unsigned long long)total_out);
     printf("checksum: %016llx\n", (unsigned long long)h);
-    printf("seconds: %.3f\n", secs);
-    printf("encode MB/s: %.1f\n", (double)qn / secs / 1.0e6);
+    printf("seconds: %.3f\n", enc_secs);
+    printf("encode MB/s: %.1f\n", (double)qn / enc_secs / 1.0e6);
+
+    if (do_decode) {
+        uint8_t  *dqual = malloc(qn ? qn : 1);
+        uint32_t *dlens = malloc(ln ? ln : 1);
+        if (dqual == NULL || dlens == NULL) { fprintf(stderr, "oom\n"); return 1; }
+        /* Fill with something the corpus is unlikely to be, so a decode
+         * that silently writes nothing fails the comparison instead of
+         * matching a zeroed buffer. */
+        memset(dqual, 0xA5, qn);
+        memset(dlens, 0xA5, ln);
+
+        dec_ctx dc;
+        dc.blocks = blocks;
+        dc.n_blk = n_blk;
+        dc.next = 0;
+        dc.outs = outs;
+        dc.outl = outl;
+        dc.qual_out = dqual;
+        dc.lens_out = dlens;
+        dc.rcs = rcs;
+        pthread_mutex_init(&dc.mu, NULL);
+
+        double d0 = now_s();
+        run_pool(dec_worker, &dc, workers);
+        double dec_secs = now_s() - d0;
+
+        for (size_t b = 0; b < n_blk; b++) {
+            if (rcs[b] != 0) {
+                fprintf(stderr, "block %zu failed to decode: %d\n", b, rcs[b]);
+                return 1;
+            }
+        }
+        if (memcmp(dqual, qual, qn) != 0) {
+            size_t i = 0;
+            while (i < qn && dqual[i] == qual[i]) i++;
+            fprintf(stderr, "round trip differs at quality byte %zu: "
+                            "got %u want %u\n", i, dqual[i], qual[i]);
+            return 1;
+        }
+        if (memcmp(dlens, lens, ln) != 0) {
+            fprintf(stderr, "round trip lost the read lengths\n");
+            return 1;
+        }
+        printf("decode seconds: %.3f\n", dec_secs);
+        printf("decode MB/s: %.1f\n", (double)qn / dec_secs / 1.0e6);
+        printf("round trip: identical\n");
+        free(dqual);
+        free(dlens);
+    }
 
     {
         const ttio_engine *e = ttio_engine_gpu();
