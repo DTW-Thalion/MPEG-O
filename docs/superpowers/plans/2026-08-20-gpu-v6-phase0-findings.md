@@ -683,22 +683,27 @@ memory speed, which no caller iterating reads in Python will do. The
 cap binds here and probably does not bind there. Measuring that needs a
 reader-level benchmark, not this one.
 
-## The reader, measured: the decode-ahead window is a 3.6x regression
+## The reader, measured: the decode-ahead window splits the SDKs
 
-`ttio.tools.genomic_read_bench` iterates a blocks_v1 run end to end,
-once per decode-ahead window, with a control row that repeats one
-window under a second name. 1.5 M reads of 150 bases, 15 blocks.
+`ttio.tools.genomic_read_bench` and `TtioGenomicReadBench` iterate a
+blocks_v1 run end to end, once per decode-ahead window, with a control
+row that repeats one window under a second name. The same file both
+times: 1.5 M reads of 150 bases, 15 blocks.
 
-| window | best | reads/s | qualities | peak RSS |
-| --- | --- | --- | --- | --- |
-| 1 | 10.0 s | 150,000 | 22.5 MB/s | 635 MB |
-| **2** | **7.4 s** | **200,000** | **30.3 MB/s** | 1083 MB |
-| 3 | 12.0 s | 125,000 | 18.7 MB/s | 1859 MB |
-| 4 (shipped) | 26.8 s | 57,000 | 8.4 MB/s | 2544 MB |
-| 6 | 34.2 s | 39,000 | 6.6 MB/s | 3359 MB |
+In Python:
 
-Control drift 0.1%. **The shipped default is 3.6x slower than a window
-of two, and holds 1.5 GB more while doing it.**
+| window | best | reads/s | qualities |
+| --- | --- | --- | --- |
+| 1 | 10.0 s | 150,000 | 22.5 MB/s |
+| **2** | **7.4 s** | **200,000** | **30.3 MB/s** |
+| 3 | 12.0 s | 125,000 | 18.7 MB/s |
+| 4 (shipped) | 26.8 s | 57,000 | 8.4 MB/s |
+| 6 | 34.2 s | 39,000 | 6.6 MB/s |
+
+Control drift 0.1%. In Python the shipped default is 3.6x slower than a
+window of two. **In Objective-C it is the best setting there is**, which
+is the section below, and it is the reason none of this became a change
+to the default.
 
 ### What it is not
 
@@ -717,29 +722,63 @@ The obvious explanations are all measurable, and all wrong:
   recovers 8% of a 260% gap.
 - **Not swapping.** 31 GB total, 29 free; peak is 3.4 GB.
 
-### What it is
+### What it is not, part two: it is not memory either
 
-The cost tracks resident memory: **each block in flight costs 700 to
-800 MB**, and the time follows that curve rather than any measure of
-work. With the machine not swapping, the remaining explanation is
-allocation churn — past one or two blocks the working set stops being
-recycled by the allocator and every block pays fresh page faults. That
-last step is inference; the residency itself is measured.
+⛔ An earlier version of this section said each block in flight cost 700
+to 800 MB and that the time followed residency. **That was wrong, and
+the measurement behind it was wrong.** `ru_maxrss` is a process
+high-water mark that never resets, and the windows were run in
+ascending order in a single process, so each figure could only be
+larger than the one before it whatever the window did.
 
-### Two things worth deciding
+One process per window gives the real numbers:
 
-**The window should be 2, not 4.** A serial consumer runs at 30 MB/s
-against a decoder that does 780 MB/s: one block of lookahead is already
-26 times more than it can use. Everything past that is memory held for
-nothing, and here it is worse than nothing.
+| window | best | peak RSS |
+| --- | --- | --- |
+| 1 | 10.0 s | 636 MB |
+| 2 | 7.5 s | 741 MB |
+| 4 | 27.2 s | 939 MB |
+| 6 | 34.1 s | 1226 MB |
 
-**700 MB resident for a block holding 15 MB of qualities is a 45-fold
-blowup**, and is the more interesting number. It is what makes the
-window expensive at all. Whatever `materialise_block` builds is far
-larger than the data it carries, and the corpus here uses 100 k-read
-blocks against a 1 M-read default, so a default-sized block may cost
-ten times this. That is worth looking at on its own, before tuning a
-window around it.
+About 100 MB per extra block, not 700. A 200 MB difference between
+window 2 and window 4 cannot produce a 3.6x slowdown on a machine with
+29 GB free, so residency is not the mechanism.
+
+### And it is Python's problem, not the codec's
+
+The same file, iterated by the Objective-C reader
+(`TtioGenomicReadBench`), which runs the identical algorithm against a
+compiled consumer:
+
+| window | Objective-C | Python |
+| --- | --- | --- |
+| 1 | 7.9 s | 10.0 s |
+| 2 | 4.3 s | **7.4 s** |
+| **4 (shipped)** | **2.4 s** | 26.8 s |
+| 8 | 2.6 s | 38.1 s |
+| 16 | 2.5 s | 38.1 s |
+
+Control drift 0.2%. **The shipped window of four is the best setting in
+Objective-C and the worst in Python.** Decode-ahead does exactly what it
+was designed to do — overlapping the storage read and decode of the next
+block with the consumption of this one — and buys 3.2x. Python gets the
+opposite from the same code.
+
+Consumption rates say why the two disagree without saying which is
+right: Objective-C consumes at 93 MB/s, Python at 30. Both are far below
+the 780 MB/s the decoder manages, so decode is not the bottleneck in
+either. But in Objective-C the pool threads genuinely overlap with the
+consumer, and in Python they contend with it for the interpreter lock.
+The decode itself releases the GIL inside the native call; everything
+around it — materialising the block, opening the view, building each
+AlignedRead — does not.
+
+⛔ **So `_READ_AHEAD_BLOCKS = 2` would be wrong.** It is worth 3.6x in
+Python and costs 1.7x in Objective-C, and Java is unmeasured. A single
+constant cannot serve both: this is a per-SDK setting, and the Python
+side is the one with a problem to fix. Raising the ceiling there means
+getting the per-read work out from under the GIL, not shrinking the
+window that exposes it.
 
 ### And the earlier reader change is confirmed neutral
 
