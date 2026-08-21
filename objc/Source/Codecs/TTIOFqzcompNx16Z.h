@@ -306,6 +306,28 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
  */
 + (NSInteger)strategyOfEncodedStream:(NSData *)stream;
 
+/**
+ * Ask the encoder to choose the sequence-context width per block.
+ */
+#define TTIOM94ZV6SbitsAuto 255
+
+/**
+ * Width of M94.Z V6's sequence-context field for streams this process
+ * writes. 0, the default, is the context V6 shipped with and needs no
+ * sequences to decode. TTIOM94ZV6SbitsAuto asks the encoder to pick per
+ * block, coding a prefix of the block's first segment each way. Any
+ * other value is used as given, and encoding without sequences then
+ * fails rather than dropping the field silently.
+ *
+ * The width travels in the stream, so decoding never consults this.
+ * Python: ttio.codecs.fqzcomp_nx16_z.set_v6_sbits; Java:
+ * FqzcompNx16Z.setV6Sbits.
+ */
++ (void)setV6SequenceContextBits:(NSInteger)bits;
+
+/** The width +setV6SequenceContextBits: last set, 0 by default. */
++ (NSInteger)v6SequenceContextBits;
+
 + (NSString *)backendName;
 
 @end

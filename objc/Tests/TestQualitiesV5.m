@@ -268,7 +268,7 @@ void testQualitiesV5(void)
                                                       padCount:pad
                                                          error:&err];
         PASS(v6s != nil && [v6s isEqualToData:v6],
-             "hint 8 ignores sequences");
+             "hint 8 ignores sequences at the default width of 0");
 
         err = nil;
         NSDictionary *v6back = [TTIOFqzcompNx16Z decodeData:v6
@@ -286,6 +286,52 @@ void testQualitiesV5(void)
         PASS(v6prov != nil
              && [(NSData *)v6prov[@"qualities"] isEqualToData:qual],
              "V6 decodes through the provider overload with no provider");
+
+        /* The width reaches the stream through the class knob, and a
+         * decoder needs the sequences only because the stream says so.
+         * Python: test_v6_sequence_context_round_trips_and_shrinks;
+         * Java: QualitiesV5Test.v6SequenceContextRoundTrips. */
+        PASS([TTIOFqzcompNx16Z v6SequenceContextBits] == 0,
+             "V6 sequence context is off by default");
+        [TTIOFqzcompNx16Z setV6SequenceContextBits:4];
+        PASS([TTIOFqzcompNx16Z v6SequenceContextBits] == 4,
+             "V6 sequence context width is readable back");
+        err = nil;
+        NSData *v6w = [TTIOFqzcompNx16Z encodeQualWithQualities:qual
+                                                   readLengths:lens
+                                                  revcompFlags:flags
+                                                     sequences:seq
+                                                  strategyHint:TTIOM94ZHintV6
+                                                      padCount:pad
+                                                         error:&err];
+        PASS(v6w != nil && ![v6w isEqualToData:v6] && v6w.length < v6.length,
+             "a width of 4 uses the sequences and shrinks the stream "
+             "(%lu vs %lu)", (unsigned long)v6w.length, (unsigned long)v6.length);
+        err = nil;
+        NSDictionary *v6wback = [TTIOFqzcompNx16Z decodeData:v6w
+                                                revcompFlags:flags
+                                           sequencesProvider:^NSData *{ return seq; }
+                                                       error:&err];
+        PASS(v6wback != nil
+             && [(NSData *)v6wback[@"qualities"] isEqualToData:qual],
+             "a width of 4 round-trips through the sequences provider (%s)",
+             [[err localizedDescription] UTF8String] ?: "nil err");
+
+        [TTIOFqzcompNx16Z setV6SequenceContextBits:TTIOM94ZV6SbitsAuto];
+        err = nil;
+        NSData *v6a = [TTIOFqzcompNx16Z encodeQualWithQualities:qual
+                                                   readLengths:lens
+                                                  revcompFlags:flags
+                                                     sequences:seq
+                                                  strategyHint:TTIOM94ZHintV6
+                                                      padCount:pad
+                                                         error:&err];
+        PASS(v6a != nil && v6a.length <= v6.length,
+             "the automatic width never loses to a width of 0 (%lu vs %lu)",
+             (unsigned long)v6a.length, (unsigned long)v6.length);
+        [TTIOFqzcompNx16Z setV6SequenceContextBits:0];
+        PASS([TTIOFqzcompNx16Z v6SequenceContextBits] == 0,
+             "V6 sequence context restored to off");
     }
 
     // ── Golden fixture — the cross-language decode contract ────────

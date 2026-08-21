@@ -102,6 +102,15 @@ void ttio_m94z_set_v6_threads(int n) { g_v6_threads = n > 0 ? n : 0; }
 
 int ttio_m94z_get_v6_threads(void) { return g_v6_threads; }
 
+/* 0 = no sequence context, 255 = choose per block, else the width. */
+static int g_v6_sbits;
+
+void ttio_m94z_set_v6_sbits(int n) {
+    g_v6_sbits = (n < 0 || n > 255) ? 0 : n;
+}
+
+int ttio_m94z_get_v6_sbits(void) { return g_v6_sbits; }
+
 static int ttio_m94z_v6_threads(void) {
     return g_v6_threads > 0 ? g_v6_threads
                             : ttio_m94z_get_autotune_threads();
@@ -123,10 +132,13 @@ int ttio_m94z_qual_encode(
     }
 
     if (strategy_hint == TTIO_M94Z_HINT_V6) {
-        return ttio_m94z_v6_encode(qual_in, n_qualities, read_lengths,
-                                   n_reads, &TTIO_V6_DEFAULT,
-                                   TTIO_V6_DEFAULT_SEG_SYMBOLS,
-                                   ttio_m94z_v6_threads(), out, out_len);
+        ttio_v6_param pm = TTIO_V6_DEFAULT;
+        pm.sbits = (uint8_t)g_v6_sbits;
+        return ttio_m94z_v6_encode_seq(qual_in, seq_in, n_qualities,
+                                       read_lengths, n_reads, &pm,
+                                       TTIO_V6_DEFAULT_SEG_SYMBOLS,
+                                       ttio_m94z_v6_threads(), out,
+                                       out_len);
     }
 
     if (strategy_hint == 5 || strategy_hint == 6) {
@@ -210,10 +222,12 @@ int ttio_m94z_qual_decode(
     if (!in || in_len < 5) return -1;
     if (in[4] == TTIO_M94Z_V6_WIRE_VERSION) {
         (void)flags;
-        (void)seq_in;
-        return ttio_m94z_v6_decode(in, in_len, read_lengths, n_reads,
-                                   ttio_m94z_v6_threads(), out_qual,
-                                   n_qualities);
+        /* The stream's own sbits decides whether the sequences are
+         * needed; a width of 0 ignores them, as every V6 stream
+         * written before the field did. */
+        return ttio_m94z_v6_decode_seq(in, in_len, seq_in, read_lengths,
+                                       n_reads, ttio_m94z_v6_threads(),
+                                       out_qual, n_qualities);
     }
 
     if (in[4] == TTIO_M94Z_V5_WIRE_VERSION) {

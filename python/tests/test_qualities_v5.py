@@ -220,6 +220,42 @@ def test_v6_decode_needs_no_sequences():
     assert bytes(back) == qual
 
 
+def test_v6_sequence_context_round_trips_and_shrinks():
+    """The width reaches the stream through set_v6_sbits, and a decoder
+    needs the sequences only because the stream says so. Java:
+    QualitiesV5Test.v6SequenceContextRoundTrips; ObjC: TestQualitiesV5.m."""
+    qual, seq, lens, flags = _motif_corpus(n_reads=2000)
+    assert fz.get_v6_sbits() == 0
+    plain = fz.encode(qual, lens, flags, v4_strategy_hint=fz.HINT_V6)
+    try:
+        fz.set_v6_sbits(4)
+        assert fz.get_v6_sbits() == 4
+        withseq = fz.encode(qual, lens, flags, sequences=seq,
+                            v4_strategy_hint=fz.HINT_V6)
+        assert withseq[4] == 6
+        back, back_lens, _rc = fz.decode_with_metadata(
+            withseq, flags, sequences_provider=lambda: seq)
+        assert bytes(back) == qual
+        assert list(back_lens) == list(lens)
+        # A motif corpus correlates quality with base, so the field pays.
+        assert len(withseq) < len(plain)
+
+        fz.set_v6_sbits(fz.V6_SBITS_AUTO)
+        auto = fz.encode(qual, lens, flags, sequences=seq,
+                         v4_strategy_hint=fz.HINT_V6)
+        back, _l, _rc = fz.decode_with_metadata(
+            auto, flags, sequences_provider=lambda: seq)
+        assert bytes(back) == qual
+        # 0 is among the candidates, so auto never loses to it.
+        assert len(auto) <= len(plain)
+    finally:
+        fz.set_v6_sbits(0)
+    # Width 0 still decodes with no sequences at all.
+    back, _l, _rc = fz.decode_with_metadata(plain, flags,
+                                            sequences_provider=None)
+    assert bytes(back) == qual
+
+
 def test_auto_never_picks_v6():
     qual, seq, lens, flags = _motif_corpus()
     assert fz.encode(qual, lens, flags, sequences=seq)[4] in (4, 5)
@@ -229,7 +265,9 @@ class TestSegmentThreadPolicy:
     """Blocks and segments are both V6 parallelism, and the writer has to
     divide its capacity between them."""
 
-    def test_segments_get_what_the_pool_leaves_spare(self, monkeypatch):
+    def test_segments_get_what_the_blocks_leave_spare(self, monkeypatch):
+        """The argument is blocks in flight, not the pool size: a run
+        with fewer blocks than workers never fills the pool."""
         from ttio import _threads
         monkeypatch.setattr(_threads.os, "cpu_count", lambda: 32)
         assert _threads.resolve_v6_segment_threads(8) == 4
@@ -245,10 +283,17 @@ class TestSegmentThreadPolicy:
 
     def test_capped_so_the_product_stays_sane(self, monkeypatch):
         """Total concurrency wants to be near the core count; far above
-        it throughput falls."""
+        it throughput falls. The cap is the core count rather than 8:
+        with one block in flight the segments are the only work there
+        is, and 8 of them would leave most of a large machine idle."""
         from ttio import _threads
         monkeypatch.setattr(_threads.os, "cpu_count", lambda: 256)
-        assert _threads.resolve_v6_segment_threads(1) == 8
+        assert _threads.resolve_v6_segment_threads(1) == 256
+        # The product stays at the cores wherever the floor of 2 does
+        # not bind; past that the floor wins, deliberately.
+        for blocks in (1, 2, 8, 64):
+            assert _threads.resolve_v6_segment_threads(blocks) * blocks <= 256
+        assert _threads.resolve_v6_segment_threads(256) == 2
 
     def test_pool_context_sets_and_restores_both_knobs(self):
         """Auto-tune wants 1 under a pool; V6 wants the spare capacity.

@@ -282,8 +282,10 @@ public final class FqzcompNx16Z {
         }
         int nQual  = (int) numQual;
         int nReads = (int) numReads;
-        // V6 builds its context from qualities alone; only V5 needs the
-        // sequences side input.
+        // V5 always needs the sequences side input. V6 needs it only
+        // when its header carries a sequence-context width, which the
+        // native decoder reads for itself, so pass whatever the caller
+        // has and let the stream decide. A width of 0 ignores them.
         if (ver == VERSION_V5_SEQCTX
                 && (sequences == null || sequences.length != nQual)) {
             throw new IllegalArgumentException(
@@ -291,7 +293,8 @@ public final class FqzcompNx16Z {
                 + (sequences == null ? "null" : sequences.length)
                 + ") != num_qualities (" + nQual + ")");
         }
-        if (ver == VERSION_V6_SEGMENTED) {
+        if (ver == VERSION_V6_SEGMENTED
+                && sequences != null && sequences.length != nQual) {
             sequences = null;
         }
         if (revcompFlags == null) revcompFlags = new int[nReads];
@@ -468,9 +471,15 @@ public final class FqzcompNx16Z {
      */
     public static DecodeResult decode(byte[] encoded, int[] revcompFlags,
                                       java.util.function.Supplier<byte[]> sequencesProvider) {
+        /* A V6 stream needs the sequences only when its header carries a
+         * sequence-context width, which the native decoder reads for
+         * itself. A provider is therefore used when there is one and
+         * never demanded: a width of 0, which is every stream written
+         * before the field existed, decodes without one. */
         if (encoded != null && encoded.length >= 5
                 && (encoded[4] & 0xFF) == VERSION_V6_SEGMENTED) {
-            return decodeQualInternal(encoded, revcompFlags, null);
+            return decodeQualInternal(encoded, revcompFlags,
+                sequencesProvider == null ? null : sequencesProvider.get());
         }
         if (encoded != null && encoded.length >= 5
                 && (encoded[4] & 0xFF) == VERSION_V5_SEQCTX) {
@@ -532,6 +541,23 @@ public final class FqzcompNx16Z {
     /** Threads the FQZCOMP auto-tune uses for its candidate encodes
      *  (default 3; {@code n <= 1} runs them in sequence). No-op when the
      *  native library is absent. */
+    /** Ask the encoder to choose the sequence-context width per block. */
+    public static final int V6_SBITS_AUTO = 255;
+
+    /** Width of M94.Z V6's sequence-context field for streams this process writes. 0, the default, is the context V6 shipped with and needs no sequences to decode. 255 asks the encoder to pick per block, coding a prefix of the block's first segment each way. Any other value is used as given, and encoding without sequences then fails rather than dropping the field silently. The width travels in the stream, so decoding never consults it.
+     *
+     *  <p>No-op when the native library is absent. Python:
+     *  {@code ttio.codecs.fqzcomp_nx16_z.set_v6_sbits}; Objective-C:
+     *  {@code +[TTIOFqzcompNx16Z setV6SequenceContextBits:]}. */
+    public static void setV6Sbits(int n) {
+        if (TtioRansNative.isAvailable()) TtioRansNative.setV6Sbits(n);
+    }
+
+    /** @return the width {@link #setV6Sbits} last set, 0 by default. */
+    public static int getV6Sbits() {
+        return TtioRansNative.isAvailable() ? TtioRansNative.getV6Sbits() : 0;
+    }
+
     public static void setV6Threads(int n) {
         if (TtioRansNative.isAvailable()) TtioRansNative.setV6Threads(n);
     }
