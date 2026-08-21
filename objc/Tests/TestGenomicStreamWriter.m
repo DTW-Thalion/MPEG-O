@@ -523,6 +523,111 @@ static void gswIterReadsThreaded(void)
     [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
 }
 
+/* -iterBlocksFrom:to:threads: is weaker than -iterReadsFrom:to:threads:
+ * by exactly one thing, that blocks arrive in no order and on several
+ * threads. So what has to hold is that every read is delivered exactly
+ * once whatever the thread count, and that the ranges tile the span.
+ * Python: test_genomic_for_each_block.py; Java: GenomicRunBlocksTest. */
+static void gswIterBlocks(void)
+{
+    TTIOWrittenGenomicRun *run = gswBigSyntheticRun(30000, 12);
+    NSString *path = [NSString stringWithFormat:@"/tmp/gsw-bp-blk-%d.tio", (int)getpid()];
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+    NSError *err = nil;
+    id<TTIOStorageProvider> pw = [[TTIOProviderRegistry sharedRegistry]
+        openURL:path mode:TTIOStorageOpenModeCreate provider:nil error:&err];
+    id<TTIOStorageGroup> ws = [[pw rootGroupWithError:&err] createGroupNamed:@"study" error:&err];
+    if (!gswWriteThreadsToStudy(ws, run, 1, 5000)) { [pw close]; return; }
+    [pw close];
+    id<TTIOStorageProvider> pr = [[TTIOProviderRegistry sharedRegistry]
+        openURL:path mode:TTIOStorageOpenModeRead provider:nil error:&err];
+    id<TTIOStorageGroup> study = [[pr rootGroupWithError:&err] openGroupNamed:@"study" error:&err];
+    id<TTIOStorageGroup> rg = [[study openGroupNamed:@"genomic_runs" error:&err]
+                               openGroupNamed:@"g" error:&err];
+    TTIOGenomicRun *g = [TTIOGenomicRun openFromGroup:rg name:@"g" error:&err];
+    if (!g) { PASS(NO, "bp blocks: reader run open"); [pr close]; return; }
+
+    NSUInteger threadCounts[] = { 1, 2, 3, 8 };
+    for (int ti = 0; ti < 4; ti++) {
+        NSLock *lock = [NSLock new];
+        NSMutableIndexSet *seen = [NSMutableIndexSet indexSet];
+        __block NSUInteger delivered = 0, covered = 0;
+        __block BOOL contiguous = YES;
+        NSMutableArray *ranges = [NSMutableArray array];
+        BOOL ok = [g iterBlocksFrom:0 to:30000 threads:threadCounts[ti] error:&err
+                         usingBlock:^(TTIOGenomicRun *v, NSUInteger f0, NSUInteger nr, BOOL *st) {
+            (void)st;
+            NSMutableIndexSet *local = [NSMutableIndexSet indexSet];
+            for (NSUInteger k = 0; k < nr; k++) {
+                TTIOAlignedRead *r = [v readAtIndex:k error:NULL];
+                if (r) [local addIndex:f0 + k];
+            }
+            [lock lock];
+            [seen addIndexes:local];
+            delivered += local.count;
+            [ranges addObject:@[@(f0), @(nr)]];
+            [lock unlock];
+        }];
+        /* delivered counts calls, seen counts distinct indices: a read
+         * handed over twice would separate them. */
+        PASS(ok && delivered == 30000 && seen.count == 30000,
+             "bp blocks: threads=%lu delivers every read exactly once (%lu calls, %lu distinct)",
+             (unsigned long)threadCounts[ti], (unsigned long)delivered,
+             (unsigned long)seen.count);
+        [ranges sortUsingComparator:^NSComparisonResult(NSArray *a, NSArray *b) {
+            return [a[0] compare:b[0]];
+        }];
+        for (NSArray *r in ranges) {
+            if ([r[0] unsignedIntegerValue] != covered) contiguous = NO;
+            covered += [r[1] unsignedIntegerValue];
+        }
+        PASS(contiguous && covered == 30000,
+             "bp blocks: threads=%lu ranges tile the span (%lu covered)",
+             (unsigned long)threadCounts[ti], (unsigned long)covered);
+    }
+
+    __block NSUInteger subCount = 0;
+    __block BOOL inRange = YES;
+    NSLock *sublock = [NSLock new];
+    BOOL okSub = [g iterBlocksFrom:12345 to:17890 threads:4 error:&err
+                        usingBlock:^(TTIOGenomicRun *v, NSUInteger f0, NSUInteger nr, BOOL *st) {
+        (void)v; (void)st;
+        [sublock lock];
+        if (f0 < 12345 || f0 + nr > 17890) inRange = NO;
+        subCount += nr;
+        [sublock unlock];
+    }];
+    PASS(okSub && inRange && subCount == 17890 - 12345,
+         "bp blocks: a sub-range delivers only that range (%lu reads)",
+         (unsigned long)subCount);
+
+    __block NSUInteger emptyCalls = 0;
+    [g iterBlocksFrom:200 to:200 threads:4 error:&err
+           usingBlock:^(TTIOGenomicRun *v, NSUInteger f0, NSUInteger nr, BOOL *st) {
+        (void)v; (void)f0; (void)nr; (void)st;
+        emptyCalls++;
+    }];
+    PASS(emptyCalls == 0, "bp blocks: an empty range calls nothing");
+
+    /* The window is a memory setting before a concurrency one: a budget
+     * that admits one block at a time must still deliver every read. */
+    setenv("TTIO_MEMORY_BUDGET", "1048576", 1);
+    __block NSUInteger tightCount = 0;
+    NSLock *tlock = [NSLock new];
+    BOOL okTight = [g iterBlocksFrom:0 to:30000 threads:8 error:&err
+                          usingBlock:^(TTIOGenomicRun *v, NSUInteger f0, NSUInteger nr, BOOL *st) {
+        (void)v; (void)f0; (void)st;
+        [tlock lock]; tightCount += nr; [tlock unlock];
+    }];
+    unsetenv("TTIO_MEMORY_BUDGET");
+    PASS(okTight && tightCount == 30000,
+         "bp blocks: a tight memory budget still delivers every read (%lu)",
+         (unsigned long)tightCount);
+
+    [pr close];
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+}
+
 static id<TTIOStorageGroup> gswWriteBudget(NSString *url, TTIOWrittenGenomicRun *run,
                                            NSUInteger threads, unsigned long long budget,
                                            unsigned long long *maxObservedOut)
@@ -665,4 +770,5 @@ void testGenomicStreamWriterThreads(void)
     gswStickyDeterministic();
     gswStickyPinSet();
     gswHintEnvPins();
+    gswIterBlocks();
 }

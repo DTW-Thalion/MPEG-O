@@ -415,6 +415,164 @@ public class GenomicRun
         };
     }
 
+    /** One decoded block, handed over whole. */
+    @FunctionalInterface
+    public interface BlockVisitor {
+        /** {@code view} is a run over one block's reads, indexed from
+         *  0, valid only for the duration of the call. */
+        void visit(GenomicRun view, int firstRead, int nReads);
+    }
+
+    /** How many blocks may be in flight at once, given how many threads
+     *  want one each. A block in flight is resident for as long as the
+     *  caller is inside it, so this is a memory setting before it is a
+     *  concurrency one, and the thread count is only an upper bound.
+     *
+     *  <p>A block in flight is charged 8 times its sequence bytes, the
+     *  figure {@link global.thalion.ttio.Threads#resolveMemoryBudget}
+     *  uses on the writing side, so {@code TTIO_MEMORY_BUDGET} and the
+     *  half-of-physical cap mean the same thing to a reader as to a
+     *  writer. The widest block in the range sets the size, not the
+     *  mean.
+     *
+     *  <p>Objective-C: {@code -_blockWindowForThreads:first:last:}. */
+    private int blockWindow(int nthreads, int bFirst, int bLast) {
+        long widest = 0;
+        for (int b = bFirst; b <= bLast; b++) widest = Math.max(widest, blockTable.nBases[b]);
+        if (widest == 0) return 1;
+        long budget = global.thalion.ttio.Threads.resolveMemoryBudget(null, nthreads, widest);
+        long admits = Math.max(1, budget / (widest * 8L));
+        int blocks = bLast - bFirst + 1;
+        return (int) Math.max(1, Math.min(Math.min(nthreads, admits), blocks));
+    }
+
+    /** One call per decoded block, on the pool.
+     *
+     *  <p>{@code fn} is called from several threads at once and in no
+     *  particular order, and must be safe to call that way. That
+     *  relaxed ordering is the whole difference from
+     *  {@link #iterReads(int, int, int)}, whose in-order delivery on the
+     *  caller's thread is what bounds it: the decoder outruns the
+     *  consumer, so dividing the consumer is what buys the throughput.
+     *
+     *  <p>Python: {@code GenomicRun.for_each_block}; Objective-C:
+     *  {@code -iterBlocksFrom:to:threads:error:usingBlock:}. */
+    public void iterBlocks(int start, int stop, int threads, BlockVisitor fn) {
+        int n = readCount();
+        final int lo = Math.max(start, 0), hi = Math.min(stop, n);
+        if (lo >= hi) return;
+        if (blockTable == null) { fn.visit(this, lo, hi - lo); return; }
+        int nthreads = Math.max(1, threads == 0
+            ? global.thalion.ttio.Threads.resolve(null) : threads);
+        final int bFirst = blockTable.blockFor(lo), bLast = blockTable.blockFor(hi - 1);
+        final int window = blockWindow(nthreads, bFirst, bLast);
+        final int blocks = bLast - bFirst + 1;
+        final int aheadN = Math.min(blocks, Math.max(2, readAheadBlocks()));
+
+        /* Below the decode-ahead depth, one consumer fed by that many
+         * decoders beats the same number of threads each decoding and
+         * then consuming its own block: decoding is the slower half, so
+         * until there are threads enough to cover it, pipelining wins
+         * over dividing. */
+        if (window < aheadN) {
+            iterBlocksPipelined(lo, hi, bFirst, bLast,
+                                Math.min(aheadN, Math.max(window, 1) * 4), fn);
+            return;
+        }
+        final global.thalion.ttio.Threads.PoolScope scope =
+            global.thalion.ttio.Threads.pool(window);
+        final java.util.Map<Integer, java.util.concurrent.Future<?>> pending =
+            new java.util.HashMap<>();
+        try {
+            final java.util.function.IntConsumer submit = b -> {
+                if (b > bLast || pending.containsKey(b)) return;
+                BlockView.Handle h = materialiseHandle(b);       // storage reads, this thread
+                final int r0 = (int) blockTable.readStart[b];
+                final int nr = blockTable.nReads[b];
+                pending.put(b, scope.executor().submit(() -> {
+                    try {
+                        GenomicRun v = GenomicRun.readFrom(h.group(), name, resolverForViews());
+                        int from = Math.max(r0, lo), to = Math.min(r0 + nr, hi);
+                        if (to > from) fn.visit(v, from, to - from);
+                        v.close();
+                    } finally {
+                        h.discard();
+                    }
+                    return null;
+                }));
+            };
+            for (int b = bFirst; b <= Math.min(bLast, bFirst + window - 1); b++) submit.accept(b);
+            for (int b = bFirst; b <= bLast; b++) {
+                var f = pending.remove(b);
+                if (f == null) continue;
+                try {
+                    f.get();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                } catch (java.util.concurrent.ExecutionException e) {
+                    Throwable c = e.getCause();
+                    throw c instanceof RuntimeException r ? r : new IllegalStateException(c);
+                }
+                submit.accept(b + window);
+            }
+        } finally {
+            for (var f : pending.values()) { try { f.get(); } catch (Exception ignored) { } }
+            scope.close();
+        }
+    }
+
+    /** One consumer on this thread, {@code aheadN} decoders behind it.
+     *  {@code readFrom} is lazy, so the warming read has to happen on
+     *  the pool: without it the channel decode lands on the consumer's
+     *  thread at its first read and the overlap is lost entirely. */
+    private void iterBlocksPipelined(int lo, int hi, int bFirst, int bLast,
+                                     int aheadN, BlockVisitor fn) {
+        final global.thalion.ttio.Threads.PoolScope scope =
+            global.thalion.ttio.Threads.pool(Math.max(2, aheadN));
+        final java.util.Map<Integer, java.util.concurrent.Future<InFlightView>> pending =
+            new java.util.HashMap<>();
+        try {
+            final java.util.function.IntConsumer submit = b -> {
+                if (b > bLast || pending.containsKey(b)) return;
+                BlockView.Handle h = materialiseHandle(b);
+                pending.put(b, scope.executor().submit(() -> {
+                    GenomicRun v = GenomicRun.readFrom(h.group(), name, resolverForViews());
+                    if (v.readCount() > 0) v.readAt(0);          // decode, off the consumer
+                    return new InFlightView(v, h);
+                }));
+            };
+            for (int b = bFirst; b <= Math.min(bLast, bFirst + aheadN - 1); b++) submit.accept(b);
+            for (int b = bFirst; b <= bLast; b++) {
+                InFlightView cur;
+                try {
+                    cur = pending.remove(b).get();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                } catch (java.util.concurrent.ExecutionException e) {
+                    Throwable c = e.getCause();
+                    throw c instanceof RuntimeException r ? r : new IllegalStateException(c);
+                }
+                submit.accept(b + aheadN);
+                int r0 = (int) blockTable.readStart[b];
+                int from = Math.max(r0, lo), to = Math.min(r0 + blockTable.nReads[b], hi);
+                try {
+                    if (to > from) fn.visit(cur.view(), from, to - from);
+                } finally {
+                    cur.view().close();
+                    cur.handle().discard();
+                }
+            }
+        } finally {
+            for (var f : pending.values()) {
+                try { var v = f.get(); v.view().close(); v.handle().discard(); }
+                catch (Exception ignored) { }
+            }
+            scope.close();
+        }
+    }
+
     /** Phase 2 (post-M91): read per-run provenance. Prefers the
      *  canonical compound dataset {@code provenance/steps} (matches
      *  Python's writer and Java's HDF5 fast path), falling back to
