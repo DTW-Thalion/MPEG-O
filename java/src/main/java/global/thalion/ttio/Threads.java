@@ -4,7 +4,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** The one thread knob of the SDK: {@code -Dttio.threads}, then
- *  {@code TTIO_THREADS}; unset or 0 means {@code max(1, cores - 8)}; 1 is
+ *  {@code TTIO_THREADS}; unset or 0 means {@code max(1, cores - 2)}; 1 is
  *  the serial path with no executor. */
 public final class Threads {
     private Threads() {}
@@ -83,9 +83,27 @@ public final class Threads {
      *  Segments are for the cores the blocks cannot reach. That is what
      *  the floor of two is for.
      *
+     *  <p>{@code -Dttio.v6.segmentThreads}, then
+     *  {@code TTIO_V6_SEGMENT_THREADS}, overrides the rule when it is a
+     *  positive integer, so the split between blocks and segments can
+     *  be measured rather than argued; see the Objective-C
+     *  {@code TtioGenomicWriteBench}. The override reaches outside the
+     *  clamp on purpose: a sweep has to be able to ask for 1 and for
+     *  more than 8.
+     *
      *  <p>Python: {@code ttio._threads.resolve_v6_segment_threads};
      *  Objective-C: {@code +[TTIOThreads resolveV6SegmentThreads:]}. */
     public static int resolveV6SegmentThreads(int poolWorkers) {
+        String raw = System.getProperty("ttio.v6.segmentThreads");
+        if (raw == null || raw.isBlank()) raw = System.getenv("TTIO_V6_SEGMENT_THREADS");
+        if (raw != null && !raw.isBlank()) {
+            try {
+                int v = Integer.parseInt(raw.trim());
+                if (v > 0) return v;
+            } catch (NumberFormatException ignored) {
+                // fall through to the rule
+            }
+        }
         int cores = Runtime.getRuntime().availableProcessors();
         int workers = Math.max(1, poolWorkers);
         int n = cores / workers;

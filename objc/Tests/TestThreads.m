@@ -51,6 +51,29 @@ void testThreads(void)
     PASS([TTIOThreads resolveV6SegmentThreads:0] == one,
          "v6 segments: zero workers is read as one");
 
+    /* The override exists so the split between blocks and segments can
+     * be swept. It sits outside the clamp on purpose: a sweep has to be
+     * able to ask for 1 and for more than 8. */
+    setenv("TTIO_V6_SEGMENT_THREADS", "5", 1);
+    PASS([TTIOThreads resolveV6SegmentThreads:1] == 5
+         && [TTIOThreads resolveV6SegmentThreads:c * 2] == 5,
+         "v6 segments: TTIO_V6_SEGMENT_THREADS wins whatever the worker count");
+    setenv("TTIO_V6_SEGMENT_THREADS", "1", 1);
+    PASS([TTIOThreads resolveV6SegmentThreads:1] == 1,
+         "v6 segments: the override reaches below the floor");
+    setenv("TTIO_V6_SEGMENT_THREADS", "16", 1);
+    PASS([TTIOThreads resolveV6SegmentThreads:1] == 16,
+         "v6 segments: the override reaches above the cap");
+    setenv("TTIO_V6_SEGMENT_THREADS", "junk", 1);
+    PASS([TTIOThreads resolveV6SegmentThreads:1] == one,
+         "v6 segments: junk falls through to the rule");
+    setenv("TTIO_V6_SEGMENT_THREADS", "0", 1);
+    PASS([TTIOThreads resolveV6SegmentThreads:1] == one,
+         "v6 segments: zero falls through to the rule");
+    unsetenv("TTIO_V6_SEGMENT_THREADS");
+    PASS([TTIOThreads resolveV6SegmentThreads:1] == one,
+         "v6 segments: unset falls through to the rule");
+
     /* The defect this guards: V6 read the auto-tune knob, a pool set
      * that to 1, and V6 has no candidates to race, so every block coded
      * its segments one after another under every writer. */

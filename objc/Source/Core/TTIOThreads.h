@@ -34,6 +34,10 @@ NS_ASSUME_NONNULL_BEGIN
  *  run, or one whose memory budget caps the blocks it can hold. That is
  *  what the floor of two is for.
  *
+ *  TTIO_V6_SEGMENT_THREADS overrides the rule when it is a positive
+ *  integer, so the split between blocks and segments can be measured
+ *  rather than argued; see TtioGenomicWriteBench.
+ *
  *  Python: ttio._threads.resolve_v6_segment_threads. */
 + (NSUInteger)resolveV6SegmentThreads:(NSUInteger)poolWorkers;
 @end

@@ -30,6 +30,18 @@ public API is stable from onward.
   per-segment model warm-up and falls as segments grow. Full table and
   method in `docs/codecs/m94z_v6.md`.
 
+- **Two environment variables that make the writer's thread split
+  measurable.** `TTIO_V6_SEGMENT_THREADS` overrides
+  `clamp(cores / workers, 2, 8)`, and reaches outside that clamp on
+  purpose: a sweep has to be able to ask for one segment thread and for
+  more than eight. `TTIO_M94Z_HINT` pins the qualities strategy before
+  block 0 rather than after it, which is the only way to reach V6
+  through a stream writer, since auto-tune never selects it;
+  `TTIO_M94Z_EXHAUSTIVE` still wins. Both are read in all three SDKs,
+  Java also taking `-Dttio.v6.segmentThreads` and `-Dttio.m94z.hint`. A
+  positive integer wins and anything else falls through to the existing
+  rule, matching `TTIO_READ_AHEAD_BLOCKS`. Defaults are unchanged.
+
 ### Fixed
 - **Exports stream their output.** The FASTQ and FASTA exporters in all
   three SDKs built the whole output in memory before one write, so

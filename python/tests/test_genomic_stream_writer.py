@@ -299,6 +299,31 @@ def test_pin_is_set_after_first_block(tmp_path):
     assert w._qual_hint != -1
 
 
+def test_hint_env_pins_before_block_zero(tmp_path, monkeypatch):
+    """TTIO_M94Z_HINT pins the strategy at construction rather than
+    after block 0. V6 is reachable no other way, which is what the knob
+    is for. Parity with the Java and ObjC writers."""
+    out = tmp_path / "hint.tio"
+    SpectralDataset.write_minimal(out, title="t", isa_investigation_id="i", runs={})
+    ds = SpectralDataset.open(out, writable=True)
+
+    def _hint():
+        w = GenomicStreamWriter(ds.study_group, "g", acquisition_mode=7,
+                                reference_uri="synthetic", platform="ILLUMINA",
+                                sample_name="s", block_reads=20_000, threads=2)
+        return w._qual_hint
+
+    monkeypatch.setenv("TTIO_M94Z_HINT", "8")
+    assert _hint() == 8
+    for bad in ("junk", "0", "-1", ""):
+        monkeypatch.setenv("TTIO_M94Z_HINT", bad)
+        assert _hint() == -1
+    monkeypatch.setenv("TTIO_M94Z_HINT", "8")
+    monkeypatch.setenv("TTIO_M94Z_EXHAUSTIVE", "1")
+    assert _hint() == -1     # exhaustive wins
+    ds.close()
+
+
 def _mini(chroms, mates):
     return make_written_genomic_run(len(chroms), 8, chromosomes=chroms, mate_chromosomes=mates)
 

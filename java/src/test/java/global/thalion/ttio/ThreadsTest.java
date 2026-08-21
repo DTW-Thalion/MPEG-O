@@ -20,6 +20,33 @@ class ThreadsTest {
         assertTrue(mid >= 2 && mid <= 8, "stays inside the clamp");
     }
 
+    /* The override reaches outside the clamp on purpose: a sweep has to
+     * be able to ask for 1 and for more than 8. Parity with the Python
+     * and Objective-C resolvers. */
+    @Test
+    void v6SegmentThreadsOverrideWinsAndReachesOutsideTheClamp() {
+        int cores = Runtime.getRuntime().availableProcessors();
+        int rule = Threads.resolveV6SegmentThreads(cores * 2);
+        try {
+            System.setProperty("ttio.v6.segmentThreads", "5");
+            assertEquals(5, Threads.resolveV6SegmentThreads(1));
+            assertEquals(5, Threads.resolveV6SegmentThreads(cores * 2),
+                         "the override wins whatever the worker count");
+            System.setProperty("ttio.v6.segmentThreads", "1");
+            assertEquals(1, Threads.resolveV6SegmentThreads(1), "below the floor");
+            System.setProperty("ttio.v6.segmentThreads", "16");
+            assertEquals(16, Threads.resolveV6SegmentThreads(1), "above the cap");
+            for (String bad : new String[] { "junk", "0", "-1", " " }) {
+                System.setProperty("ttio.v6.segmentThreads", bad);
+                assertEquals(rule, Threads.resolveV6SegmentThreads(cores * 2),
+                             "\"" + bad + "\" falls through to the rule");
+            }
+        } finally {
+            System.clearProperty("ttio.v6.segmentThreads");
+        }
+        assertEquals(rule, Threads.resolveV6SegmentThreads(cores * 2));
+    }
+
     /* Exercises the JNI binding as well as the policy: a pool that
      * cannot call setV6Threads would fail here rather than silently
      * leaving V6 coding every block's segments in sequence, which is

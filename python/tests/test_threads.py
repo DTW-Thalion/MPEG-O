@@ -77,3 +77,22 @@ def test_v6_segment_threads_clamp(monkeypatch):
     assert _threads.resolve_v6_segment_threads(64) == 2     # floor
     assert _threads.resolve_v6_segment_threads(0) == 8      # read as one
 
+
+def test_v6_segment_threads_env_override(monkeypatch):
+    """TTIO_V6_SEGMENT_THREADS wins whatever the worker count, and
+    reaches outside the clamp on purpose: a sweep has to be able to ask
+    for 1 and for more than 8. Parity with the Java and ObjC resolvers."""
+    monkeypatch.setattr(os, "cpu_count", lambda: 32)
+    monkeypatch.setenv("TTIO_V6_SEGMENT_THREADS", "5")
+    assert _threads.resolve_v6_segment_threads(1) == 5
+    assert _threads.resolve_v6_segment_threads(64) == 5
+    monkeypatch.setenv("TTIO_V6_SEGMENT_THREADS", "1")
+    assert _threads.resolve_v6_segment_threads(1) == 1       # below the floor
+    monkeypatch.setenv("TTIO_V6_SEGMENT_THREADS", "16")
+    assert _threads.resolve_v6_segment_threads(1) == 16      # above the cap
+    for bad in ("junk", "0", "-1", ""):
+        monkeypatch.setenv("TTIO_V6_SEGMENT_THREADS", bad)
+        assert _threads.resolve_v6_segment_threads(16) == 2  # falls through
+    monkeypatch.delenv("TTIO_V6_SEGMENT_THREADS")
+    assert _threads.resolve_v6_segment_threads(16) == 2
+

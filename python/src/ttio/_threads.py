@@ -73,7 +73,19 @@ def resolve_v6_segment_threads(pool_workers: int) -> int:
     blocks it can hold, has spare cores and nothing else to do with
     them. That is what the floor of 2 is for, and why the count is
     derived from the pool size rather than fixed.
+
+    ``TTIO_V6_SEGMENT_THREADS`` overrides the rule when it is a positive
+    integer, so the split between blocks and segments can be measured
+    rather than argued; see the Objective-C ``TtioGenomicWriteBench``.
     """
+    raw = os.environ.get("TTIO_V6_SEGMENT_THREADS")
+    if raw:
+        try:
+            v = int(raw.strip())
+        except ValueError:
+            v = 0
+        if v > 0:
+            return v
     cores = os.cpu_count() or 1
     workers = max(1, int(pool_workers))
     n = cores // workers

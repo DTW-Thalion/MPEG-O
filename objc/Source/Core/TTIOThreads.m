@@ -36,6 +36,11 @@
 
 + (NSUInteger)resolveV6SegmentThreads:(NSUInteger)poolWorkers
 {
+    const char *env = getenv("TTIO_V6_SEGMENT_THREADS");
+    if (env && env[0]) {
+        long v = strtol(env, NULL, 10);
+        if (v > 0) return (NSUInteger)v;
+    }
     NSUInteger cores = (NSUInteger)[[NSProcessInfo processInfo] activeProcessorCount];
     NSUInteger workers = poolWorkers < 1 ? 1 : poolWorkers;
     NSUInteger n = cores / workers;

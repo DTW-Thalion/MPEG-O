@@ -145,13 +145,32 @@ public final class GenomicStreamWriter implements AutoCloseable {
     /** Per-run sticky qualities strategy: block 0 auto-tunes, the winner
      *  is pinned for the rest of the run (spec docs/superpowers/plans/
      *  2026-08-19-fqz-v5-sticky-strategy-spec.md). -1 = not yet pinned. */
-    private int qualStrategyHint = -1;
+    private int qualStrategyHint = pinnedHint();
     private final boolean qualExhaustive = exhaustiveTune();
 
     private static boolean exhaustiveTune() {
         String raw = System.getProperty("ttio.m94z.exhaustive");
         if (raw == null || raw.isBlank()) raw = System.getenv("TTIO_M94Z_EXHAUSTIVE");
         return "1".equals(raw);
+    }
+
+    /** A positive {@code -Dttio.m94z.hint} or {@code TTIO_M94Z_HINT}
+     *  pins the strategy before block 0 instead, skipping the tune. V6
+     *  is reachable no other way, so measuring it through the writer
+     *  needs it. The exhaustive flag wins. */
+    private static int pinnedHint() {
+        if (exhaustiveTune()) return -1;
+        String raw = System.getProperty("ttio.m94z.hint");
+        if (raw == null || raw.isBlank()) raw = System.getenv("TTIO_M94Z_HINT");
+        if (raw != null && !raw.isBlank()) {
+            try {
+                int v = Integer.parseInt(raw.trim());
+                if (v > 0) return v;
+            } catch (NumberFormatException ignored) {
+                // fall through to the tune
+            }
+        }
+        return -1;
     }
 
     int qualStrategyHintForTests() { return qualStrategyHint; }
