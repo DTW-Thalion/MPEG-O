@@ -191,7 +191,8 @@ int main(int argc, char **argv) {
                 for (size_t sbi = 0; sbi < sbn; sbi++) {
                     unsigned sb = sbv[sbi];
                     unsigned seed = sdv[sdi];
-                    if (qb + pb + db + sb > TTIO_V6_MAX_CTX_BITS) continue;
+                    if (sb != TTIO_V6_SBITS_AUTO
+                        && qb + pb + db + sb > TTIO_V6_MAX_CTX_BITS) continue;
                     ttio_v6_param pm;
                     pm.qbits = (uint8_t)qb;
                     pm.qshift = (uint8_t)qsv[qsi];
@@ -233,7 +234,8 @@ int main(int argc, char **argv) {
                     ttio_v6_alphabet probe;
                     ttio_v6_alphabet_build(qual + blocks[0].qual_off,
                                            blocks[0].n_qual, seed, &probe);
-                    double model_mb = (double)((size_t)1 << (qb + pb + db + sb))
+                    unsigned sb_eff = (sb == TTIO_V6_SBITS_AUTO) ? 0u : sb;
+                    double model_mb = (double)((size_t)1 << (qb + pb + db + sb_eff))
                                     * (double)(probe.n + 2) * 4.0 / 1048576.0;
                     printf("%u,%u,%u,%u,%u,%u,%u,%u,%.2f,%u,%llu,%.4f,%+.2f,%.1f\n",
                            qb, pm.qshift, pb, pm.pshift, db, sb,

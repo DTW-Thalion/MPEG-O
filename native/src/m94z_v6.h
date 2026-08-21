@@ -76,6 +76,14 @@ extern const ttio_v6_param TTIO_V6_DEFAULT;
 
 #define TTIO_V6_MAX_CTX_BITS 16
 
+/* sbits = TTIO_V6_SBITS_AUTO asks the encoder to choose the width,
+ * by coding segment 0 each way and keeping the smallest. That costs
+ * about one segment per candidate, against a block of N of them, so
+ * it is affordable where racing whole blocks would not be. The
+ * chosen width goes into the body header, so a decoder never repeats
+ * the choice. With no sequences the answer is 0 without probing. */
+#define TTIO_V6_SBITS_AUTO 0xFFu
+
 /* One segment. lengths/n_reads describe ONLY this segment's reads;
  * qual holds sum(lengths) bytes. *out_len is capacity in, bytes out.
  * The chain body is the bare range-coded stream: the parameters live

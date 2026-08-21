@@ -456,6 +456,49 @@ static uint32_t v6_get_u32(const uint8_t *p) {
     return v;
 }
 
+/* Symbols the width probe codes, per candidate. The probe runs on the
+ * calling thread while the encode itself runs on the pool, so its cost
+ * is serial and a whole segment of it is dear: at S = 1 Mi, probing
+ * three widths over a full segment measured 25 to 30 per cent off the
+ * encode rate. A prefix picks the same width for a fraction of that. */
+#define V6_PROBE_SYMBOLS (128u * 1024u)
+
+/* Code a prefix of segment 0 at each candidate width and keep the
+ * smallest. */
+static uint8_t v6_pick_sbits(const ttio_v6_param *base,
+                             const ttio_v6_alphabet *ab,
+                             const uint8_t *qual, const uint8_t *seq,
+                             const uint32_t *lengths, const v6_seg *s0,
+                             uint8_t *scratch, size_t scratch_cap) {
+    static const uint8_t cand[] = { 0, 2, 4 };
+    uint8_t  best = 0;
+    size_t   best_len = (size_t)-1;
+    size_t   probe_reads = 0;
+    uint64_t probe_syms = 0;
+
+    /* Whole reads only, as a segment is. */
+    while (probe_reads < s0->n_reads && probe_syms < V6_PROBE_SYMBOLS) {
+        probe_syms += lengths[s0->first_read + probe_reads];
+        probe_reads++;
+    }
+    if (probe_reads == 0) return 0;
+
+    for (size_t c = 0; c < sizeof cand; c++) {
+        ttio_v6_param p = *base;
+        size_t l = scratch_cap;
+        int rc;
+        p.sbits = cand[c];
+        if ((unsigned)p.qbits + p.pbits + p.dbits + p.sbits
+                > TTIO_V6_MAX_CTX_BITS) continue;
+        rc = ttio_v6_chain_encode_seq(&p, ab, qual + s0->qual_off,
+                                      seq + s0->qual_off,
+                                      lengths + s0->first_read,
+                                      probe_reads, scratch, &l);
+        if (rc == 0 && l < best_len) { best_len = l; best = cand[c]; }
+    }
+    return best;
+}
+
 int ttio_m94z_v6_encode_seq(const uint8_t *qual, const uint8_t *seq,
                             size_t n_qualities,
                             const uint32_t *read_lengths, size_t n_reads,
@@ -471,21 +514,28 @@ int ttio_m94z_v6_encode_seq(const uint8_t *qual, const uint8_t *seq,
     size_t    n_segs, body_len;
     int       rc = 0;
 
-    if (!param_valid(pm)) return TTIO_SEQCTX_ERR_PARAM;
+    ttio_v6_param eff;
+    int auto_sbits;
+
+    if (!pm) return TTIO_SEQCTX_ERR_PARAM;
+    eff = *pm;
+    auto_sbits = (pm->sbits == (uint8_t)TTIO_V6_SBITS_AUTO);
+    if (auto_sbits) eff.sbits = 0;
+    if (!param_valid(&eff)) return TTIO_SEQCTX_ERR_PARAM;
     if (!out || !out_len) return TTIO_SEQCTX_ERR_ARGS;
     if (seg_symbols == 0) return TTIO_SEQCTX_ERR_PARAM;
     if (n_reads > 0 && !read_lengths) return TTIO_SEQCTX_ERR_ARGS;
     lengths_sum(read_lengths, n_reads, &total);
     if (total != (uint64_t)n_qualities) return TTIO_SEQCTX_ERR_ARGS;
     if (n_qualities > 0 && !qual) return TTIO_SEQCTX_ERR_ARGS;
-    if (n_qualities > 0 && pm->sbits && !seq) return TTIO_SEQCTX_ERR_NO_SEQ;
+    if (n_qualities > 0 && eff.sbits && !seq) return TTIO_SEQCTX_ERR_NO_SEQ;
 
     n_segs = v6_plan(read_lengths, n_reads, seg_symbols, NULL);
     if (n_segs > 0xFFFFu) return TTIO_SEQCTX_ERR_PARAM;
 
     /* One alphabet for the whole block: every segment codes against the
      * same dense symbol set, and it is written once into the header. */
-    ttio_v6_alphabet_build(qual, n_qualities, pm->seed_total, &ab);
+    ttio_v6_alphabet_build(qual, n_qualities, eff.seed_total, &ab);
 
     if (n_segs > 0) {
         uint64_t pool_bytes = 0, at = 0;
@@ -514,13 +564,18 @@ int ttio_m94z_v6_encode_seq(const uint8_t *qual, const uint8_t *seq,
             at += lens[i];
         }
 
+        if (auto_sbits && seq) {
+            eff.sbits = v6_pick_sbits(&eff, &ab, qual, seq, read_lengths,
+                                      &segs[0], bufs[0], lens[0]);
+        }
+
         {
             ttio_v6_job job;
             const ttio_engine *gpu = ttio_engine_gpu();
             int                done_on_gpu = 0;
 
             memset(&job, 0, sizeof job);
-            job.pm = pm;
+            job.pm = &eff;
             job.ab = &ab;
             job.qual = qual;
             job.seq = seq;
@@ -571,14 +626,14 @@ int ttio_m94z_v6_encode_seq(const uint8_t *qual, const uint8_t *seq,
     body[0] = 1;
     v6_put_u16(body + 2, (uint16_t)n_segs);
     v6_put_u32(body + 4, seg_symbols);
-    body[8] = pm->qbits;
-    body[9] = pm->qshift;
-    body[10] = pm->pbits;
-    body[11] = pm->pshift;
-    body[12] = pm->dbits;
+    body[8] = eff.qbits;
+    body[9] = eff.qshift;
+    body[10] = eff.pbits;
+    body[11] = eff.pshift;
+    body[12] = eff.dbits;
     /* Zero in every stream written before sbits existed, which is
      * exactly the no-sequence-context case. */
-    body[13] = pm->sbits;
+    body[13] = eff.sbits;
     v6_put_u16(body + 14, (uint16_t)ab.n);
     memcpy(body + V6_BODY_HDR, ab.inv, ab.n);
     for (unsigned i = 0; i < ab.n; i++)
