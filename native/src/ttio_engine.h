@@ -42,6 +42,8 @@ typedef struct {
     const ttio_v6_param    *pm;
     const ttio_v6_alphabet *ab;
     const uint8_t          *qual;
+    /* Parallel to qual when pm->sbits > 0, else NULL. */
+    const uint8_t          *seq;
     const uint32_t         *read_lengths;
     size_t                  n_reads;
     size_t                  n_qualities;

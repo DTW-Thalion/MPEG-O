@@ -9,14 +9,18 @@
  * Wire format: docs/codecs/m94z_v6.md.
  *
  * Context word, low to high:
- *   [ qctx : qbits ][ pos : pbits ][ delta : dbits ]
+ *   [ qctx : qbits ][ pos : pbits ][ delta : dbits ][ sctx : sbits ]
  *   qctx  = (qctx << qshift) + q, rolled after coding q, reset per read
  *   pos   = MIN((1<<pbits)-1, (len-1-i) >> pshift)
  *   delta = MIN((1<<dbits)-1, |q_prev - q_prev2|), 0 for the first two
  *           symbols of a read, reset per read
  *
- * Unlike V5 this needs no sequence bytes: every field comes from the
- * qualities and the read-length table.
+ * With sbits 0 the context is qualities and the read-length table
+ * alone, and a decoder needs no sequence bytes. With sbits > 0 the
+ * sctx field is V5's: a rolling window of 2-bit base codes, rolled
+ * BEFORE coding q_i so the window includes the current base, reset
+ * per read. A stream carrying sbits > 0 cannot be decoded without
+ * the sequences channel.
  *
  * Functions return 0 or a TTIO_SEQCTX_ERR_* value.
  */
@@ -37,6 +41,9 @@ typedef struct {
      * body, so a decoder never needs this. Larger seeds start closer
      * to the block's marginal distribution but adapt more slowly. */
     uint16_t seed_total;
+    /* Sequence-context width, 0 for none. Last so the positional
+     * initialisers that predate it still mean what they did. */
+    uint8_t sbits;
 } ttio_v6_param;
 
 /* The quality values a block actually uses, mapped to a dense
@@ -73,6 +80,21 @@ extern const ttio_v6_param TTIO_V6_DEFAULT;
  * qual holds sum(lengths) bytes. *out_len is capacity in, bytes out.
  * The chain body is the bare range-coded stream: the parameters live
  * in the block body header, not here. */
+/* seq, when pm->sbits > 0, is n_qualities base bytes parallel to
+ * qual. NULL is an error in that case, and ignored otherwise. */
+int ttio_v6_chain_encode_seq(const ttio_v6_param *pm,
+                             const ttio_v6_alphabet *ab,
+                             const uint8_t *qual, const uint8_t *seq,
+                             const uint32_t *lengths, size_t n_reads,
+                             uint8_t *out, size_t *out_len);
+
+int ttio_v6_chain_decode_seq(const ttio_v6_param *pm,
+                             const ttio_v6_alphabet *ab,
+                             const uint8_t *in, size_t in_len,
+                             const uint8_t *seq,
+                             const uint32_t *lengths, size_t n_reads,
+                             uint8_t *qual_out, size_t n_qualities);
+
 int ttio_v6_chain_encode(const ttio_v6_param *pm,
                          const ttio_v6_alphabet *ab,
                          const uint8_t *qual,
@@ -118,10 +140,24 @@ int ttio_v6_chain_decode(const ttio_v6_param *pm,
  * decode fills read_lengths from the container's read-length table;
  * the caller must size it for n_reads, and n_reads and n_qualities
  * must match the container or the call is rejected. */
+int ttio_m94z_v6_encode_seq(const uint8_t *qual, const uint8_t *seq,
+                            size_t n_qualities,
+                            const uint32_t *read_lengths, size_t n_reads,
+                            const ttio_v6_param *pm, uint32_t seg_symbols,
+                            int threads, uint8_t *out, size_t *out_len);
+
 int ttio_m94z_v6_encode(const uint8_t *qual, size_t n_qualities,
                         const uint32_t *read_lengths, size_t n_reads,
                         const ttio_v6_param *pm, uint32_t seg_symbols,
                         int threads, uint8_t *out, size_t *out_len);
+
+/* seq is required when the stream's header carries sbits > 0, and
+ * ignored otherwise; the width comes from the stream, not the caller. */
+int ttio_m94z_v6_decode_seq(const uint8_t *in, size_t in_len,
+                            const uint8_t *seq,
+                            uint32_t *read_lengths, size_t n_reads,
+                            int threads, uint8_t *qual_out,
+                            size_t n_qualities);
 
 int ttio_m94z_v6_decode(const uint8_t *in, size_t in_len,
                         uint32_t *read_lengths, size_t n_reads,
