@@ -48,6 +48,24 @@
 #import "Codecs/Registry/TTIODecodedChannel.h"
 #import "Codecs/Registry/TTIOCodecContext.h"
 #import <hdf5.h>
+#include <stdlib.h>
+
+/* How many blocks decode ahead of a serial consumer. Each one in
+ * flight stays resident until it is consumed, so this is a memory
+ * setting as much as a latency one, and the two do not pull the same
+ * way: a consumer slower than the decoder needs almost no lookahead,
+ * and paying for more of it costs throughput rather than buying any.
+ * TTIO_READ_AHEAD_BLOCKS exists so the trade can be measured rather
+ * than argued; see TtioGenomicReadBench. */
+static NSUInteger TTIOReadAheadBlocks(void)
+{
+    const char *env = getenv("TTIO_READ_AHEAD_BLOCKS");
+    if (env && env[0]) {
+        long v = strtol(env, NULL, 10);
+        if (v > 0) return (NSUInteger)v;
+    }
+    return 4;
+}
 
 /** One prefetched block view in flight. */
 @interface TTIOInFlightView : NSObject
@@ -297,10 +315,7 @@
     if (!_blockTable || nthreads <= 1 || start >= hi) {
         return [self iterReadsFrom:start to:hi error:error usingBlock:block];
     }
-    /* The serial consumer only needs enough decode-ahead to never
-     * stall; more in flight is pure memory. The auto-tune stand-down
-     * still keys off nthreads. */
-    NSUInteger window = MIN(nthreads, (NSUInteger)4);
+    NSUInteger window = MIN(nthreads, TTIOReadAheadBlocks());
     TTIOThreadPool *pool = [TTIOThreadPool poolWithThreads:nthreads];
     NSUInteger bFirst = [_blockTable blockForRead:start];
     NSUInteger bLast = [_blockTable blockForRead:hi - 1];

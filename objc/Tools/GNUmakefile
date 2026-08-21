@@ -1,6 +1,6 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioDekEnvelope TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioFastqEncodeBench TtioMzMLProbe TtioTransportEncodeBench TtioRefXLangWriter TtioRefXLangReader TtioQualXLangReader TtioMsImageXLangReader TtioRamanImageXLangReader TtioEncode TtioExport
+TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioDekEnvelope TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioFastqEncodeBench TtioGenomicReadBench TtioMzMLProbe TtioTransportEncodeBench TtioRefXLangWriter TtioRefXLangReader TtioQualXLangReader TtioMsImageXLangReader TtioRamanImageXLangReader TtioEncode TtioExport
 
 TtioTransportEncodeBench_OBJC_FILES = TtioTransportEncodeBench.m
 TtioTransportEncodeBench_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
@@ -13,6 +13,10 @@ TtioMzMLProbe_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 TtioFastqBench_OBJC_FILES = TtioFastqBench.m
 TtioFastqBench_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
 TtioFastqBench_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
+
+TtioGenomicReadBench_OBJC_FILES = TtioGenomicReadBench.m
+TtioGenomicReadBench_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
+TtioGenomicReadBench_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 TtioFastqEncodeBench_OBJC_FILES = TtioFastqEncodeBench.m
 TtioFastqEncodeBench_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
