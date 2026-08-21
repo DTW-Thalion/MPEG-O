@@ -399,6 +399,211 @@ static NSUInteger TTIOReadAheadBlocks(void)
     return ok;
 }
 
+/* How many blocks may be in flight at once, given how many threads want
+ * one each. A block in flight is resident for as long as the caller is
+ * inside it, so this is a memory setting before it is a concurrency
+ * one, and the thread count is only ever an upper bound on it.
+ *
+ * The cost of a block in flight is taken as eight times its sequence
+ * bytes, the same figure +resolveMemoryBudget: uses on the writing
+ * side, so TTIO_MEMORY_BUDGET and the half-of-physical cap mean the
+ * same thing to a reader as to a writer. Measured here it is nearer
+ * ten (about 100 MB resident per 10 MB block, one process per window),
+ * so the estimate is a little optimistic; the thread count is the
+ * binding limit on any machine with memory to spare, and the budget
+ * only takes over when there is not.
+ *
+ * The largest block in the range sets the size rather than the mean:
+ * one outsized block in flight costs its own bytes, not the average. */
+- (NSUInteger)_blockWindowForThreads:(NSUInteger)nthreads
+                               first:(NSUInteger)bFirst
+                                last:(NSUInteger)bLast
+{
+    unsigned long long widest = 0;
+    for (NSUInteger b = bFirst; b <= bLast; b++) {
+        unsigned long long nb = (unsigned long long)[_blockTable nBasesAt:b];
+        if (nb > widest) widest = nb;
+    }
+    if (widest == 0) return 1;
+    unsigned long long budget =
+        [TTIOThreads resolveMemoryBudget:nil threads:nthreads blockBytes:widest];
+    unsigned long long admits = budget / (widest * 8ull);
+    if (admits < 1) admits = 1;
+    NSUInteger blocks = bLast - bFirst + 1;
+    NSUInteger window = (NSUInteger)MIN((unsigned long long)nthreads, admits);
+    /* More workers than blocks buys nothing: one block, one thread. */
+    if (window > blocks) window = blocks;
+    return window < 1 ? 1 : window;
+}
+
+/* Hands each decoded block to the caller on the pool rather
+ * than iterating its reads on the caller's thread, because the serial
+ * consumer is what bounds -iterReadsFrom:to:threads:, not the decode
+ * that already runs ahead of it.
+ *
+ * The caller's block runs on several threads at once and in no
+ * particular order, so it has to be safe to call that way; that is the
+ * whole difference from -iterReadsFrom:to:threads:, whose ordering
+ * guarantee is what costs the parallelism. Handles are still
+ * materialised on this thread, since those are storage reads. */
+- (BOOL)iterBlocksFrom:(NSUInteger)start
+                    to:(NSUInteger)stop
+               threads:(NSUInteger)threads
+                 error:(NSError **)error
+            usingBlock:(void (^)(TTIOGenomicRun *view, NSUInteger firstRead,
+                                 NSUInteger nReads, BOOL *stop))userBlock
+{
+    NSUInteger n = [self readCount];
+    NSUInteger hi = MIN(stop, n);
+    NSUInteger nthreads = threads ? threads : [TTIOThreads resolve:nil];
+    if (start >= hi) return YES;
+    /* A run with no block table is one block as far as a caller of this
+     * method is concerned: hand it over whole, on this thread. */
+    if (!_blockTable) {
+        BOOL s = NO;
+        userBlock(self, start, hi - start, &s);
+        return YES;
+    }
+    NSUInteger bFirst = [_blockTable blockForRead:start];
+    NSUInteger bLast = [_blockTable blockForRead:hi - 1];
+    if (bFirst == NSNotFound || bLast == NSNotFound) return NO;
+
+    /* Blocks in flight is a memory setting before it is a concurrency
+     * one: each one stays resident for as long as the caller is inside
+     * it. The budget resolver is the writer's, so TTIO_MEMORY_BUDGET
+     * and the half-of-physical cap mean the same thing on both sides. */
+    NSUInteger window = [self _blockWindowForThreads:nthreads
+                                              first:bFirst
+                                               last:bLast];
+    /* One worker still decodes ahead. Consuming and decoding the same
+     * block one after the other is what -iterReadsFrom:to:threads:
+     * never does, and doing it here measured a third of that method's
+     * rate: the loss is the lost overlap, not the delivery shape. So a
+     * single consumer keeps a decode running one block ahead of it and
+     * calls back on this thread, in order. */
+    /* Below the decode-ahead depth, one consumer fed by that many
+     * decoders beats the same number of threads each decoding and then
+     * consuming its own block. Decoding is the slower half — one
+     * decoder measured about a third of what one consumer gets through
+     * — so until there are enough threads to cover it, pipelining wins
+     * over dividing. Measured at 15 blocks: 1 thread 77.6 MB/s this
+     * way against 23.4 the other, and 2 threads 43.6 the other way. */
+    NSUInteger blocks = bLast - bFirst + 1;
+    NSUInteger aheadN = MIN(blocks, MAX((NSUInteger)2, TTIOReadAheadBlocks()));
+    if (window < aheadN) {
+        aheadN = MIN(aheadN, MAX(window, (NSUInteger)1) * 4);
+        TTIOThreadPool *ahead = [TTIOThreadPool poolWithThreads:aheadN];
+        NSMutableDictionary<NSNumber *, TTIOInFlightView *> *q = [NSMutableDictionary dictionary];
+        NSCondition *c = [NSCondition new];
+        BOOL ok = YES, halted1 = NO;
+        void (^decode)(NSUInteger) = ^(NSUInteger b) {
+            if (b > bLast || q[@(b)]) return;
+            NSError *me = nil;
+            TTIOBlockView *h = [self _materialiseHandle:b error:&me];
+            TTIOInFlightView *f = [TTIOInFlightView new];
+            q[@(b)] = f;
+            if (!h) { f.error = me; f.done = YES; return; }
+            [ahead.queue addOperationWithBlock:^{
+                NSError *ie = nil;
+                TTIOGenomicRun *v = [TTIOGenomicRun openFromGroup:h.group name:self->_name
+                                                referenceResolver:[self _resolverForViews]
+                                                            error:&ie];
+                /* openFromGroup is lazy: without this the channel
+                 * decode lands on the consumer's thread at its first
+                 * read, which is the whole of the overlap. */
+                if (v && [v readCount] > 0) [v readAtIndex:0 error:&ie];
+                [c lock];
+                f.view = v; f.handle = h; f.error = ie; f.done = YES;
+                [c broadcast];
+                [c unlock];
+            }];
+        };
+        for (NSUInteger b = bFirst; b <= MIN(bLast, bFirst + aheadN - 1); b++) decode(b);
+        for (NSUInteger b = bFirst; b <= bLast && !halted1; b++) {
+            TTIOInFlightView *f = q[@(b)];
+            [c lock];
+            while (!f.done) [c wait];
+            [c unlock];
+            [q removeObjectForKey:@(b)];
+            if (!f.view) { if (error) *error = f.error; ok = NO; [f.handle discard]; break; }
+            decode(b + aheadN);
+            NSUInteger r0 = (NSUInteger)[_blockTable readStartAt:b];
+            NSUInteger nr = (NSUInteger)[_blockTable nReadsAt:b];
+            NSUInteger from = MAX(r0, start), to = MIN(r0 + nr, hi);
+            if (to > from) userBlock(f.view, from, to - from, &halted1);
+            [f.handle discard];
+        }
+        for (TTIOInFlightView *f in q.allValues) {
+            [c lock];
+            while (!f.done) [c wait];
+            [c unlock];
+            [f.handle discard];
+        }
+        [ahead close];
+        return ok;
+    }
+    TTIOThreadPool *pool = [TTIOThreadPool poolWithThreads:window];
+
+    NSMutableDictionary<NSNumber *, TTIOInFlightView *> *pending = [NSMutableDictionary dictionary];
+    NSCondition *cond = [NSCondition new];
+    __block BOOL halted = NO;
+    __weak typeof(self) weakSelf = self;
+    void (^submit)(NSUInteger) = ^(NSUInteger b) {
+        typeof(self) sself = weakSelf;
+        if (!sself || b > bLast || pending[@(b)] || halted) return;
+        NSError *me = nil;
+        TTIOBlockView *h = [sself _materialiseHandle:b error:&me];  /* storage reads, this thread */
+        TTIOInFlightView *f = [TTIOInFlightView new];
+        pending[@(b)] = f;
+        if (!h) { f.error = me; f.done = YES; return; }
+        NSUInteger r0 = (NSUInteger)[sself->_blockTable readStartAt:b];
+        NSUInteger nr = (NSUInteger)[sself->_blockTable nReadsAt:b];
+        [pool.queue addOperationWithBlock:^{
+            NSError *ie = nil;
+            TTIOGenomicRun *v = nil;
+            @try {
+                v = [TTIOGenomicRun openFromGroup:h.group name:sself->_name
+                                referenceResolver:[sself _resolverForViews] error:&ie];
+                if (v && !halted) {
+                    BOOL s = NO;
+                    NSUInteger from = MAX(r0, start);
+                    NSUInteger to = MIN(r0 + nr, hi);
+                    if (to > from) userBlock(v, from, to - from, &s);
+                    if (s) halted = YES;
+                }
+            } @catch (NSException *ex) {
+                v = nil;
+                ie = TTIOMakeError(TTIOErrorDatasetRead, @"%@: %@", ex.name, ex.reason);
+            }
+            [cond lock];
+            f.view = v; f.handle = h; f.error = ie; f.done = YES;
+            [cond broadcast];
+            [cond unlock];
+        }];
+    };
+    for (NSUInteger b = bFirst; b <= MIN(bLast, bFirst + window - 1); b++) submit(b);
+    BOOL ok = YES;
+    for (NSUInteger b = bFirst; b <= bLast && !halted; b++) {
+        TTIOInFlightView *f = pending[@(b)];
+        if (!f) continue;
+        [cond lock];
+        while (!f.done) [cond wait];
+        [cond unlock];
+        [pending removeObjectForKey:@(b)];
+        if (!f.view) { if (error) *error = f.error; ok = NO; [f.handle discard]; break; }
+        submit(b + window);
+        [f.handle discard];
+    }
+    for (TTIOInFlightView *f in pending.allValues) {
+        [cond lock];
+        while (!f.done) [cond wait];
+        [cond unlock];
+        [f.handle discard];
+    }
+    [pool close];
+    return ok;
+}
+
 - (BOOL)iterReadsFrom:(NSUInteger)start
                    to:(NSUInteger)stop
                 error:(NSError **)error

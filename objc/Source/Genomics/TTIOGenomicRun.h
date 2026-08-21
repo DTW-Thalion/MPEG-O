@@ -92,6 +92,21 @@
                 error:(NSError **)error
            usingBlock:(void (^)(TTIOAlignedRead *read, NSUInteger index, BOOL *stop))block;
 
+/** One call per decoded block, on the pool.
+ *
+ *  <code>block</code> is called from several threads at once and in no
+ *  particular order, and must be safe to call that way. <code>view</code>
+ *  is a run over one block's reads, indexed from 0, valid only for the
+ *  duration of the call. That relaxed ordering is the whole difference
+ *  from -iterReadsFrom:to:threads:, whose in-order delivery on the
+ *  caller's thread is what bounds it. */
+- (BOOL)iterBlocksFrom:(NSUInteger)start
+                    to:(NSUInteger)stop
+               threads:(NSUInteger)threads
+                 error:(NSError **)error
+            usingBlock:(void (^)(TTIOGenomicRun *view, NSUInteger firstRead,
+                                 NSUInteger nReads, BOOL *stop))block;
+
 /** Drop the cached block view and its memory store. */
 - (void)close;
 
