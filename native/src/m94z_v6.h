@@ -85,8 +85,30 @@ int ttio_v6_chain_decode(const ttio_v6_param *pm,
                          const uint32_t *lengths, size_t n_reads,
                          uint8_t *qual_out, size_t n_qualities);
 
-/* Provisional until the Phase 1 ratio sweep fixes it. */
-#define TTIO_V6_DEFAULT_SEG_SYMBOLS (256u * 1024u)
+/* Segment size trades ratio against how many segments a block holds.
+ * 256 Ki was sized for the number of chains a GPU could run at once;
+ * that backend is gone, and 16 cores are served by far fewer segments
+ * than it bought.
+ *
+ * Swept at the shipped context (Q6 qshift7 P4 pshift4 D1, seed 256)
+ * with native/bench/bench_v6_ratio, which compares against the
+ * strategy the umbrella pins rather than against V4. Byte counts are
+ * deterministic; MB/s is best of 3 on 16 cores.
+ *
+ *   S       HiFi vs V4   lowcov vs V5   HiFi MB/s
+ *   256 Ki  +6.25%       +31.45%        ~510
+ *   512 Ki  +5.84%       +29.82%        ~550
+ *   1 Mi    +5.42%       +28.67%        ~530
+ *   2 Mi    +5.13%       +27.92%        ~521
+ *   8 Mi    +4.87%       +27.16%        ~408
+ *
+ * 1 Mi beats 256 Ki on both axes and leaves 64 segments in a 64 MiB
+ * block. 8 Mi gives up a fifth of the throughput for a quarter point.
+ *
+ * S is written into the body header and the segmentation derives from
+ * it and the read-length table, so streams written before this keep
+ * their own S and decode unchanged. */
+#define TTIO_V6_DEFAULT_SEG_SYMBOLS (1024u * 1024u)
 
 /* Whole-block coder, including the outer M94Z container. threads <= 1
  * codes sequentially; output bytes are identical for any thread count,
