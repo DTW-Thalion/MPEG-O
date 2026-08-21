@@ -107,7 +107,9 @@ int main(int argc, const char *argv[])
 
         /* par mode: the same full pass, every quality byte
          * touched, but the reads built and consumed on the pool. */
-        if (argc > 5 && strcmp(argv[5], "par") == 0) {
+        if (argc > 5 && (strcmp(argv[5], "par") == 0
+                         || strcmp(argv[5], "pardecode") == 0)) {
+            BOOL decodeOnly = strcmp(argv[5], "pardecode") == 0;
             NSUInteger th = argc > 6 ? (NSUInteger)atoi(argv[6]) : 0;
             double bestT = 0;
             for (int r = 0; r < rounds; r++) {
@@ -126,12 +128,25 @@ int main(int argc, const char *argv[])
                         (void)f0; (void)st;
                         int64_t ln = 0, lq = 0;
                         @autoreleasepool {
-                            for (NSUInteger k = 0; k < nr; k++) {
-                                NSError *e = nil;
-                                TTIOAlignedRead *rd = [v readAtIndex:k error:&e];
-                                if (!rd) break;
-                                lq += (int64_t)rd.qualities.length;
-                                ln++;
+                            if (decodeOnly) {
+                                /* The block's qualities as one buffer:
+                                 * the same decode, none of the per-read
+                                 * objects. */
+                                NSData *q = [v wholeQualitiesData];
+                                const uint8_t *p = q.bytes;
+                                int64_t s = 0;
+                                for (NSUInteger k = 0; k < q.length; k++) s += p[k];
+                                lq = (int64_t)q.length;
+                                ln = (int64_t)nr;
+                                if (s == -1) fprintf(stderr, " ");
+                            } else {
+                                for (NSUInteger k = 0; k < nr; k++) {
+                                    NSError *e = nil;
+                                    TTIOAlignedRead *rd = [v readAtIndex:k error:&e];
+                                    if (!rd) break;
+                                    lq += (int64_t)rd.qualities.length;
+                                    ln++;
+                                }
                             }
                         }
                         __sync_fetch_and_add(&n, ln);
