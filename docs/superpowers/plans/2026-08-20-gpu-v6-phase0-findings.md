@@ -682,3 +682,69 @@ whoever is reading. These numbers come from a tool that consumes at
 memory speed, which no caller iterating reads in Python will do. The
 cap binds here and probably does not bind there. Measuring that needs a
 reader-level benchmark, not this one.
+
+## The reader, measured: the decode-ahead window is a 3.6x regression
+
+`ttio.tools.genomic_read_bench` iterates a blocks_v1 run end to end,
+once per decode-ahead window, with a control row that repeats one
+window under a second name. 1.5 M reads of 150 bases, 15 blocks.
+
+| window | best | reads/s | qualities | peak RSS |
+| --- | --- | --- | --- | --- |
+| 1 | 10.0 s | 150,000 | 22.5 MB/s | 635 MB |
+| **2** | **7.4 s** | **200,000** | **30.3 MB/s** | 1083 MB |
+| 3 | 12.0 s | 125,000 | 18.7 MB/s | 1859 MB |
+| 4 (shipped) | 26.8 s | 57,000 | 8.4 MB/s | 2544 MB |
+| 6 | 34.2 s | 39,000 | 6.6 MB/s | 3359 MB |
+
+Control drift 0.1%. **The shipped default is 3.6x slower than a window
+of two, and holds 1.5 GB more while doing it.**
+
+### What it is not
+
+The obvious explanations are all measurable, and all wrong:
+
+- **Not redundant work.** `_blocks_materialised` is exactly 15 at every
+  window. The same blocks are decoded exactly once each.
+- **Not the segment threads.** A window x threads grid over
+  {1,2,3,4,6} x {2,4,8} moves by under 1% along the thread axis at
+  every window. Native decode threads do not hold the GIL, so they
+  cost the consumer nothing.
+- **Not garbage collection.** `gc.disable()` for the pass changes
+  window 4 by 1%. The memory involved is numpy and HDF5 buffers, which
+  the cyclic collector does not walk.
+- **Not GIL convoying.** A ten-fold longer `sys.setswitchinterval`
+  recovers 8% of a 260% gap.
+- **Not swapping.** 31 GB total, 29 free; peak is 3.4 GB.
+
+### What it is
+
+The cost tracks resident memory: **each block in flight costs 700 to
+800 MB**, and the time follows that curve rather than any measure of
+work. With the machine not swapping, the remaining explanation is
+allocation churn — past one or two blocks the working set stops being
+recycled by the allocator and every block pays fresh page faults. That
+last step is inference; the residency itself is measured.
+
+### Two things worth deciding
+
+**The window should be 2, not 4.** A serial consumer runs at 30 MB/s
+against a decoder that does 780 MB/s: one block of lookahead is already
+26 times more than it can use. Everything past that is memory held for
+nothing, and here it is worse than nothing.
+
+**700 MB resident for a block holding 15 MB of qualities is a 45-fold
+blowup**, and is the more interesting number. It is what makes the
+window expensive at all. Whatever `materialise_block` builds is far
+larger than the data it carries, and the corpus here uses 100 k-read
+blocks against a 1 M-read default, so a default-sized block may cost
+ten times this. That is worth looking at on its own, before tuning a
+window around it.
+
+### And the earlier reader change is confirmed neutral
+
+Forcing `pool_context` to the pre-change and post-change values at the
+shipped window, best of three: 26.82 s against 26.71 s, +0.4%. It
+matches what `v6_acceptance` said with no consumer attached. The change
+is right on its own terms and buys nothing measurable, exactly as
+recorded above.
