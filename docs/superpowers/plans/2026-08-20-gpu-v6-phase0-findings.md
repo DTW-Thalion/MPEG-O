@@ -617,3 +617,68 @@ the CPU.
 The engine interface, the `TTIO_GPU` selection and the block-level spill
 stay in the tree. They cost nothing with one engine registered, and they
 are where a second one would attach.
+
+## Decode, and a correction to the reader change
+
+Every figure above this section is an encode figure: the acceptance tool
+encoded and checksummed, which measured half the codec. It now decodes
+as well, checking that the qualities and the read lengths both return
+identical. Thirty-six runs across four corpora, every one identical.
+
+Decode runs at roughly 0.7 to 0.9 of encode, and is parallel the same
+two ways: segments within a block, blocks in flight.
+
+| Corpus | blocks | encode | decode | decode / encode |
+| --- | --- | --- | --- | --- |
+| lowcov chr22 | 3 | 539 MB/s | 391 MB/s | 0.73 |
+| HiFi | 5 | 736 MB/s | 551 MB/s | 0.75 |
+| NovaSeq 512 MB | 9 | 1397 MB/s | 1228 MB/s | 0.88 |
+| NovaSeq 2 GB | 33 | 1630 MB/s | 1237 MB/s | 0.76 |
+
+### The reader change is correct, and buys nothing measurable
+
+`genomic_run` caps decode-ahead at four blocks and was passing the
+uncapped thread count to `pool_context`, which sizes V6's segment
+threads from the number of workers. On 32 cores that asked for 2
+segment threads across 4 blocks. Passing the window instead asks for 8
+across 4.
+
+The thread count rises fourfold. **The throughput does not move.**
+Best of six interleaved runs, with a control row that repeats the
+before-configuration under a second name:
+
+| Corpus | before | control | after | after vs before | control vs before |
+| --- | --- | --- | --- | --- | --- |
+| lowcov | 384.1 | 389.9 | 389.6 | +1.4% | +1.5% |
+| NovaSeq 2 GB | 810.6 | 804.9 | 819.2 | +1.1% | -0.7% |
+
+The effect is the same size as the drift between two runs of an
+identical configuration, so it is not an effect. **Segment threads
+beyond two do nothing for decode.** The change is still right — the
+parameter means "how many workers", and four workers is what there are
+— but it is a correctness fix, not a speed one, and it should not be
+described as one.
+
+⛔ A first sweep appeared to show +21% on lowcov. That was noise. On
+that corpus the two configurations it compared were *identical* (3
+blocks clamps both window values to 3 workers), and they differed by
+21%: a control row disagreeing with itself. Single runs on this machine
+spread 27 to 47%; only best-of-six brings the drift down to about 1.5%.
+
+### What the window costs, and why it may not matter
+
+Blocks in flight is the real lever, well clear of the noise:
+
+| Corpus | blocks | window 4 | uncapped | gain |
+| --- | --- | --- | --- | --- |
+| HiFi | 5 | 539 MB/s | 551 MB/s | +2% |
+| NovaSeq 512 MB | 9 | 854 MB/s | 1228 MB/s | +44% |
+| NovaSeq 2 GB | 33 | 781 MB/s | 1237 MB/s | +58% |
+
+That is not a reason to raise `_READ_AHEAD_BLOCKS`. The window exists
+because each block in flight is a decoded block held resident, and
+because the consumer is serial: decode-ahead only has to stay ahead of
+whoever is reading. These numbers come from a tool that consumes at
+memory speed, which no caller iterating reads in Python will do. The
+cap binds here and probably does not bind there. Measuring that needs a
+reader-level benchmark, not this one.
