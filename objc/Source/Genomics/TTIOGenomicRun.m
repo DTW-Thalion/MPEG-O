@@ -450,8 +450,9 @@ static NSUInteger TTIOReadAheadBlocks(void)
                     to:(NSUInteger)stop
                threads:(NSUInteger)threads
                  error:(NSError **)error
-            usingBlock:(void (^)(TTIOGenomicRun *view, NSUInteger firstRead,
-                                 NSUInteger nReads, BOOL *stop))userBlock
+            usingBlock:(void (^)(TTIOGenomicRun *view, NSUInteger viewStart,
+                                 NSUInteger firstRead, NSUInteger nReads,
+                                 BOOL *stop))userBlock
 {
     NSUInteger n = [self readCount];
     NSUInteger hi = MIN(stop, n);
@@ -461,7 +462,7 @@ static NSUInteger TTIOReadAheadBlocks(void)
      * method is concerned: hand it over whole, on this thread. */
     if (!_blockTable) {
         BOOL s = NO;
-        userBlock(self, start, hi - start, &s);
+        userBlock(self, start, start, hi - start, &s);
         return YES;
     }
     NSUInteger bFirst = [_blockTable blockForRead:start];
@@ -530,7 +531,7 @@ static NSUInteger TTIOReadAheadBlocks(void)
             NSUInteger r0 = (NSUInteger)[_blockTable readStartAt:b];
             NSUInteger nr = (NSUInteger)[_blockTable nReadsAt:b];
             NSUInteger from = MAX(r0, start), to = MIN(r0 + nr, hi);
-            if (to > from) userBlock(f.view, from, to - from, &halted1);
+            if (to > from) userBlock(f.view, from - r0, from, to - from, &halted1);
             [f.handle discard];
         }
         for (TTIOInFlightView *f in q.allValues) {
@@ -570,7 +571,7 @@ static NSUInteger TTIOReadAheadBlocks(void)
                     BOOL s = NO;
                     NSUInteger from = MAX(r0, start);
                     NSUInteger to = MIN(r0 + nr, hi);
-                    if (to > from) userBlock(v, from, to - from, &s);
+                    if (to > from) userBlock(v, from - r0, from, to - from, &s);
                     if (s) halted = YES;
                 }
             } @catch (NSException *ex) {

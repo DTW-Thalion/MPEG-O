@@ -418,9 +418,14 @@ public class GenomicRun
     /** One decoded block, handed over whole. */
     @FunctionalInterface
     public interface BlockVisitor {
-        /** {@code view} is a run over one block's reads, indexed from
-         *  0, valid only for the duration of the call. */
-        void visit(GenomicRun view, int firstRead, int nReads);
+        /** {@code view} is a run over one block's reads and is valid
+         *  only for the duration of the call. Read record {@code k} of
+         *  the delivered range as {@code view.readAt(viewStart + k)};
+         *  its index in the whole run is {@code firstRead + k}. The two
+         *  differ whenever a range starts part-way into a block, so a
+         *  caller that indexes the view by {@code firstRead} reads the
+         *  wrong records. */
+        void visit(GenomicRun view, int viewStart, int firstRead, int nReads);
     }
 
     /** How many blocks may be in flight at once, given how many threads
@@ -461,7 +466,7 @@ public class GenomicRun
         int n = readCount();
         final int lo = Math.max(start, 0), hi = Math.min(stop, n);
         if (lo >= hi) return;
-        if (blockTable == null) { fn.visit(this, lo, hi - lo); return; }
+        if (blockTable == null) { fn.visit(this, lo, lo, hi - lo); return; }
         int nthreads = Math.max(1, threads == 0
             ? global.thalion.ttio.Threads.resolve(null) : threads);
         final int bFirst = blockTable.blockFor(lo), bLast = blockTable.blockFor(hi - 1);
@@ -493,7 +498,7 @@ public class GenomicRun
                     try {
                         GenomicRun v = GenomicRun.readFrom(h.group(), name, resolverForViews());
                         int from = Math.max(r0, lo), to = Math.min(r0 + nr, hi);
-                        if (to > from) fn.visit(v, from, to - from);
+                        if (to > from) fn.visit(v, from - r0, from, to - from);
                         v.close();
                     } finally {
                         h.discard();
@@ -558,7 +563,7 @@ public class GenomicRun
                 int r0 = (int) blockTable.readStart[b];
                 int from = Math.max(r0, lo), to = Math.min(r0 + blockTable.nReads[b], hi);
                 try {
-                    if (to > from) fn.visit(cur.view(), from, to - from);
+                    if (to > from) fn.visit(cur.view(), from - r0, from, to - from);
                 } finally {
                     cur.view().close();
                     cur.handle().discard();

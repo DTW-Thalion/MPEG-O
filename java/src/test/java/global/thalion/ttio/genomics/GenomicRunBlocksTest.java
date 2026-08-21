@@ -42,9 +42,10 @@ class GenomicRunBlocksTest {
     private static Seen collect(GenomicRun g, int start, int stop, int threads) {
         List<String> names = Collections.synchronizedList(new ArrayList<>());
         List<int[]> ranges = Collections.synchronizedList(new ArrayList<>());
-        g.iterBlocks(start, stop, threads, (view, first, n) -> {
+        g.iterBlocks(start, stop, threads, (view, viewStart, first, n) -> {
             List<String> local = new ArrayList<>(n);
-            for (int k = 0; k < n; k++) local.add(first + k + ":" + view.readAt(k).readName());
+            for (int k = 0; k < n; k++)
+                local.add(first + k + ":" + view.readAt(viewStart + k).readName());
             names.addAll(local);
             ranges.add(new int[] { first, n });
         });
@@ -94,6 +95,17 @@ class GenomicRunBlocksTest {
                 assertTrue(r[0] >= 12_345 && r[0] + r[1] <= 17_890,
                            "range " + r[0] + "+" + r[1] + " escapes the span");
             }
+            /* 12345 lands part-way into a block, which is where viewStart
+             * and firstRead part company. Counting the reported indices
+             * cannot see that; the names have to be compared. */
+            List<String> want = new ArrayList<>();
+            for (var it = g.iterReads(12_345, 17_890, 1); it.hasNext(); ) {
+                want.add(12_345 + want.size() + ":" + it.next().readName());
+            }
+            List<String> got = new ArrayList<>(s.names());
+            Collections.sort(got);
+            Collections.sort(want);
+            assertEquals(want, got, "a sub-range starting mid-block returned the wrong records");
         }
     }
 
@@ -102,7 +114,7 @@ class GenomicRunBlocksTest {
         StorageGroup study = written("memory://grbt-empty");
         try (GenomicRun g = GenomicRun.readFrom(study.openGroup("genomic_runs").openGroup("g"), "g")) {
             AtomicInteger calls = new AtomicInteger();
-            g.iterBlocks(200, 200, 4, (v, f, n) -> calls.incrementAndGet());
+            g.iterBlocks(200, 200, 4, (v, vs, f, n) -> calls.incrementAndGet());
             assertEquals(0, calls.get());
         }
     }

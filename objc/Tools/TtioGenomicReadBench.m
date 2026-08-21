@@ -123,8 +123,9 @@ int main(int argc, const char *argv[])
                     __block int64_t n = 0, nq = 0;
                     double t0 = benchNow();
                     BOOL ok = [g iterBlocksFrom:0 to:[g readCount] threads:th error:&err
-                                     usingBlock:^(TTIOGenomicRun *v, NSUInteger f0,
-                                                  NSUInteger nr, BOOL *st) {
+                                     usingBlock:^(TTIOGenomicRun *v, NSUInteger vs,
+                                                  NSUInteger f0, NSUInteger nr,
+                                                  BOOL *st) {
                         (void)f0; (void)st;
                         int64_t ln = 0, lq = 0;
                         @autoreleasepool {
@@ -142,7 +143,7 @@ int main(int argc, const char *argv[])
                             } else {
                                 for (NSUInteger k = 0; k < nr; k++) {
                                     NSError *e = nil;
-                                    TTIOAlignedRead *rd = [v readAtIndex:k error:&e];
+                                    TTIOAlignedRead *rd = [v readAtIndex:vs + k error:&e];
                                     if (!rd) break;
                                     lq += (int64_t)rd.qualities.length;
                                     ln++;

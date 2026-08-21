@@ -555,11 +555,12 @@ static void gswIterBlocks(void)
         __block BOOL contiguous = YES;
         NSMutableArray *ranges = [NSMutableArray array];
         BOOL ok = [g iterBlocksFrom:0 to:30000 threads:threadCounts[ti] error:&err
-                         usingBlock:^(TTIOGenomicRun *v, NSUInteger f0, NSUInteger nr, BOOL *st) {
+                         usingBlock:^(TTIOGenomicRun *v, NSUInteger vs, NSUInteger f0,
+                                      NSUInteger nr, BOOL *st) {
             (void)st;
             NSMutableIndexSet *local = [NSMutableIndexSet indexSet];
             for (NSUInteger k = 0; k < nr; k++) {
-                TTIOAlignedRead *r = [v readAtIndex:k error:NULL];
+                TTIOAlignedRead *r = [v readAtIndex:vs + k error:NULL];
                 if (r) [local addIndex:f0 + k];
             }
             [lock lock];
@@ -586,25 +587,45 @@ static void gswIterBlocks(void)
              (unsigned long)threadCounts[ti], (unsigned long)covered);
     }
 
+    /* A range starting part-way into a block is where viewStart and
+     * firstRead part company. Checking the reported indices alone
+     * cannot see that; the names have to be compared. */
     __block NSUInteger subCount = 0;
     __block BOOL inRange = YES;
+    NSMutableDictionary<NSNumber *, NSString *> *subNames = [NSMutableDictionary dictionary];
     NSLock *sublock = [NSLock new];
     BOOL okSub = [g iterBlocksFrom:12345 to:17890 threads:4 error:&err
-                        usingBlock:^(TTIOGenomicRun *v, NSUInteger f0, NSUInteger nr, BOOL *st) {
-        (void)v; (void)st;
+                        usingBlock:^(TTIOGenomicRun *v, NSUInteger vs, NSUInteger f0,
+                                     NSUInteger nr, BOOL *st) {
+        (void)st;
+        NSMutableDictionary *local = [NSMutableDictionary dictionary];
+        for (NSUInteger k = 0; k < nr; k++) {
+            TTIOAlignedRead *r = [v readAtIndex:vs + k error:NULL];
+            if (r) local[@(f0 + k)] = r.readName;
+        }
         [sublock lock];
         if (f0 < 12345 || f0 + nr > 17890) inRange = NO;
         subCount += nr;
+        [subNames addEntriesFromDictionary:local];
         [sublock unlock];
     }];
     PASS(okSub && inRange && subCount == 17890 - 12345,
          "bp blocks: a sub-range delivers only that range (%lu reads)",
          (unsigned long)subCount);
+    NSUInteger mismatched = 0;
+    for (NSUInteger i = 12345; i < 17890; i++) {
+        TTIOAlignedRead *want = [g readAtIndex:i error:NULL];
+        if (![subNames[@(i)] isEqualToString:want.readName]) mismatched++;
+    }
+    PASS(mismatched == 0,
+         "bp blocks: a sub-range starting mid-block returns the right records "
+         "(%lu wrong)", (unsigned long)mismatched);
 
     __block NSUInteger emptyCalls = 0;
     [g iterBlocksFrom:200 to:200 threads:4 error:&err
-           usingBlock:^(TTIOGenomicRun *v, NSUInteger f0, NSUInteger nr, BOOL *st) {
-        (void)v; (void)f0; (void)nr; (void)st;
+           usingBlock:^(TTIOGenomicRun *v, NSUInteger vs, NSUInteger f0,
+                                     NSUInteger nr, BOOL *st) {
+        (void)v; (void)vs; (void)f0; (void)nr; (void)st;
         emptyCalls++;
     }];
     PASS(emptyCalls == 0, "bp blocks: an empty range calls nothing");
@@ -615,8 +636,9 @@ static void gswIterBlocks(void)
     __block NSUInteger tightCount = 0;
     NSLock *tlock = [NSLock new];
     BOOL okTight = [g iterBlocksFrom:0 to:30000 threads:8 error:&err
-                          usingBlock:^(TTIOGenomicRun *v, NSUInteger f0, NSUInteger nr, BOOL *st) {
-        (void)v; (void)f0; (void)st;
+                          usingBlock:^(TTIOGenomicRun *v, NSUInteger vs, NSUInteger f0,
+                                     NSUInteger nr, BOOL *st) {
+        (void)v; (void)vs; (void)f0; (void)st;
         [tlock lock]; tightCount += nr; [tlock unlock];
     }];
     unsetenv("TTIO_MEMORY_BUDGET");

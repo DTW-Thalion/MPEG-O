@@ -331,8 +331,14 @@ class GenomicRun:
 
     def for_each_block(self, fn, start: int = 0, stop: int | None = None, *,
                        threads: int | None = None) -> None:
-        """Call ``fn(view, first_read, n_reads)`` once per decoded block,
-        on the pool.
+        """Call ``fn(view, view_start, first_read, n_reads)`` once per
+        decoded block, on the pool.
+
+        Read record ``k`` of the delivered range as
+        ``view[view_start + k]``; its index in the whole run is
+        ``first_read + k``. The two differ whenever a range starts
+        part-way into a block, so a caller that indexes the view by
+        ``first_read`` reads the wrong records.
 
         ``fn`` is called from several threads at once and in no
         particular order, and must be safe to call that way; ``view`` is
@@ -368,7 +374,7 @@ class GenomicRun:
         if lo >= stop:
             return
         if self._layout != "blocks_v1":
-            fn(self, lo, stop - lo)
+            fn(self, lo, lo, stop - lo)
             return
         import concurrent.futures as _cf
         from ._threads import resolve_threads, pool_context
@@ -395,7 +401,7 @@ class GenomicRun:
             r0 = int(t.read_start[b])
             frm, to = max(r0, lo), min(r0 + int(t.n_reads[b]), stop)
             if to > frm:
-                fn(view, frm, to - frm)
+                fn(view, frm - r0, frm, to - frm)
 
         with pool_context(window), _cf.ThreadPoolExecutor(
                 max_workers=window, thread_name_prefix="ttio-block") as pool:
@@ -443,7 +449,7 @@ class GenomicRun:
                 r0 = int(t.read_start[b])
                 frm, to = max(r0, lo), min(r0 + int(t.n_reads[b]), stop)
                 if to > frm:
-                    fn(view, frm, to - frm)
+                    fn(view, frm - r0, frm, to - frm)
 
     def _prefetch_view(self, b: int) -> "GenomicRun":
         """The block view for ``b``, built on the caller's thread (storage

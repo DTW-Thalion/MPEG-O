@@ -35,8 +35,9 @@ def _collect(path, threads, start=0, stop=None):
     ranges: list[tuple[int, int]] = []
     with SpectralDataset.open(str(path)) as ds:
         g = ds.genomic_runs["run"]
-        def fn(view, first, n):
-            local = [(first + k, len(view[k].qualities)) for k in range(n)]
+        def fn(view, view_start, first, n):
+            local = [(first + k, view[view_start + k].read_name)
+                     for k in range(n)]
             with lock:
                 seen.extend(local)
                 ranges.append((first, n))
@@ -49,7 +50,7 @@ def test_every_read_exactly_once_at_every_thread_count(run_path):
         seen, _ = _collect(run_path, threads)
         idx = sorted(i for i, _ in seen)
         assert idx == list(range(600)), f"threads={threads}"
-        assert all(q == 40 for _, q in seen), f"threads={threads}"
+        assert all(nm == f"r{i}" for i, nm in seen), f"threads={threads}"
 
 
 def test_block_ranges_tile_the_span_without_gaps(run_path):
@@ -68,6 +69,9 @@ def test_a_sub_range_delivers_only_that_range(run_path):
     idx = sorted(i for i, _ in seen)
     assert idx == list(range(150, 450))
     assert all(first >= 150 and first + n <= 450 for first, n in ranges)
+    # 150 lands part-way into a block, which is where view_start and
+    # first_read part company. The indices alone cannot see that.
+    assert all(nm == f"r{i}" for i, nm in seen)
 
 
 def test_matches_iter_reads(run_path):
@@ -76,7 +80,7 @@ def test_matches_iter_reads(run_path):
     by_index = dict(seen)
     with SpectralDataset.open(str(run_path)) as ds:
         g = ds.genomic_runs["run"]
-        serial = {i: len(r.qualities) for i, r in enumerate(g.iter_reads())}
+        serial = {i: r.read_name for i, r in enumerate(g.iter_reads())}
     assert by_index == serial
 
 
