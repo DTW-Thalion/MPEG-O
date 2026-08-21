@@ -142,6 +142,28 @@ int main(int argc, char **argv) {
         v4_total += l;
     }
 
+    /* Reference: each V5 strategy forced, so the umbrella's choice can
+     * be read as a margin rather than only as a winner. */
+    uint64_t v5_total[2] = { 0, 0 };
+    for (int si = 0; si < 2; si++) {
+        for (size_t b = 0; b < n_blk; b++) {
+            size_t l = cap;
+            int rc = ttio_m94z_qual_encode(qual + blocks[b].qual_off,
+                                           blocks[b].n_qual,
+                                           lens + blocks[b].first_read,
+                                           blocks[b].n_reads,
+                                           flags + blocks[b].first_read,
+                                           seq + blocks[b].qual_off,
+                                           si == 0 ? 5 : 6, 0, out, &l);
+            if (rc != 0) {
+                fprintf(stderr, "v5 s%d block %zu rc %d\n", si == 0 ? 5 : 6,
+                        b, rc);
+                return 1;
+            }
+            v5_total[si] += l;
+        }
+    }
+
     printf("# corpus %s: %zu reads, %zu qualities, %zu blocks\n", argv[1],
            n_reads, qn, n_blk);
     printf("# baseline (hint -1, sequences present): version %d, "
@@ -151,6 +173,16 @@ int main(int argc, char **argv) {
            "bits/qual, %+.2f%% vs baseline\n",
            (unsigned long long)v4_total, 8.0 * (double)v4_total / (double)qn,
            100.0 * ((double)v4_total - (double)base_total) / (double)base_total);
+    for (int si = 0; si < 2; si++)
+        printf("# reference (V5-S%d forced, sequences): %llu bytes, %.4f "
+               "bits/qual, %+.2f%% vs baseline, %+.2f%% vs V4\n",
+               si == 0 ? 5 : 6, (unsigned long long)v5_total[si],
+               8.0 * (double)v5_total[si] / (double)qn,
+               100.0 * ((double)v5_total[si] - (double)base_total)
+                   / (double)base_total,
+               100.0 * ((double)v5_total[si] - (double)v4_total)
+                   / (double)v4_total);
+
     printf("qbits,qshift,pbits,pshift,dbits,sbits,ctx_bits,seg_symbols,"
            "model_MB_per_seg,seed,bytes,bits_per_qual,delta_pct,encode_MBps\n");
     fflush(stdout);
