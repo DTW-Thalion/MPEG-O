@@ -330,6 +330,24 @@ public class GenomicRun
      *  decode-ahead window; memory is about this many block working sets). */
     static final int READ_AHEAD_BLOCKS = 4;
 
+    /** The window, with {@code TTIO_READ_AHEAD_BLOCKS} allowed to
+     *  override it. Each block in flight stays resident until it is
+     *  consumed, so this is a memory setting as much as a latency one,
+     *  and the two do not pull the same way. The override exists so the
+     *  trade can be measured rather than argued. */
+    static int readAheadBlocks() {
+        String env = System.getenv("TTIO_READ_AHEAD_BLOCKS");
+        if (env != null && !env.isEmpty()) {
+            try {
+                int v = Integer.parseInt(env.trim());
+                if (v > 0) return v;
+            } catch (NumberFormatException ignored) {
+                // fall through to the default
+            }
+        }
+        return READ_AHEAD_BLOCKS;
+    }
+
     public java.util.Iterator<AlignedRead> iterReads(int start, int stop, int threads) {
         int n = readCount();
         int lo = Math.max(start, 0), hi = Math.min(stop, n);
@@ -337,10 +355,12 @@ public class GenomicRun
         if (blockTable == null || nthreads <= 1 || lo >= hi) return iterReads(lo, hi);
         final int bFirst = blockTable.blockFor(lo), bLast = blockTable.blockFor(hi - 1);
         // The serial consumer only needs enough decode-ahead to never
-        // stall; more in flight is pure memory. The stand-down still
-        // keys off nthreads.
-        final int window = Math.min(nthreads, READ_AHEAD_BLOCKS);
-        final global.thalion.ttio.Threads.PoolScope scope = global.thalion.ttio.Threads.pool(nthreads);
+        // stall; more in flight is pure memory.
+        final int window = Math.min(nthreads, readAheadBlocks());
+        // The scope takes the window, not nthreads: it sizes V6's
+        // segment threads from the number of workers, and the window is
+        // how many blocks are ever in flight.
+        final global.thalion.ttio.Threads.PoolScope scope = global.thalion.ttio.Threads.pool(window);
         final java.util.Map<Integer, java.util.concurrent.Future<InFlightView>> pending = new java.util.HashMap<>();
         final java.util.function.IntConsumer submit = b -> {
             if (b <= bLast && !pending.containsKey(b)) {

@@ -532,6 +532,16 @@ public final class FqzcompNx16Z {
     /** Threads the FQZCOMP auto-tune uses for its candidate encodes
      *  (default 3; {@code n <= 1} runs them in sequence). No-op when the
      *  native library is absent. */
+    public static void setV6Threads(int n) {
+        if (TtioRansNative.isAvailable()) TtioRansNative.setV6Threads(n);
+    }
+
+    /** @return the V6 segment thread count, or 0 when it defers to the
+     *  auto-tune knob. */
+    public static int getV6Threads() {
+        return TtioRansNative.isAvailable() ? TtioRansNative.getV6Threads() : 0;
+    }
+
     public static void setAutotuneThreads(int n) {
         if (TtioRansNative.isAvailable()) TtioRansNative.setAutotuneThreads(n);
     }

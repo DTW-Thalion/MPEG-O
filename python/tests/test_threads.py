@@ -47,3 +47,33 @@ def test_cli_threads_flag_sets_env(monkeypatch, tmp_path):
     assert main(["encode", "--input", str(fq), "--format", "fastq",
                  "--output", str(tmp_path / "o.tio"), "--threads", "3"]) == 0
     assert os.environ["TTIO_THREADS"] == "3"
+
+
+def test_read_ahead_window_env_override(monkeypatch):
+    """The window is settable so the memory/latency trade can be
+    measured. Java: GenomicRun.readAheadBlocks; ObjC:
+    TTIOReadAheadBlocks."""
+    from ttio import genomic_run
+
+    monkeypatch.delenv("TTIO_READ_AHEAD_BLOCKS", raising=False)
+    assert genomic_run._read_ahead_blocks() == genomic_run._READ_AHEAD_BLOCKS
+    monkeypatch.setenv("TTIO_READ_AHEAD_BLOCKS", "9")
+    assert genomic_run._read_ahead_blocks() == 9
+    # Junk and non-positive values defer to the default rather than
+    # leaving a reader with no lookahead at all.
+    monkeypatch.setenv("TTIO_READ_AHEAD_BLOCKS", "junk")
+    assert genomic_run._read_ahead_blocks() == genomic_run._READ_AHEAD_BLOCKS
+    monkeypatch.setenv("TTIO_READ_AHEAD_BLOCKS", "0")
+    assert genomic_run._read_ahead_blocks() == genomic_run._READ_AHEAD_BLOCKS
+
+
+def test_v6_segment_threads_clamp(monkeypatch):
+    """Parity with Threads.resolveV6SegmentThreads (Java) and
+    +[TTIOThreads resolveV6SegmentThreads:] (ObjC)."""
+    monkeypatch.setattr(os, "cpu_count", lambda: 32)
+    assert _threads.resolve_v6_segment_threads(1) == 8      # capped
+    assert _threads.resolve_v6_segment_threads(4) == 8
+    assert _threads.resolve_v6_segment_threads(16) == 2
+    assert _threads.resolve_v6_segment_threads(64) == 2     # floor
+    assert _threads.resolve_v6_segment_threads(0) == 8      # read as one
+

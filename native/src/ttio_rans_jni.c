@@ -82,6 +82,20 @@ Java_global_thalion_ttio_codecs_TtioRansNative_getAutotuneThreads(JNIEnv *env, j
     return (jint)ttio_m94z_get_autotune_threads();
 }
 
+JNIEXPORT void JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_setV6Threads(JNIEnv *env, jclass cls, jint n)
+{
+    (void)env; (void)cls;
+    ttio_m94z_set_v6_threads((int)n);
+}
+
+JNIEXPORT jint JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_getV6Threads(JNIEnv *env, jclass cls)
+{
+    (void)env; (void)cls;
+    return (jint)ttio_m94z_get_v6_threads();
+}
+
 JNIEXPORT jint JNICALL
 Java_global_thalion_ttio_codecs_TtioRansNative_qualStreamStrategy(
     JNIEnv *env, jclass cls, jbyteArray stream)

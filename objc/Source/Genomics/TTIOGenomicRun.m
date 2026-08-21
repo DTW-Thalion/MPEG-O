@@ -316,7 +316,10 @@ static NSUInteger TTIOReadAheadBlocks(void)
         return [self iterReadsFrom:start to:hi error:error usingBlock:block];
     }
     NSUInteger window = MIN(nthreads, TTIOReadAheadBlocks());
-    TTIOThreadPool *pool = [TTIOThreadPool poolWithThreads:nthreads];
+    /* The pool takes the window, not nthreads: it sizes V6's segment
+     * threads from the number of workers, and the window is how many
+     * blocks are ever in flight. */
+    TTIOThreadPool *pool = [TTIOThreadPool poolWithThreads:window];
     NSUInteger bFirst = [_blockTable blockForRead:start];
     NSUInteger bLast = [_blockTable blockForRead:hi - 1];
     if (bFirst == NSNotFound || bLast == NSNotFound) {

@@ -9,6 +9,7 @@ Genomic analogue of :class:`ttio.acquisition_run.AcquisitionRun`.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Iterator, TYPE_CHECKING
 
@@ -56,6 +57,28 @@ def _wrap_hdf5_group(obj: object) -> "StorageGroup":
 #: Decoded blocks a threaded sequential walk holds at most (the
 #: decode-ahead window; memory is about this many block working sets).
 _READ_AHEAD_BLOCKS = 4
+
+
+def _read_ahead_blocks() -> int:
+    """The decode-ahead window, with ``TTIO_READ_AHEAD_BLOCKS`` allowed
+    to override it.
+
+    Each block in flight stays resident until it is consumed, so this is
+    a memory setting as much as a latency one, and the two do not pull
+    the same way. The override exists so the trade can be measured
+    rather than argued; see ``ttio.tools.genomic_read_bench``. Java:
+    ``GenomicRun.readAheadBlocks``; Objective-C:
+    ``TTIOReadAheadBlocks``.
+    """
+    raw = os.environ.get("TTIO_READ_AHEAD_BLOCKS")
+    if raw:
+        try:
+            v = int(raw.strip())
+        except ValueError:
+            return _READ_AHEAD_BLOCKS
+        if v > 0:
+            return v
+    return _READ_AHEAD_BLOCKS
 
 
 @dataclass(slots=True)
@@ -254,7 +277,7 @@ class GenomicRun:
         # The serial consumer only needs enough decode-ahead to never
         # stall; more in flight is pure memory, since the window is how
         # many decoded blocks stay resident.
-        window = min(nthreads, _READ_AHEAD_BLOCKS)
+        window = min(nthreads, _read_ahead_blocks())
         # pool_context sizes V6 segment threads from the number of
         # workers, so it takes the window and not nthreads: only this
         # many blocks decode at once, and the rest of the machine is
