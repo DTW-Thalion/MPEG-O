@@ -399,6 +399,50 @@ static NSUInteger TTIOReadAheadBlocks(void)
     return ok;
 }
 
+/* A second reader over the same block, for another thread.
+ *
+ * Every decoded buffer is immutable once built, so siblings share them;
+ * the mutable containers holding them are copied, so no two threads
+ * ever write the same one. That is what makes reading one block from
+ * several threads safe without a lock on the per-read path, and it
+ * fails in the right direction: a field this misses costs that sibling
+ * a decode of its own, never a race.
+ *
+ * The caller must warm the parent first, or every sibling repeats the
+ * whole block's decode. */
+- (TTIOGenomicRun *)_siblingForConcurrentRead
+{
+    TTIOGenomicRun *s = [[TTIOGenomicRun alloc]
+        initWithName:_name
+     acquisitionMode:_acquisitionMode
+            modality:_modality
+        referenceUri:_referenceUri
+            platform:_platform
+          sampleName:_sampleName
+               index:_index
+               group:_group];
+    s->_signalChannelsGroup       = _signalChannelsGroup;
+    s->_signalCache               = [_signalCache mutableCopy];
+    s->_compoundCache             = [_compoundCache mutableCopy];
+    s->_decodedByteChannels       = [_decodedByteChannels mutableCopy];
+    s->_decodedMateInfo           = [_decodedMateInfo mutableCopy];
+    s->_decodedReadNames          = _decodedReadNames;
+    s->_decodedCigars             = _decodedCigars;
+    s->_decodedRefDiffV2Sequences = _decodedRefDiffV2Sequences;
+    s->_mateInfoLinkType          = _mateInfoLinkType;
+    s->_sequencesLinkType         = _sequencesLinkType;
+    s->_layout                    = _layout;
+    s->_chromNamesTable           = _chromNamesTable;
+    s->_mateChromNamesTable       = _mateChromNamesTable;
+    s->_injectedResolver          = _injectedResolver;
+    s->_viewResolver              = _viewResolver;
+    s->_viewResolverBuilt         = _viewResolverBuilt;
+    /* _codecCtxCache is deliberately not shared: it is the one cached
+     * object whose immutability once built is not established here, and
+     * rebuilding it per sibling is cheap. */
+    return s;
+}
+
 /* How many blocks may be in flight at once, given how many threads want
  * one each. A block in flight is resident for as long as the caller is
  * inside it, so this is a memory setting before it is a concurrency
@@ -543,9 +587,19 @@ static NSUInteger TTIOReadAheadBlocks(void)
         [ahead close];
         return ok;
     }
-    TTIOThreadPool *pool = [TTIOThreadPool poolWithThreads:window];
+    /* Blocks in flight is capped by memory, so on a file with fewer
+     * blocks than threads the pool would otherwise sit idle: three
+     * blocks never used more than three threads however many were
+     * asked for. Splitting each block's reads across the threads the
+     * blocks cannot reach is what gets past that. The decode is still
+     * once per block; only the reading divides. */
+    NSUInteger splits = MAX((NSUInteger)1, nthreads / MAX(window, (NSUInteger)1));
+    NSUInteger poolSize = MIN(nthreads, window * splits);
+    if (poolSize < window) poolSize = window;
+    TTIOThreadPool *pool = [TTIOThreadPool poolWithThreads:poolSize];
 
     NSMutableDictionary<NSNumber *, TTIOInFlightView *> *pending = [NSMutableDictionary dictionary];
+    NSMutableDictionary<NSNumber *, NSNumber *> *outstanding = [NSMutableDictionary dictionary];
     NSCondition *cond = [NSCondition new];
     __block BOOL halted = NO;
     __weak typeof(self) weakSelf = self;
@@ -567,21 +621,56 @@ static NSUInteger TTIOReadAheadBlocks(void)
             @try {
                 v = [TTIOGenomicRun openFromGroup:h.group name:sself->_name
                                 referenceResolver:[sself _resolverForViews] error:&ie];
-                if (v && !halted) {
-                    BOOL s = NO;
-                    NSUInteger from = MAX(r0, start);
-                    NSUInteger to = MIN(r0 + nr, hi);
-                    if (to > from) userBlock(v, from - r0, from, to - from, &s);
-                    if (s) halted = YES;
-                }
+                /* Warm here, on this thread: the open is lazy, so
+                 * without it every sibling below decodes the block
+                 * again instead of sharing this one's buffers. */
+                if (v && [v readCount] > 0) [v readAtIndex:0 error:&ie];
             } @catch (NSException *ex) {
                 v = nil;
                 ie = TTIOMakeError(TTIOErrorDatasetRead, @"%@: %@", ex.name, ex.reason);
             }
+            NSUInteger from = MAX(r0, start), to = MIN(r0 + nr, hi);
+            if (!v || halted || to <= from) {
+                [cond lock];
+                f.view = v; f.handle = h; f.error = ie; f.done = YES;
+                [cond broadcast];
+                [cond unlock];
+                return;
+            }
+            /* One block, several readers. Each takes its own sibling
+             * view so no two write the same cache; the decoded buffers
+             * are shared, so the block is decoded once however many
+             * ways it is split. */
+            NSUInteger span = to - from;
+            NSUInteger parts = MIN(splits, span);
+            if (parts < 1) parts = 1;
             [cond lock];
-            f.view = v; f.handle = h; f.error = ie; f.done = YES;
-            [cond broadcast];
+            outstanding[@(b)] = @(parts);
             [cond unlock];
+            void (^consume)(NSUInteger, TTIOGenomicRun *) =
+                    ^(NSUInteger part, TTIOGenomicRun *pv) {
+                NSUInteger lo2 = from + (span * part) / parts;
+                NSUInteger hi2 = from + (span * (part + 1)) / parts;
+                if (hi2 > lo2 && !halted) {
+                    BOOL s = NO;
+                    userBlock(pv, lo2 - r0, lo2, hi2 - lo2, &s);
+                    if (s) halted = YES;
+                }
+                [cond lock];
+                NSUInteger left = [outstanding[@(b)] unsignedIntegerValue] - 1;
+                outstanding[@(b)] = @(left);
+                if (left == 0) {
+                    [outstanding removeObjectForKey:@(b)];
+                    f.view = v; f.handle = h; f.error = ie; f.done = YES;
+                    [cond broadcast];
+                }
+                [cond unlock];
+            };
+            for (NSUInteger part = 1; part < parts; part++) {
+                TTIOGenomicRun *sib = [v _siblingForConcurrentRead];
+                [pool.queue addOperationWithBlock:^{ consume(part, sib); }];
+            }
+            consume(0, v);
         }];
     };
     for (NSUInteger b = bFirst; b <= MIN(bLast, bFirst + window - 1); b++) submit(b);
