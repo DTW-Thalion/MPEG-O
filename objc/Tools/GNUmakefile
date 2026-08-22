@@ -1,6 +1,6 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioDekEnvelope TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioFastqEncodeBench TtioGenomicReadBench TtioGenomicWriteBench TtioMzMLProbe TtioTransportEncodeBench TtioRefXLangWriter TtioRefXLangReader TtioQualXLangReader TtioMsImageXLangReader TtioRamanImageXLangReader TtioEncode TtioExport
+TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioDekEnvelope TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioFastqEncodeBench TtioBamParseBench TtioGenomicReadBench TtioGenomicWriteBench TtioMzMLProbe TtioTransportEncodeBench TtioRefXLangWriter TtioRefXLangReader TtioQualXLangReader TtioMsImageXLangReader TtioRamanImageXLangReader TtioEncode TtioExport
 
 TtioTransportEncodeBench_OBJC_FILES = TtioTransportEncodeBench.m
 TtioTransportEncodeBench_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
@@ -21,6 +21,10 @@ TtioGenomicReadBench_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 TtioGenomicWriteBench_OBJC_FILES = TtioGenomicWriteBench.m
 TtioGenomicWriteBench_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
 TtioGenomicWriteBench_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
+
+TtioBamParseBench_OBJC_FILES = TtioBamParseBench.m
+TtioBamParseBench_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
+TtioBamParseBench_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 TtioFastqEncodeBench_OBJC_FILES = TtioFastqEncodeBench.m
 TtioFastqEncodeBench_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto

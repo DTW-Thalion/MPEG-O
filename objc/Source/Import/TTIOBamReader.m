@@ -146,6 +146,8 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
 @property (nonatomic) int64_t fileMtime;
 @property (nonatomic, readonly) NSUInteger readCount;
 - (BOOL)consumeLine:(NSString *)line lineNo:(NSUInteger)lineNo error:(NSError **)error;
+- (BOOL)consumeLineBytes:(const uint8_t *)line length:(NSUInteger)len
+                  lineNo:(NSUInteger)lineNo error:(NSError **)error;
 - (TTIOWrittenGenomicRun *)drainBatchWithSampleName:(NSString *)sampleName;
 @end
 
@@ -198,6 +200,140 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
 }
 
 - (NSUInteger)readCount { return _readNames.count; }
+
+/* SAM integers, read straight from the record. NSString's
+ * longLongValue takes the leading integer and yields 0 for a field
+ * with no digits; this matches that on the shapes SAM permits. */
+static int64_t bamFieldInt(const uint8_t *p, NSUInteger n)
+{
+    NSUInteger i = 0;
+    int neg = 0;
+    if (i < n && (p[i] == '-' || p[i] == '+')) { neg = (p[i] == '-'); i++; }
+    int64_t v = 0;
+    for (; i < n && p[i] >= '0' && p[i] <= '9'; i++) v = v * 10 + (p[i] - '0');
+    return neg ? -v : v;
+}
+
+/* One alignment record, parsed over the bytes samtools wrote.
+ *
+ * The string path built an NSString for the record, split it into
+ * twelve more with characterAtIndex: per character, and copied SEQ and
+ * QUAL into their own NSData before appending them. That is about
+ * sixteen objects and a message send per byte for every read. This
+ * walks the record once, keeps only the four fields that are stored as
+ * text, and appends SEQ and QUAL straight from the slice. */
+- (BOOL)consumeLineBytes:(const uint8_t *)line length:(NSUInteger)len
+                  lineNo:(NSUInteger)lineNo error:(NSError **)error
+{
+    if (len == 0) return YES;
+    if (line[0] == '@') {
+        /* Headers are a few hundred lines in a file of millions. */
+        NSString *h = [[NSString alloc] initWithBytes:line length:len
+                                             encoding:NSUTF8StringEncoding];
+        if (h == nil) {
+            if (error) *error = TTIOMakeError(TTIOErrorDatasetRead,
+                @"SAM header not valid UTF-8 at line %lu", (unsigned long)lineNo);
+            return NO;
+        }
+        return [self consumeLine:h lineNo:lineNo error:error];
+    }
+
+    /* Fields 1-11, trailing optional tags left in the twelfth, exactly
+     * as bamSplitTabsLimited(line, 12) cut them. */
+    const uint8_t *fp[12];
+    NSUInteger fn[12];
+    NSUInteger nf = 0, start = 0;
+    for (NSUInteger i = 0; i < len; i++) {
+        if (line[i] != '\t') continue;
+        if (nf + 1 >= 12) break;
+        fp[nf] = line + start; fn[nf] = i - start; nf++;
+        start = i + 1;
+    }
+    fp[nf] = line + start; fn[nf] = len - start; nf++;
+    if (nf < 11) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetRead,
+            @"Malformed SAM alignment at line %lu: expected >=11 "
+            @"tab-separated fields, got %lu",
+            (unsigned long)lineNo, (unsigned long)nf);
+        return NO;
+    }
+
+    NSString *qname = [[NSString alloc] initWithBytes:fp[0] length:fn[0]
+                                             encoding:NSUTF8StringEncoding];
+    NSString *rname = [[NSString alloc] initWithBytes:fp[2] length:fn[2]
+                                             encoding:NSUTF8StringEncoding];
+    NSString *cigar = [[NSString alloc] initWithBytes:fp[5] length:fn[5]
+                                             encoding:NSUTF8StringEncoding];
+    if (qname == nil || rname == nil || cigar == nil) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetRead,
+            @"samtools output not valid UTF-8 for %@ (line %lu)",
+            @"this file", (unsigned long)lineNo);
+        return NO;
+    }
+    /* Binding Decision 131: RNEXT "=" expands to RNAME. Sharing the
+     * object is also one allocation fewer on the common case. */
+    NSString *expandedRnext;
+    if (fn[6] == 1 && fp[6][0] == '=') {
+        expandedRnext = rname;
+    } else {
+        expandedRnext = [[NSString alloc] initWithBytes:fp[6] length:fn[6]
+                                               encoding:NSUTF8StringEncoding];
+        if (expandedRnext == nil) {
+            if (error) *error = TTIOMakeError(TTIOErrorDatasetRead,
+                @"samtools output not valid UTF-8 for %@ (line %lu)",
+                @"this file", (unsigned long)lineNo);
+            return NO;
+        }
+    }
+
+    uint32_t flag  = (uint32_t)bamFieldInt(fp[1], fn[1]);
+    int64_t  pos   = bamFieldInt(fp[3], fn[3]);
+    uint8_t  mapq  = (uint8_t)bamFieldInt(fp[4], fn[4]);
+    int64_t  pnext = bamFieldInt(fp[7], fn[7]);
+    int32_t  tlen  = (int32_t)bamFieldInt(fp[8], fn[8]);
+
+    BOOL seqStar  = (fn[9] == 1 && fp[9][0] == '*');
+    BOOL qualStar = (fn[10] == 1 && fp[10][0] == '*');
+    NSUInteger sLen = seqStar ? 0 : fn[9];
+    NSUInteger qLen = qualStar ? sLen : fn[10];
+    /* SEQ/QUAL length-mismatch defence, as the string path had it. */
+    if (qLen != sLen) {
+        if (seqStar) {
+            qLen = 0;
+        } else if (!qualStar) {
+            if (error) *error = TTIOMakeError(TTIOErrorDatasetRead,
+                @"SEQ/QUAL length mismatch at line %lu: SEQ=%lu QUAL=%lu",
+                (unsigned long)lineNo, (unsigned long)sLen, (unsigned long)fn[10]);
+            return NO;
+        }
+    }
+
+    [_readNames addObject:qname];
+    [_chromosomes addObject:rname];
+    [_cigars addObject:cigar];
+    [_mateChromosomes addObject:expandedRnext];
+    [_positionsData appendBytes:&pos length:sizeof(int64_t)];
+    [_flagsData appendBytes:&flag length:sizeof(uint32_t)];
+    [_mappingQualitiesData appendBytes:&mapq length:sizeof(uint8_t)];
+    [_matePositionsData appendBytes:&pnext length:sizeof(int64_t)];
+    [_templateLengthsData appendBytes:&tlen length:sizeof(int32_t)];
+
+    uint64_t offset = _runningOffset;
+    uint32_t length = (uint32_t)sLen;
+    [_offsetsData appendBytes:&offset length:sizeof(uint64_t)];
+    [_lengthsData appendBytes:&length length:sizeof(uint32_t)];
+    if (sLen > 0) [_sequencesData appendBytes:fp[9] length:sLen];
+    if (qualStar) {
+        /* QUAL "*" with SEQ present fills 0xFF, without allocating. */
+        NSUInteger before = _qualitiesData.length;
+        [_qualitiesData increaseLengthBy:qLen];
+        if (qLen > 0) memset((uint8_t *)_qualitiesData.mutableBytes + before, 0xFF, qLen);
+    } else if (qLen > 0) {
+        [_qualitiesData appendBytes:fp[10] length:qLen];
+    }
+    _runningOffset += sLen;
+    return YES;
+}
 
 - (BOOL)consumeLine:(NSString *)line lineNo:(NSUInteger)lineNo error:(NSError **)error
 {
@@ -412,8 +548,20 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
 - (NSArray<NSString *> *)samtoolsArgumentsForRegion:(NSString *)region error:(NSError **)error
 {
     (void)error;
+    /* BGZF decode is the subprocess's own bottleneck and is serial
+     * without -@. The flag counts threads additional to the main one,
+     * and the gain flattens early because this process still has to
+     * parse everything the subprocess emits, so ask for a few rather
+     * than for the pool's worth. */
+    NSUInteger decode = [TTIOThreads resolveImportThreads];
+    if (decode > 4) decode = 4;
     NSMutableArray<NSString *> *args = [NSMutableArray arrayWithObjects:
-        @"view", @"-h", _path, nil];
+        @"view", @"-h", nil];
+    if (decode > 1) {
+        [args addObject:@"-@"];
+        [args addObject:[NSString stringWithFormat:@"%lu", (unsigned long)(decode - 1)]];
+    }
+    [args addObject:_path];
     if (region.length > 0) [args addObject:region];
     return args;
 }
@@ -515,7 +663,12 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
     __block NSUInteger bamSeq = 0;
     NSUInteger bamPulled = 0;
     BOOL headerDone = NO;
-    NSMutableArray<NSString *> *sliceLines = [NSMutableArray array];
+    /* The slice is the bytes samtools wrote, newline terminated;
+     * the worker cuts it. Building an NSString per record here only
+     * to split it again on the worker cost two passes and an object
+     * per read on the thread that has to keep the pipe drained. */
+    NSMutableData *sliceBytes = [NSMutableData data];
+    __block NSUInteger sliceCount = 0;
     __block unsigned long long totalParallel = 0;
 
     BOOL (^pullOneBam)(BOOL) = ^BOOL(BOOL emitIt) {
@@ -536,9 +689,10 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
 
     NSString *sampleCopy = sampleName;
     BOOL (^submitSlice)(void) = ^BOOL {
-        if (sliceLines.count == 0) return YES;
-        NSArray<NSString *> *lines = [sliceLines copy];
-        [sliceLines removeAllObjects];
+        if (sliceCount == 0) return YES;
+        NSData *lines = [sliceBytes copy];
+        [sliceBytes setLength:0];
+        sliceCount = 0;
         NSString *rgS = acc.rgSample, *rgP = acc.rgPlatform;
         int64_t mtime = acc.fileMtime;
         NSArray *sq = [acc.sqNames copy];
@@ -549,14 +703,18 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
                 wacc.rgPlatform = rgP;
                 wacc.fileMtime = mtime;
                 [wacc.sqNames addObjectsFromArray:sq];
-                NSUInteger ln = 0;
-                for (NSString *l in lines) {
+                const uint8_t *lb = lines.bytes;
+                NSUInteger ll = lines.length, ls = 0, ln = 0;
+                for (NSUInteger i = 0; i < ll; i++) {
+                    if (lb[i] != '\n') continue;
                     ln++;
                     NSError *ce = nil;
-                    if (![wacc consumeLine:l lineNo:ln error:&ce]) {
+                    if (![wacc consumeLineBytes:lb + ls length:i - ls
+                                         lineNo:ln error:&ce]) {
                         if (pe) *pe = ce;
                         return nil;
                     }
+                    ls = i + 1;
                 }
                 return [wacc drainBatchWithSampleName:sampleCopy];
             }
@@ -577,24 +735,19 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
             if (b[i] != '\n') continue;
             NSUInteger end = i;
             if (end > start && b[end - 1] == '\r') end--;
-            NSString *line = [[NSString alloc] initWithBytes:b + start length:end - start
-                                                    encoding:NSUTF8StringEncoding];
-            start = i + 1;
             lineNo++;
-            if (!line) {
-                loopErr = TTIOMakeError(TTIOErrorDatasetRead,
-                    @"samtools output not valid UTF-8 for %@ (line %lu)", _path, (unsigned long)lineNo);
-                ok = NO; break;
-            }
-            BOOL isHeader = line.length > 0 && [line characterAtIndex:0] == '@';
+            BOOL isHeader = end > start && b[start] == '@';
             if (bamAsm != nil && !isHeader) headerDone = YES;
             if (bamAsm != nil && headerDone) {
-                [sliceLines addObject:line];
+                [sliceBytes appendBytes:b + start length:end - start];
+                [sliceBytes appendBytes:"\n" length:1];
+                sliceCount++;
+                start = i + 1;
                 totalParallel++;
                 if ((totalParallel % TTIOBamReaderProgressIntervalReads) == 0) {
                     progress((int64_t)totalParallel, (int64_t)-1);
                 }
-                if (sliceLines.count >= batchReads) {
+                if (sliceCount >= batchReads) {
                     anyBatch = YES;
                     if (!submitSlice()) { ok = NO; break; }
                     bamSeq++;
@@ -604,6 +757,14 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
                     }
                 }
                 continue;
+            }
+            NSString *line = [[NSString alloc] initWithBytes:b + start length:end - start
+                                                    encoding:NSUTF8StringEncoding];
+            start = i + 1;
+            if (!line) {
+                loopErr = TTIOMakeError(TTIOErrorDatasetRead,
+                    @"samtools output not valid UTF-8 for %@ (line %lu)", _path, (unsigned long)lineNo);
+                ok = NO; break;
             }
             NSUInteger before = acc.readCount;
             NSError *ce = nil;
@@ -625,7 +786,9 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
                 NSString *line = [[NSString alloc] initWithData:carry encoding:NSUTF8StringEncoding];
                 lineNo++;
                 if (bamAsm != nil && headerDone && line.length > 0) {
-                    [sliceLines addObject:line];
+                    [sliceBytes appendData:carry];
+                    [sliceBytes appendBytes:"\n" length:1];
+                    sliceCount++;
                     totalParallel++;
                 } else {
                     NSUInteger before = acc.readCount;
@@ -639,7 +802,7 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
         }
     }
     if (bamAsm != nil) {
-        if (ok && sliceLines.count > 0) {
+        if (ok && sliceCount > 0) {
             anyBatch = YES;
             if (!submitSlice()) ok = NO;
             else bamSeq++;
