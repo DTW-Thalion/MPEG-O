@@ -45,30 +45,16 @@ typedef struct {
  * the sort-step). htscodecs's c_simple_model uses an inline struct
  * with sentinel preceding F[] in memory; we replicate that with one
  * extra slot at index 0. */
-static inline int sm_init(sm_model *m, int nsym, int max_sym) {
+/* Initialise into caller-supplied storage of nsym+2 entries, which
+ * must already be zeroed. The model does not own it, so sm_destroy is
+ * not called on a model set up this way: a bank of contexts is then one
+ * allocation instead of one per context. */
+static inline void sm_init_at(sm_model *m, int nsym, int max_sym,
+                              sm_symfreq *storage) {
     m->nsym = nsym;
-    /* +2: one for sentinel at [0], one for terminal at [nsym+1] */
-    m->F = (sm_symfreq *)calloc((size_t)(nsym + 2), sizeof(*m->F));
-    if (!m->F) return -1;
-
-    /* Sentinel at F[0] */
+    m->F = storage;
     m->F[0].symbol = 0;
     m->F[0].freq   = (uint16_t)SM_MAX_FREQ;
-
-    /* Real symbols at F[1..max_sym] init to freq=1; F[max_sym+1..nsym] freq=0;
-     * terminal at F[nsym+1] freq=0 (implicit via calloc).
-     * NB: htscodecs uses 0-indexed F[] while sentinel sits "before". To stay
-     * one-to-one with that loop:
-     *   for (i=0; i<max_sym; i++) F[i].Symbol=i, F[i].Freq=1;
-     *   for (; i<NSYM; i++)       F[i].Symbol=i, F[i].Freq=0;
-     *   sentinel.Symbol=0, sentinel.Freq=MAX_FREQ;
-     *   F[NSYM].Freq=0;
-     * Encode loop walks F[0..] until it finds the symbol and uses F[-1] for
-     * the sort-up swap (which goes through sentinel).
-     * We adopt the same layout but offset by 1: real symbols live at indices
-     * 1..nsym; F[0] is the sentinel; F[nsym+1] is terminal. The sort-up
-     * compares against F[i-1] which for i=1 hits the sentinel — exactly the
-     * htscodecs semantics. */
     for (int i = 0; i < max_sym; i++) {
         m->F[i + 1].symbol = (uint16_t)i;
         m->F[i + 1].freq   = 1;
@@ -78,9 +64,16 @@ static inline int sm_init(sm_model *m, int nsym, int max_sym) {
         m->F[i + 1].freq   = 0;
     }
     m->tot_freq = (uint32_t)max_sym;
-    /* terminal at [nsym+1] freq=0 already from calloc */
+}
+
+static inline int sm_init(sm_model *m, int nsym, int max_sym) {
+    /* +2: one for the sentinel at [0], one for the terminal at [nsym+1] */
+    sm_symfreq *f = (sm_symfreq *)calloc((size_t)(nsym + 2), sizeof(*f));
+    if (!f) return -1;
+    sm_init_at(m, nsym, max_sym, f);
     return 0;
 }
+
 
 static inline void sm_destroy(sm_model *m) {
     if (m->F) { free(m->F); m->F = NULL; }
