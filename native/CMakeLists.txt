@@ -446,6 +446,10 @@ if(NOT TTIO_COVERAGE)
     target_link_libraries(v6_acceptance PRIVATE ttio_rans)
     target_compile_options(v6_acceptance PRIVATE -O2)
 
+    add_executable(bench_m94z_qual bench/bench_m94z_qual.c)
+    target_link_libraries(bench_m94z_qual PRIVATE ttio_rans Threads::Threads)
+    target_compile_options(bench_m94z_qual PRIVATE -O3)
+
     add_executable(bench_v6_ratio bench/bench_v6_ratio.c)
     target_link_libraries(bench_v6_ratio PRIVATE ttio_rans Threads::Threads)
     target_compile_options(bench_v6_ratio PRIVATE -O3)

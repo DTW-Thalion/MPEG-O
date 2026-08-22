@@ -103,13 +103,46 @@ void ttio_m94z_set_v6_threads(int n) { g_v6_threads = n > 0 ? n : 0; }
 int ttio_m94z_get_v6_threads(void) { return g_v6_threads; }
 
 /* 0 = no sequence context, 255 = choose per block, else the width. */
-static int g_v6_sbits;
+static int g_v6_sbits = -1;   /* -1: not set, consult the environment */
 
 void ttio_m94z_set_v6_sbits(int n) {
     g_v6_sbits = (n < 0 || n > 255) ? 0 : n;
 }
 
-int ttio_m94z_get_v6_sbits(void) { return g_v6_sbits; }
+/* TTIO_M94Z_V6_SBITS names the width when nothing set one, so the
+ * choice can be measured rather than argued, the same way
+ * TTIO_V6_SEGMENT_THREADS names the segment count. Read once. */
+int ttio_m94z_get_v6_sbits(void) {
+    if (g_v6_sbits < 0) {
+        const char *env = getenv("TTIO_M94Z_V6_SBITS");
+        long v = 0;
+        if (env && *env) {
+            char *end = NULL;
+            v = strtol(env, &end, 10);
+            if (end == env || v < 0 || v > 255) v = 0;
+        }
+        g_v6_sbits = (int)v;
+    }
+    return g_v6_sbits;
+}
+
+/* TTIO_M94Z_V6_SEG_SYMBOLS names the segment size when set, so the
+ * trade between the context a segment shares and the parallelism it
+ * gives up can be measured. Read once; 0 or junk keeps the default. */
+static unsigned ttio_m94z_v6_seg_symbols(void) {
+    static unsigned cached;
+    if (cached == 0) {
+        const char *env = getenv("TTIO_M94Z_V6_SEG_SYMBOLS");
+        unsigned long v = 0;
+        if (env && *env) {
+            char *end = NULL;
+            v = strtoul(env, &end, 10);
+            if (end == env) v = 0;
+        }
+        cached = v > 0 ? (unsigned)v : TTIO_V6_DEFAULT_SEG_SYMBOLS;
+    }
+    return cached;
+}
 
 static int ttio_m94z_v6_threads(void) {
     return g_v6_threads > 0 ? g_v6_threads
@@ -133,10 +166,10 @@ int ttio_m94z_qual_encode(
 
     if (strategy_hint == TTIO_M94Z_HINT_V6) {
         ttio_v6_param pm = TTIO_V6_DEFAULT;
-        pm.sbits = (uint8_t)g_v6_sbits;
+        pm.sbits = (uint8_t)ttio_m94z_get_v6_sbits();
         return ttio_m94z_v6_encode_seq(qual_in, seq_in, n_qualities,
                                        read_lengths, n_reads, &pm,
-                                       TTIO_V6_DEFAULT_SEG_SYMBOLS,
+                                       ttio_m94z_v6_seg_symbols(),
                                        ttio_m94z_v6_threads(), out,
                                        out_len);
     }
