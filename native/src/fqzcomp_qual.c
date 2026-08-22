@@ -427,16 +427,31 @@ static void fqz_qual_stats_pass1_run(fqz_stats_chunk *c)
 
         uint32_t tot = 0;
         for (; i < end && j > 0; i++, j--) {
-            tot += c->in[i];
-            c->qhist[c->in[i]]++;
-            c->qhistb[j & (FQZ_NP - 1)][c->in[i]]++;
-            qh       [j & (FQZ_NP - 1)][c->in[i]]++;
-            th       [j & (FQZ_NP - 1)]++;
+            unsigned q = c->in[i];
+            unsigned b = j & (FQZ_NP - 1);
+            tot += q;
+            qh[b][q]++;
+            th[b]++;
         }
         tot = last_len ? (uint32_t)((tot * 10.0) / last_len + 0.5) : 0;
 
         c->avg_qual[rec] = (int)tot;
         c->avg[MIN(2559u, tot)]++;
+    }
+
+    /* qhistb is qhist1 + qhist2 elementwise, and qhist is qhistb summed
+     * over the position buckets, so both are recoverable from the two
+     * the loop keeps. That takes two of the four read-modify-writes the
+     * inner loop did for every quality byte and does them once per
+     * chunk over a 32 x 256 table instead. */
+    for (int b = 0; b < FQZ_NP; b++) {
+        for (int q = 0; q < 256; q++) {
+            uint32_t v = c->qhist1[b][q] + c->qhist2[b][q];
+            if (v) {
+                c->qhistb[b][q] += v;
+                c->qhist[q]     += v;
+            }
+        }
     }
 }
 
