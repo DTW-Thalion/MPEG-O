@@ -214,6 +214,9 @@ public final class MemoryProvider implements StorageProvider {
         private final List<CompoundField> fields;
         private final boolean extendable;
         private Object data;
+        /* Appends land here and are joined once, on read. Concatenating
+         * on every append made the cost quadratic in the append count. */
+        private final List<Object> pending = new ArrayList<>();
         private final Map<String, Object> attrs = new LinkedHashMap<>();
 
         MemDataset(String name, Precision precision, long[] shape,
@@ -239,7 +242,29 @@ public final class MemoryProvider implements StorageProvider {
         @Override public List<CompoundField> compoundFields() { return fields; }
         @Override public boolean extendable() { return extendable; }
 
+        /** Join any pending appends into {@code data}. Readers call this. */
+        private void materialise() {
+            if (pending.isEmpty()) return;
+            int n = data == null ? 0 : lengthOf(data);
+            for (Object p : pending) n += lengthOf(p);
+            Object first = data != null ? data : pending.get(0);
+            Object out = java.lang.reflect.Array.newInstance(
+                first.getClass().getComponentType(), n);
+            int at = 0;
+            if (data != null) {
+                System.arraycopy(data, 0, out, at, lengthOf(data));
+                at += lengthOf(data);
+            }
+            for (Object p : pending) {
+                System.arraycopy(p, 0, out, at, lengthOf(p));
+                at += lengthOf(p);
+            }
+            pending.clear();
+            data = out;
+        }
+
         @Override public Object readAll() {
+            materialise();
             if (data == null && extendable) {
                 return fields != null ? new ArrayList<Object[]>() : emptyArray(precision);
             }
@@ -269,12 +294,15 @@ public final class MemoryProvider implements StorageProvider {
                 shape[0] = rows.size();
                 return;
             }
-            data = data == null ? copyPrimitive(d) : concatPrimitive(data, d);
-            shape[0] = lengthOf(data);
+            pending.add(copyPrimitive(d));
+            long n = data == null ? 0 : lengthOf(data);
+            for (Object p : pending) n += lengthOf(p);
+            shape[0] = n;
         }
 
         @Override
         public void writeSlice(long offset, Object d) {
+            materialise();
             if (data == null) throw new IllegalStateException("dataset '" + name + "' has no data");
             int n = lengthOf(d);
             if (offset < 0 || offset + n > lengthOf(data)) {
@@ -316,6 +344,7 @@ public final class MemoryProvider implements StorageProvider {
 
         @Override
         public Object readSlice(long offset, long count) {
+            materialise();
             if (data == null) return null;
             if (fields != null) {
                 @SuppressWarnings("unchecked")
@@ -327,7 +356,7 @@ public final class MemoryProvider implements StorageProvider {
             return slicePrimitive(data, (int) offset, (int) count);
         }
 
-        @Override public void writeAll(Object d) { this.data = d; }
+        @Override public void writeAll(Object d) { pending.clear(); this.data = d; }
 
         @Override public boolean hasAttribute(String n) { return attrs.containsKey(n); }
         @Override public Object getAttribute(String n) { return attrs.get(n); }
