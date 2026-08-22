@@ -66,7 +66,7 @@ static void gswLayout(void)
     PASS([[[rg attributeValueForName:@"layout" error:NULL] description] isEqualToString:@"blocks_v1"],
          "stream writer: @layout blocks_v1");
     PASS([[[rg attributeValueForName:@"block_policy" error:NULL] description]
-             isEqualToString:@"reads=3,bytes=268435456"], "stream writer: @block_policy");
+             isEqualToString:@"reads=3,bytes=67108864"], "stream writer: @block_policy");
     PASS([[rg attributeValueForName:@"read_count" error:NULL] longLongValue] == 10
          && [[rg attributeValueForName:@"base_count" error:NULL] longLongValue] == 720,
          "stream writer: @read_count/@base_count");

@@ -22,7 +22,16 @@
 
 static NSString *const kLayout = @"blocks_v1";
 static const NSUInteger kDefaultBlockReads = 1000000;
-static const unsigned long long kDefaultBlockBytes = 256ULL << 20;
+/* A block is the unit of encode concurrency and of residency, so a
+ * big one costs both: the pool cannot start a block that is still
+ * filling, and every block in flight is held whole. At 256 MiB a
+ * 2x250 import of 10.6 M reads was 11 blocks, which left 7 workers
+ * at 3.05x of one thread and 10.4 GiB resident. At 64 MiB the same
+ * import is 43.0 s against 70.3 s and 4.50 GiB against 10.38 GiB.
+ * The cost is context the codecs no longer share: 0.16% on 2x250,
+ * 0.05% on 150 bp FASTQ, and 0.46% on HiFi, where reads are long
+ * enough that a block holds few of them. */
+static const unsigned long long kDefaultBlockBytes = 64ULL << 20;
 static const NSUInteger kChannelChunk = 256 << 10;
 static const NSUInteger kIndexChunkRows = 1024;
 static const NSUInteger kIndexArrayChunk = 65536;

@@ -1494,7 +1494,7 @@ v1.8 whole-channel layout.
 | Attribute | Type | Meaning |
 |---|---|---|
 | `@layout` | fixed string `"blocks_v1"` | Selects this layout. Absent means the v1.8 whole-channel layout. A reader that does not know the value MUST fail with an unsupported-layout error. |
-| `@block_policy` | fixed string | Writer policy, informative, e.g. `reads=1000000,bytes=268435456`. |
+| `@block_policy` | fixed string | Writer policy, informative, e.g. `reads=1000000,bytes=67108864`. |
 | `@read_count`, `@base_count` | int64 | Totals over the blocks written so far; updated at every flush and at close. |
 
 ### 10.12.2 `blocks/index`
