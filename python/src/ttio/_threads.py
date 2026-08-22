@@ -28,6 +28,54 @@ def resolve_threads(explicit: int | None = None) -> int:
     return n
 
 
+# The block size both importers hand resolve_memory_budget, and so the
+# per-thread cost of the budget: IMPORT_BLOCK_BYTES * 16.
+IMPORT_BLOCK_BYTES = 64 << 20
+
+
+def resolve_import_threads() -> int:
+    """Threads for an import pipeline when the caller names no count.
+
+    The pipeline byte budget is ``threads * block_bytes * 16`` and the
+    batch assembler and the writer take half each, so the thread knob
+    sets residency as well as concurrency: one thread costs about a
+    gibibyte of the budget at the 64 MiB block the importers use. On a
+    32-thread, 31 GiB box the ``cpu_count - 2`` default asks for 30 GiB,
+    takes the half-memory clamp instead, and a short-read FASTQ import
+    settles at about 17.5 GiB resident.
+
+    Short reads are the case that reaches the clamp. A block of 150 bp
+    records holds a million reads where the same block of HiFi holds a
+    few thousand, so the pipeline runs out of memory well before it runs
+    out of cores: measured on 27 M Illumina reads, 4 to 30 threads moved
+    peak residency 9.8 -> 17.5 GiB for a throughput gain that stops
+    paying in the single digits.
+
+    So cap the default at the count a quarter of physical memory
+    affords. An explicit ``TTIO_THREADS`` is honoured as asked;
+    ``TTIO_IMPORT_THREADS`` overrides this rule alone. Matches the ObjC
+    and Java resolvers.
+    """
+    raw = os.environ.get("TTIO_IMPORT_THREADS", "").strip()
+    if raw:
+        try:
+            n = int(raw)
+        except ValueError:
+            n = 0
+        if n > 0:
+            return n
+    threads = resolve_threads()
+    # A count the caller asked for is a count the caller gets.
+    if os.environ.get("TTIO_THREADS", "").strip():
+        return threads
+    try:
+        phys = os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
+    except (ValueError, OSError, AttributeError):
+        return threads
+    afford = max(1, (phys // 4) // (IMPORT_BLOCK_BYTES * 16))
+    return min(threads, afford)
+
+
 def resolve_memory_budget(
     explicit: int | None = None, threads: int = 1, block_bytes: int = 1
 ) -> int:

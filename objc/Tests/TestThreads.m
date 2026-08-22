@@ -24,6 +24,37 @@ void testThreads(void)
     PASS([TTIOThreads resolve:nil] == 1, "threads: junk resolves to 1");
     unsetenv("TTIO_THREADS");
 
+    /* The import cap. A thread costs about a gibibyte of the pipeline
+     * budget, so the default count is capped at what a quarter of
+     * memory affords; a count the caller asked for is not capped. */
+    unsetenv("TTIO_THREADS");
+    unsetenv("TTIO_IMPORT_THREADS");
+    unsigned long long share =
+        (unsigned long long)[[NSProcessInfo processInfo] physicalMemory] / 4ull;
+    NSUInteger afford = (NSUInteger)(share / ((64ull << 20) * 16ull));
+    if (afford < 1) afford = 1;
+    NSUInteger plain = [TTIOThreads resolve:nil];
+    NSUInteger imported = [TTIOThreads resolveImportThreads];
+    PASS(imported == (plain < afford ? plain : afford),
+         "import threads: the default is capped at what a quarter of memory affords");
+    PASS(imported >= 1, "import threads: never zero");
+    PASS(imported <= plain, "import threads: never above the plain default");
+    setenv("TTIO_THREADS", "30", 1);
+    PASS([TTIOThreads resolveImportThreads] == 30,
+         "import threads: an explicit TTIO_THREADS is honoured uncapped");
+    unsetenv("TTIO_THREADS");
+    setenv("TTIO_IMPORT_THREADS", "3", 1);
+    PASS([TTIOThreads resolveImportThreads] == 3,
+         "import threads: TTIO_IMPORT_THREADS overrides the rule");
+    setenv("TTIO_THREADS", "30", 1);
+    PASS([TTIOThreads resolveImportThreads] == 3,
+         "import threads: TTIO_IMPORT_THREADS wins over TTIO_THREADS too");
+    setenv("TTIO_IMPORT_THREADS", "junk", 1);
+    PASS([TTIOThreads resolveImportThreads] == 30,
+         "import threads: junk falls through to the count asked for");
+    unsetenv("TTIO_IMPORT_THREADS");
+    unsetenv("TTIO_THREADS");
+
     int before = ttio_m94z_get_autotune_threads();
     TTIOThreadPool *p1 = [TTIOThreadPool poolWithThreads:1];
     PASS(p1.queue == nil && ttio_m94z_get_autotune_threads() == before,

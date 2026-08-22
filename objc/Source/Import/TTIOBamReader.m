@@ -507,7 +507,7 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
      * caller is both submitter and consumer, so submission never
      * blocks and the window is bounded by pulling before submitting,
      * the same shape as the FASTQ pipeline producer. */
-    NSUInteger bamThreads = [TTIOThreads resolve:nil];
+    NSUInteger bamThreads = [TTIOThreads resolveImportThreads];
     TTIOThreadPool *bamPool = bamThreads > 1 ? [TTIOThreadPool poolWithThreads:bamThreads] : nil;
     TTIOOrderedBatchAssembler *bamAsm = bamPool.queue
         ? [[TTIOOrderedBatchAssembler alloc] initWithPool:bamPool] : nil;

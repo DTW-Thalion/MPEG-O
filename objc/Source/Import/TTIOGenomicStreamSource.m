@@ -5,6 +5,7 @@
  */
 #import "Import/TTIOGenomicStreamSource.h"
 #import "Genomics/TTIOGenomicStreamWriter.h"
+#import "Core/TTIOThreads.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOLazyReference.h"
 
@@ -65,6 +66,9 @@
             if (self->_blockReads) o.blockReads = [self->_blockReads unsignedIntegerValue];
             if (self->_blockBytes) o.blockBytes = [self->_blockBytes unsignedLongLongValue];
             if (self->_optLegacyWholeChannel) o.optLegacyWholeChannel = YES;
+            /* Same rule as the producer side, so the two halves of the
+             * budget are sized off one count rather than two. */
+            if (o.threads == 0) o.threads = [TTIOThreads resolveImportThreads];
             writer = [[TTIOGenomicStreamWriter alloc] initWithStudyGroup:study
                                                                  runName:self->_name
                                                                  options:o];

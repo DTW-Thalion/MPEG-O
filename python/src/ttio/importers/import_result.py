@@ -22,6 +22,7 @@ from ..identification import Identification
 from ..provenance import ProvenanceRecord
 from ..quantification import Quantification
 from ..spectral_dataset import SpectralDataset, WrittenRun
+from .._threads import resolve_import_threads
 
 
 @dataclass(slots=True)
@@ -300,7 +301,11 @@ class GenomicStreamSource:
                     signal_compression=batch.signal_compression,
                     opt_legacy_whole_channel=self.opt_legacy_whole_channel,
                     provenance_records=batch.provenance_records,
-                    threads=self.threads, **kw)
+                    # Same rule as the producer side, so the two
+                    # halves of the pipeline budget are sized off one
+                    # count.
+                    threads=(self.threads if self.threads is not None
+                             else resolve_import_threads()), **kw)
             writer.append_batch(batch)
             n += int(len(batch.lengths))
         if writer is not None:

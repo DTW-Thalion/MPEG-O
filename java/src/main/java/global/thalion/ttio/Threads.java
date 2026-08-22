@@ -35,6 +35,56 @@ public final class Threads {
         return n;
     }
 
+    /** The block size both importers hand
+     *  {@link #resolveMemoryBudget}, and so the per-thread cost of the
+     *  budget: {@code IMPORT_BLOCK_BYTES * 16}. */
+    private static final long IMPORT_BLOCK_BYTES = 64L << 20;
+
+    /** Threads for an import pipeline when the caller names no count.
+     *
+     *  <p>The pipeline byte budget is {@code threads * blockBytes * 16}
+     *  and the batch assembler and the writer take half each, so the
+     *  thread knob sets residency as well as concurrency: one thread
+     *  costs about a gibibyte of the budget at the 64 MiB block the
+     *  importers use. On a 32-thread, 31 GiB box the {@code cores - 2}
+     *  default asks for 30 GiB, takes the half-memory clamp instead,
+     *  and a short-read FASTQ import settles at about 17.5 GiB
+     *  resident.
+     *
+     *  <p>Short reads are the case that reaches the clamp. A block of
+     *  150 bp records holds a million reads where the same block of
+     *  HiFi holds a few thousand, so the pipeline runs out of memory
+     *  well before it runs out of cores: measured on 27 M Illumina
+     *  reads, 4 to 30 threads moved peak residency 9.8 -> 17.5 GiB for
+     *  a throughput gain that stops paying in the single digits.
+     *
+     *  <p>So cap the default at the count a quarter of physical memory
+     *  affords. An explicit thread count is honoured as asked;
+     *  {@code TTIO_IMPORT_THREADS} (or {@code -Dttio.import.threads})
+     *  overrides this rule alone. Python:
+     *  {@code ttio._threads.resolve_import_threads}; Objective-C:
+     *  {@code +[TTIOThreads resolveImportThreads]}. */
+    public static int resolveImportThreads() {
+        String raw = System.getProperty("ttio.import.threads");
+        if (raw == null || raw.isBlank()) raw = System.getenv("TTIO_IMPORT_THREADS");
+        if (raw != null && !raw.isBlank()) {
+            try {
+                int n = Integer.parseInt(raw.trim());
+                if (n > 0) return n;
+            } catch (NumberFormatException ignored) { }
+        }
+        int threads = resolve(null);
+        // A count the caller asked for is a count the caller gets.
+        String asked = System.getProperty("ttio.threads");
+        if (asked == null || asked.isBlank()) asked = System.getenv("TTIO_THREADS");
+        if (asked != null && !asked.isBlank()) return threads;
+        long phys = physicalMemory();
+        if (phys <= 0) return threads;
+        long afford = (phys / 4) / (IMPORT_BLOCK_BYTES * 16L);
+        if (afford < 1) afford = 1;
+        return (int) Math.min((long) threads, afford);
+    }
+
     /** The pipeline byte budget: {@code explicit} > 0 wins, else the
      *  {@code TTIO_MEMORY_BUDGET} environment variable (bytes), else
      *  {@code max(1 GiB, min(threads * blockBytes * 16, physical / 2))}:

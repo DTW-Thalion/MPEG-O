@@ -125,4 +125,44 @@ class ThreadsTest {
         }
         assertEquals(before, global.thalion.ttio.codecs.FqzcompNx16Z.getAutotuneThreads());
     }
+
+    /** A thread costs about a gibibyte of the pipeline budget, so the
+     *  default import count is capped at what a quarter of memory
+     *  affords; a count the caller asked for is not capped. */
+    @Test
+    void importThreadsCapTheDefaultButNotAnExplicitCount() {
+        String savedThreads = System.getProperty("ttio.threads");
+        String savedImport = System.getProperty("ttio.import.threads");
+        try {
+            System.clearProperty("ttio.threads");
+            System.clearProperty("ttio.import.threads");
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                System.getenv("TTIO_THREADS") == null
+                && System.getenv("TTIO_IMPORT_THREADS") == null,
+                "thread environment set");
+            int plain = Threads.resolve(null);
+            int imported = Threads.resolveImportThreads();
+            assertTrue(imported >= 1, "never zero");
+            assertTrue(imported <= plain, "never above the plain default");
+
+            System.setProperty("ttio.threads", "30");
+            assertEquals(30, Threads.resolveImportThreads(),
+                         "an explicit count is honoured uncapped");
+            System.setProperty("ttio.import.threads", "3");
+            assertEquals(3, Threads.resolveImportThreads(),
+                         "the import knob wins over the thread knob");
+            System.clearProperty("ttio.threads");
+            assertEquals(3, Threads.resolveImportThreads(),
+                         "and wins over the default");
+            System.setProperty("ttio.import.threads", "junk");
+            System.setProperty("ttio.threads", "12");
+            assertEquals(12, Threads.resolveImportThreads(),
+                         "junk falls through to the count asked for");
+        } finally {
+            if (savedThreads == null) System.clearProperty("ttio.threads");
+            else System.setProperty("ttio.threads", savedThreads);
+            if (savedImport == null) System.clearProperty("ttio.import.threads");
+            else System.setProperty("ttio.import.threads", savedImport);
+        }
+    }
 }

@@ -9,6 +9,30 @@
 
 @implementation TTIOThreads
 
+/* The block size both importers hand resolveMemoryBudget, and so the
+ * per-thread cost of the budget: TTIO_IMPORT_BLOCK_BYTES x 16. */
+#define TTIO_IMPORT_BLOCK_BYTES (64ull << 20)
+
++ (NSUInteger)resolveImportThreads
+{
+    const char *raw = getenv("TTIO_IMPORT_THREADS");
+    if (raw && *raw) {
+        char *end = NULL;
+        long n = strtol(raw, &end, 10);
+        if (end != raw && n > 0) return (NSUInteger)n;
+    }
+    NSUInteger threads = [self resolve:nil];
+    /* A count the caller asked for is a count the caller gets. */
+    const char *asked = getenv("TTIO_THREADS");
+    if (asked && *asked) return threads;
+    unsigned long long perThread = TTIO_IMPORT_BLOCK_BYTES * 16ull;
+    unsigned long long share =
+        (unsigned long long)[[NSProcessInfo processInfo] physicalMemory] / 4ull;
+    NSUInteger afford = (NSUInteger)(share / perThread);
+    if (afford < 1) afford = 1;
+    return threads < afford ? threads : afford;
+}
+
 + (unsigned long long)resolveMemoryBudget:(NSNumber *)explicitBytes
                                   threads:(NSUInteger)threads
                                blockBytes:(unsigned long long)blockBytes
