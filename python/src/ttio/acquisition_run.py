@@ -745,20 +745,30 @@ class AcquisitionRun:
         :meth:`iter_spectra`, whose in-order delivery on the calling
         thread is what bounds it.
 
-        ⚠️ **In CPython this buys nothing, and past a few workers it
-        costs.** The callback holds the GIL, so consumers serialise
-        against each other while still paying the contention; only the
-        decode overlaps, because it releases the GIL inside the native
-        call. The measured genomic equivalent went 6.2 MB/s serial, 6.1
-        at one worker, 6.8 at four and 4.5 at eight and above. The
-        compiled SDKs behave the other way round: Objective-C measures
-        213.3 MB/s ordered against 780.5 at 16 threads on an Orbitrap
-        Exploris run.
+        ⚠️ **In CPython this is close to flat.** Measured on an
+        Orbitrap Exploris run, 342546 spectra over 16 units, MB/s:
+        :meth:`iter_spectra` 97.7, this method 99.6 at one worker, 102.5
+        at four, 100.4 at sixteen. So it buys about 5 per cent and does
+        not degrade.
 
-        So an unset ``threads`` resolves to at most
-        ``_read_ahead_blocks()`` workers rather than to ``TTIO_THREADS``:
-        the default has to be the best measured setting, not the worst.
-        An explicit ``threads`` is honoured as given.
+        That is *not* what the genomic equivalent measures, and the
+        difference is the callback's work rather than the method: there
+        the consumer builds read objects in pure Python and is
+        GIL-bound, going 6.2 MB/s serial, 6.8 at four workers and 4.5 at
+        eight and above. Here the consumer's work is numpy reductions
+        over channel arrays, and numpy releases the GIL, so the
+        consumers overlap instead of serialising. A callback that stays
+        in pure Python should expect the genomic shape.
+
+        The compiled SDKs gain far more: Objective-C measures 213.3 MB/s
+        ordered against 780.5 at 16 threads on the same run.
+
+        An unset ``threads`` still resolves to at most
+        ``_read_ahead_blocks()`` workers rather than to ``TTIO_THREADS``.
+        With unit counts in the tens there is nothing to gain past a few
+        workers, so the cap costs nothing and protects a pure-Python
+        callback from the genomic outcome. An explicit ``threads`` is
+        honoured as given.
 
         Java: ``AcquisitionRun.iterBlocks``; Objective-C:
         ``-iterBlocksFrom:to:threads:error:usingBlock:``.
