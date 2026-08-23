@@ -71,6 +71,31 @@ public API is stable from onward.
   expression ends.
 
 ### Changed
+- **`TTIOImzMLReader` reads the `.ibd` at the offsets the metadata
+  names instead of loading the whole file.** The reader called
+  `+[NSData dataWithContentsOfFile:]` on the binary and then cut each
+  pixel's arrays out of it with `-subdataWithRange:`, so peak memory
+  held the entire `.ibd` on top of the materialised pixels. Imaging
+  `.ibd` files run to many GB. Each array is now read with `pread`
+  into a buffer handed to `+[NSData dataWithBytesNoCopy:length:freeWhenDone:]`,
+  which is what the Java and Python importers have always done:
+  `RandomAccessFile.seek` and `fh.seek` respectively. This closes a
+  gap where Objective-C was the only SDK that loaded the file whole.
+
+  On a synthetic continuous-mode image of 20000 pixels by 25000 points,
+  a 4.0 GB `.ibd`, peak resident set falls from 7869984 KB to 3967776 KB
+  and wall time from 4.39 s to 2.37 s, minima of 3 runs. The remaining
+  term is the array of materialised pixels, which the return type of
+  `+readFromImzMLPath:ibdPath:error:` requires; the file itself no
+  longer contributes. The pixel checksum is identical before and after.
+
+  `-[NSFileHandle readDataOfLength:]` was not used for the read because
+  GNUstep returns `NSMutableDataMalloc` from it, and `-copy` on mutable
+  data allocates. The pixel initialiser copies what it is handed and
+  continuous mode requires every pixel to alias one m/z object, so that
+  route silently broke the aliasing. `+dataWithBytesNoCopy:` yields
+  immutable data, on which `-copy` is identity.
+
 - **FLOAT_DELTA_ZSTD (codec id 17) chooses the byte-plane transpose per
   block instead of always applying it.** Bit 1 of the per-block
   transform byte now means the values enter the zstd frame as plain

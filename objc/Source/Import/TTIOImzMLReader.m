@@ -22,6 +22,8 @@
 #import "TTIOImzMLReader.h"
 #import "Import/TTIOXMLStreamParser.h"
 
+#import <unistd.h>
+
 NSString *const TTIOImzMLReaderErrorDomain = @"TTIOImzMLReaderErrorDomain";
 
 // Mirrors Java ImzMLReader.PROGRESS_INTERVAL_PIXELS (100).
@@ -266,24 +268,38 @@ static NSString *normaliseUUID(NSString *value) {
         return nil;
     }
 
-    NSData *ibdData = [NSData dataWithContentsOfFile:resolvedIbd];
-    if (!ibdData) {
+    NSDictionary *ibdAttrs = [fm attributesOfItemAtPath:resolvedIbd error:NULL];
+    if (!ibdAttrs) {
         if (error) *error = [self errorWithCode:TTIOImzMLReaderErrorMissingFile
                                         message:[NSString stringWithFormat:@"cannot read .ibd: %@", resolvedIbd]];
         return nil;
     }
-    if (ibdData.length < 16) {
+    unsigned long long ibdSize = [ibdAttrs fileSize];
+    if (ibdSize < 16) {
         if (error) *error = [self errorWithCode:TTIOImzMLReaderErrorBinaryShorterThanUUID
                                         message:[NSString stringWithFormat:@"%@ shorter than the 16-byte UUID header", resolvedIbd]];
         return nil;
     }
-    NSData *uuidBytes = [ibdData subdataWithRange:NSMakeRange(0, 16)];
+    NSFileHandle *ibd = [NSFileHandle fileHandleForReadingAtPath:resolvedIbd];
+    if (!ibd) {
+        if (error) *error = [self errorWithCode:TTIOImzMLReaderErrorMissingFile
+                                        message:[NSString stringWithFormat:@"cannot read .ibd: %@", resolvedIbd]];
+        return nil;
+    }
+    NSData *uuidBytes = [ibd readDataOfLength:16];
+    if (uuidBytes.length != 16) {
+        [ibd closeFile];
+        if (error) *error = [self errorWithCode:TTIOImzMLReaderErrorBinaryShorterThanUUID
+                                        message:[NSString stringWithFormat:@"%@ shorter than the 16-byte UUID header", resolvedIbd]];
+        return nil;
+    }
     NSMutableString *ibdUUIDHex = [NSMutableString stringWithCapacity:32];
     const unsigned char *bytes = uuidBytes.bytes;
     for (NSUInteger i = 0; i < 16; i++) {
         [ibdUUIDHex appendFormat:@"%02x", bytes[i]];
     }
     if (![ibdUUIDHex isEqualToString:reader->_state.uuidHex]) {
+        [ibd closeFile];
         if (error) *error = [self errorWithCode:TTIOImzMLReaderErrorUUIDMismatch
                                         message:[NSString stringWithFormat:@"UUID mismatch: imzML declares %@ but .ibd header is %@", reader->_state.uuidHex, ibdUUIDHex]];
         return nil;
@@ -291,10 +307,12 @@ static NSString *normaliseUUID(NSString *value) {
 
     NSError *materialiseError = nil;
     NSArray<TTIOImzMLPixelSpectrum *> *pixels =
-        [reader materialiseSpectraWithIBD:ibdData
+        [reader materialiseSpectraWithIBD:ibd.fileDescriptor
+                                   ibdSize:ibdSize
                                    ibdPath:resolvedIbd
                                   progress:progress
                                      error:&materialiseError];
+    [ibd closeFile];
     if (!pixels) {
         if (error) *error = materialiseError;
         return nil;
@@ -420,7 +438,8 @@ static NSString *normaliseUUID(NSString *value) {
 
 #pragma mark - Binary materialisation
 
-- (NSArray<TTIOImzMLPixelSpectrum *> *)materialiseSpectraWithIBD:(NSData *)ibdData
+- (NSArray<TTIOImzMLPixelSpectrum *> *)materialiseSpectraWithIBD:(int)ibd
+                                                          ibdSize:(unsigned long long)ibdSize
                                                           ibdPath:(NSString *)ibdPath
                                                          progress:(TTIOProgressBlock)progress
                                                             error:(NSError **)error
@@ -428,11 +447,10 @@ static NSString *normaliseUUID(NSString *value) {
     NSMutableArray<TTIOImzMLPixelSpectrum *> *pixels = [NSMutableArray array];
     NSData *sharedMz = nil;
     BOOL continuous = [_state.mode isEqualToString:@"continuous"];
-    NSUInteger ibdSize = ibdData.length;
     NSUInteger total = _state.stubs.count;
 
     for (NSDictionary *stub in _state.stubs) {
-        NSData *mzData = [self readArrayFromIBD:ibdData
+        NSData *mzData = [self readArrayFromIBD:ibd
                                           offset:[stub[@"mz_offset"] longLongValue]
                                           length:[stub[@"mz_length"] longLongValue]
                                        precision:stub[@"mz_precision"]
@@ -441,7 +459,7 @@ static NSString *normaliseUUID(NSString *value) {
                                            label:@"m/z"
                                            error:error];
         if (!mzData) return nil;
-        NSData *intData = [self readArrayFromIBD:ibdData
+        NSData *intData = [self readArrayFromIBD:ibd
                                            offset:[stub[@"int_offset"] longLongValue]
                                            length:[stub[@"int_length"] longLongValue]
                                         precision:stub[@"int_precision"]
@@ -483,11 +501,11 @@ static NSString *normaliseUUID(NSString *value) {
     return pixels;
 }
 
-- (NSData *)readArrayFromIBD:(NSData *)ibdData
+- (NSData *)readArrayFromIBD:(int)ibd
                        offset:(long long)offset
                        length:(long long)length
                     precision:(NSString *)precision
-                      ibdSize:(NSUInteger)ibdSize
+                      ibdSize:(unsigned long long)ibdSize
                       ibdPath:(NSString *)ibdPath
                         label:(NSString *)label
                         error:(NSError **)error
@@ -500,23 +518,48 @@ static NSString *normaliseUUID(NSString *value) {
     if (length == 0) return [NSData data];
     NSUInteger bytesPer = [precision isEqualToString:@"64"] ? 8 : 4;
     NSUInteger nbytes = (NSUInteger)length * bytesPer;
-    if ((NSUInteger)offset + nbytes > ibdSize) {
+    if ((unsigned long long)offset + (unsigned long long)nbytes > ibdSize) {
         if (error) *error = [[self class] errorWithCode:TTIOImzMLReaderErrorOffsetOverflow
-                                                message:[NSString stringWithFormat:@"%@: %@ array reads past end of file (offset=%lld, bytes=%lu, size=%lu)",
-                                                         ibdPath, label, offset, (unsigned long)nbytes, (unsigned long)ibdSize]];
+                                                message:[NSString stringWithFormat:@"%@: %@ array reads past end of file (offset=%lld, bytes=%lu, size=%llu)",
+                                                         ibdPath, label, offset, (unsigned long)nbytes, ibdSize]];
         return nil;
     }
-    NSData *raw = [ibdData subdataWithRange:NSMakeRange((NSUInteger)offset, nbytes)];
+    void *raw = malloc(nbytes);
+    if (!raw) {
+        if (error) *error = [[self class] errorWithCode:TTIOImzMLReaderErrorOffsetOverflow
+                                                message:[NSString stringWithFormat:@"%@: out of memory for a %lu-byte %@ array",
+                                                         ibdPath, (unsigned long)nbytes, label]];
+        return nil;
+    }
+    ssize_t got = pread(ibd, raw, nbytes, (off_t)offset);
+    if (got != (ssize_t)nbytes) {
+        free(raw);
+        if (error) *error = [[self class] errorWithCode:TTIOImzMLReaderErrorOffsetOverflow
+                                                message:[NSString stringWithFormat:@"%@: %@ array is short (offset=%lld, wanted=%lu, got=%ld)",
+                                                         ibdPath, label, offset, (unsigned long)nbytes, (long)got]];
+        return nil;
+    }
+    /* -dataWithBytesNoCopy: takes the malloc'd buffer and yields an
+     * immutable NSData, so -copy on it is identity. The pixel
+     * initialiser copies what it is handed, and continuous mode
+     * depends on every pixel aliasing one m/z object. */
     if (bytesPer == 8) {
-        return raw; // already <f8
+        return [NSData dataWithBytesNoCopy:raw length:nbytes freeWhenDone:YES];
     }
     // 32-bit -> promote to 64-bit float NSData.
     NSUInteger n = (NSUInteger)length;
-    NSMutableData *out = [NSMutableData dataWithLength:n * sizeof(double)];
-    const float *src = raw.bytes;
-    double *dst = out.mutableBytes;
+    double *dst = malloc(n * sizeof(double));
+    if (!dst) {
+        free(raw);
+        if (error) *error = [[self class] errorWithCode:TTIOImzMLReaderErrorOffsetOverflow
+                                                message:[NSString stringWithFormat:@"%@: out of memory promoting a %lu-value %@ array",
+                                                         ibdPath, (unsigned long)n, label]];
+        return nil;
+    }
+    const float *src = (const float *)raw;
     for (NSUInteger i = 0; i < n; i++) dst[i] = (double)src[i];
-    return out;
+    free(raw);
+    return [NSData dataWithBytesNoCopy:dst length:n * sizeof(double) freeWhenDone:YES];
 }
 
 @end
