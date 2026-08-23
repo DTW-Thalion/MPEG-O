@@ -220,3 +220,62 @@ void testMilestone13(void)
         }
     }
 }
+
+/* An nmrML <fidData> node larger than libxml2's 10 MB text-node
+ * ceiling, parsed off the filesystem. A 500 kpoint complex FID is an
+ * ordinary size for a 1D proton acquisition and crosses the ceiling on
+ * its own. */
+void testNmrMLReaderHugeFidNode(void)
+{
+    const NSUInteger N = 500000;    /* 8 MB raw -> ~10.7 MB of base64 */
+    const NSUInteger M = 16;
+    double *fid = malloc(N * 2 * sizeof(double));
+    double *cs  = malloc(M * sizeof(double));
+    double *ins = malloc(M * sizeof(double));
+    if (!fid || !cs || !ins) {
+        free(fid); free(cs); free(ins);
+        PASS(0, "huge-FID fixture allocated");
+        return;
+    }
+    for (NSUInteger i = 0; i < N; i++) {
+        double t = (double)i * 1e-6;
+        fid[2 * i]     = exp(-t * 5.0) * cos(t * 1000.0);
+        fid[2 * i + 1] = exp(-t * 5.0) * sin(t * 1000.0);
+    }
+    for (NSUInteger i = 0; i < M; i++) {
+        cs[i]  = -1.0 + (double)i * 0.1;
+        ins[i] = sin((double)i * 0.2) * 500.0;
+    }
+
+    NSString *path = [NSString stringWithFormat:@"/tmp/ttio_test_m13_%d_huge.nmrML",
+                      (int)getpid()];
+    @autoreleasepool {
+        NSString *xml = buildNmrML(fid, N, cs, ins, M);
+        PASS(xml.length > 10 * 1000 * 1000,
+             "fixture FID node exceeds libxml2's 10 MB text ceiling");
+        NSError *werr = nil;
+        BOOL wrote = [xml writeToFile:path
+                           atomically:YES
+                             encoding:NSUTF8StringEncoding
+                                error:&werr];
+        PASS(wrote, "huge-FID nmrML fixture written");
+        if (!wrote) { free(fid); free(cs); free(ins); return; }
+    }
+
+    NSError *err = nil;
+    TTIONmrMLReader *r = [TTIONmrMLReader parseFilePath:path error:&err];
+    PASS(r != nil, "nmrML with a 10 MB+ FID node parses from a file path");
+    PASS(err == nil, "no parse error on the huge FID node");
+    PASS(r.fids.count == 1, "one FID parsed from the huge node");
+    if (r.fids.count == 1) {
+        TTIOFreeInductionDecay *f = r.fids[0];
+        PASS(f.length == N, "huge FID complex length matches");
+        PASS(complexBuffersEqual(f.buffer, fid, N),
+             "all 500000 complex points survive the streaming parse");
+    }
+
+    unlink([path fileSystemRepresentation]);
+    free(fid);
+    free(cs);
+    free(ins);
+}

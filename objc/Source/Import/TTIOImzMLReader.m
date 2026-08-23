@@ -20,6 +20,7 @@
  */
 
 #import "TTIOImzMLReader.h"
+#import "Import/TTIOXMLStreamParser.h"
 
 NSString *const TTIOImzMLReaderErrorDomain = @"TTIOImzMLReaderErrorDomain";
 
@@ -234,24 +235,18 @@ static NSString *normaliseUUID(NSString *value) {
         return nil;
     }
 
-    NSData *xmlData = [NSData dataWithContentsOfFile:imzmlPath];
-    if (!xmlData) {
-        if (error) *error = [self errorWithCode:TTIOImzMLReaderErrorParseFailed
-                                        message:[NSString stringWithFormat:@"cannot read imzML: %@", imzmlPath]];
-        return nil;
-    }
-
     TTIOImzMLReader *reader = [[TTIOImzMLReader alloc] init];
     reader->_state = [[TTIOImzMLReaderState alloc] init];
     reader->_currentArrayKind = @"";
     reader->_currentArrayPrecision = @"64";
 
-    NSXMLParser *parser = [[NSXMLParser alloc] initWithData:xmlData];
-    parser.delegate = reader;
-    parser.shouldProcessNamespaces = NO;
-    if (![parser parse]) {
+    NSError *xmlError = nil;
+    if (![TTIOXMLStreamParser parseFileAtPath:imzmlPath
+                                     delegate:reader
+                                        error:&xmlError]) {
         if (error) *error = [self errorWithCode:TTIOImzMLReaderErrorParseFailed
-                                        message:[NSString stringWithFormat:@"NSXMLParser failed: %@", parser.parserError.localizedDescription ?: @"(unknown)"]];
+                                        message:[NSString stringWithFormat:@"cannot parse imzML: %@",
+                                                 xmlError.localizedDescription ?: @"(unknown)"]];
         return nil;
     }
 
