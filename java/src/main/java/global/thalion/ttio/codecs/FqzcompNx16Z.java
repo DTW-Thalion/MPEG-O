@@ -36,8 +36,7 @@ public final class FqzcompNx16Z {
     public static final int VERSION_V4_FQZCOMP = 4;
 
     /** M94.Z V5: sequence-context body, emitted only when it beats V4
-     *  by exact size (spec
-     *  docs/superpowers/specs/2026-08-16-qualities-v5-design.md). */
+     *  by exact size. */
     public static final int VERSION_V5_SEQCTX = 5;
 
     /** Strategy hint: V4 with its internal preset selection, sequences

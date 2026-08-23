@@ -180,9 +180,6 @@ int ttio_rans_build_decode_table(
  * T > T_max - STEP. T_max = 65519, STEP = 16. Encoder maintains
  * the freq tables internally; decoder rebuilds them via the same
  * update rules. Wire format omits the freq-tables sidecar.
- *
- * See docs/superpowers/specs/2026-05-01-l2-m94z-adaptive-design.md
- * for the byte-pairing proof and wire format spec.
  */
 
 #define TTIO_RANS_ADAPTIVE_STEP     16u
@@ -280,8 +277,7 @@ int ttio_m94z_v4_decode(
     uint8_t        *out_qual,
     size_t          n_qualities);
 
-/* Qualities V5: sequence-context strategies (spec at
- * docs/superpowers/specs/2026-08-16-qualities-v5-design.md). The
+/* Qualities V5: sequence-context strategies. The
  * umbrella auto-tunes across the V4 presets plus S5/S6 and keeps the
  * smallest stream by exact size; ties go to V4. S5/S6 are tried only
  * when seq_in is non-NULL and n_qualities is at least the floor
@@ -400,7 +396,6 @@ int ttio_rans_o0_decode(
 
 /* ──────────────────────────────────────────────────────────────────────
  * mate_info v2 — CRAM-style inline mate-pair encoding.
- * Spec: docs/superpowers/specs/2026-05-03-mate-info-v2-design.md
  *
  * Encode produces a self-contained uint8 blob written as
  * signal_channels/mate_info/inline_v2 with @compression = 13.
@@ -443,7 +438,6 @@ int ttio_mate_info_v2_decode(
 
 /* ──────────────────────────────────────────────────────────────────────
  * REF_DIFF v2 — CRAM-style bit-packed sequence diff codec (codec id 14).
- * Spec: docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md
  *
  * Encoded blob written as signal_channels/sequences/refdiff_v2 with
  * @compression = 14. Outer container preserves v1 slice index;
@@ -486,8 +480,7 @@ int ttio_ref_diff_v2_decode(
 
 /* ──────────────────────────────────────────────────────────────────────
  * NAME_TOKENIZED v2 — multi-substream + DUP-pool + PREFIX-MATCH codec
- * (codec id 15). Spec:
- *   docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md
+ * (codec id 15).
  *
  * Encoded blob written to read_names HDF5 dataset with @compression = 15.
  * Wire magic "NTK2", version 0x01.

@@ -1,7 +1,5 @@
 """Python ctypes wrapper for mate_info v2 (CRAM-style inline mate-pair codec).
 
-Spec: docs/superpowers/specs/2026-05-03-mate-info-v2-design.md
-
 Encoded blob written as signal_channels/mate_info/inline_v2 uint8
 dataset with @compression = 13 (MATE_INLINE_V2). Requires
 TTIO_RANS_LIB_PATH to point at a built libttio_rans.so;

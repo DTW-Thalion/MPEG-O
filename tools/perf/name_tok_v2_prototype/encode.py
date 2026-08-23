@@ -1,6 +1,6 @@
 """Pure-Python NAME_TOKENIZED v2 encoder (Phase 0 prototype).
 
-Wire constants per spec docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md.
+Wire constants per the design spec.
 Row-major emission within NUM_DELTA / DICT_CODE substreams (Phase 0 simplification —
 spec will be updated to match if Phase 0 passes the gate).
 """

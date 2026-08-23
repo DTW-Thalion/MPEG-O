@@ -1,7 +1,5 @@
 """FD-1 Phase C-2a — server_kek_id in ProtectionMetadata (Python).
 
-Spec + proof: docs/superpowers/specs/2026-05-22-fd1-c2a-server-kek-id-spec.md.
-
 Covers the append-only server_kek_id field: packet byte-identity when
 absent, round-trip when present (with and without additional recipients),
 and storage carriage through stamp -> write -> read.

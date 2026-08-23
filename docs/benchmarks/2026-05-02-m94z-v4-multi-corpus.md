@@ -16,8 +16,6 @@
 > SplitMix64-hash (c4) was worst on every Illumina corpus.
 
 - Date: 2026-05-02
-- Spec: `docs/superpowers/specs/2026-05-02-l2x-m94z-richer-context-stage1-design.md`
-- Plan: `docs/superpowers/plans/2026-05-02-l2x-m94z-richer-context-stage1.md`
 - Per-corpus result docs:
   - chr22: `docs/benchmarks/2026-05-02-m94z-v4-candidates.md`
   - WES: `docs/benchmarks/2026-05-02-m94z-v4-na12878_wes_chr22.md`

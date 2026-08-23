@@ -196,8 +196,7 @@ def _decode_provenance_json(blob: str) -> list[ProvenanceRecord]:
 
 
 # ── Stage 6 (transport-spec v0.11, Deferral 2): Subjects + Samples ──
-# Per design spec docs/superpowers/specs/2026-05-26-subjects-samples-design.md
-# §4.4 (validation), §5 (HDF5 layout). Mirrors Java's
+# Per the design spec §4.4 (validation), §5 (HDF5 layout). Mirrors Java's
 # SpectralDataset.{validateSubjectsAndSamples, writeSubjects, writeSamples,
 # readSubjects, readSamples} from commit dd39f4e6.
 

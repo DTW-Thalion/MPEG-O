@@ -465,8 +465,7 @@ up to and including v1.7.1**; `opt_disable_float_delta` and
   qualities, and `opt_disable_qualities_v5` / `optDisableQualitiesV5` removes
   them per run. One native implementation serves all three languages; a shared
   golden fixture pins the decode side and a cross-language file-level edge
-  covers Python-written V5 files opened by Java and ObjC. Spec:
-  `docs/superpowers/specs/2026-08-16-qualities-v5-design.md`; bake-off:
+  covers Python-written V5 files opened by Java and ObjC. Bake-off:
   `docs/benchmarks/2026-08-16-qualities-v5-bakeoff.md`.
 - **FLOAT_DELTA_ZSTD (codec id 17): lossless float64 channel codec.** Per block:
   none/delta on the uint64 bit view (picked by exact size comparison), byte-plane
@@ -477,8 +476,7 @@ up to and including v1.7.1**; `opt_disable_float_delta` and
   level-9 default vs the shipping shuffle+gzip pipeline, bit-exact, ~100 MB/s encode.
   Decoders in all three languages; a shared golden fixture pins the decode side
   (encoders may differ byte-wise per the spec's Option B). Shipped opt-in; the
-  default flipped for MS runs in the same release (see Changed). Spec:
-  `docs/superpowers/specs/2026-08-16-float-delta-codec-design.md`.
+  default flipped for MS runs in the same release (see Changed).
 - **HDF5 byte-shuffle ahead of the channel compressor.** All three writers now set the
   core HDF5 shuffle filter before deflate/LZ4 on chunked numeric datasets with multi-byte
   elements (signal channels, index arrays, image cubes, 2-D NMR matrices). Measured on
@@ -1387,8 +1385,7 @@ Java mirror of the C-2a Python `server_kek_id` field (byte-compatible).
 
 Append-only `server_kek_id` field in the `ProtectionMetadata` packet, so the
 workbench daemon can record a container's server-resolvable `kek_id` at
-upload and decide server-processability (FD-1 Phase C-2). Spec + proof:
-`docs/superpowers/specs/2026-05-22-fd1-c2a-server-kek-id-spec.md`.
+upload and decide server-processability (FD-1 Phase C-2).
 
 - `_emit_protection_metadata(..., server_kek_id=None)` appends the field
   after the Phase A recipient block; the trailing section is emitted iff
@@ -1548,8 +1545,7 @@ using the same append-only layout (single-recipient byte-identical).
 
 ### Added -- FD-1 Phase A-1: multi-recipient ProtectionMetadata (Python) (2026-05-21)
 
-First implementation step of the FD-1 server-side-compute groundwork (per
-the spec-proof in `docs/superpowers/specs/`): the transport
+First implementation step of the FD-1 server-side-compute groundwork: the transport
 `ProtectionMetadata` packet can now carry the per-run DEK wrapped for
 **multiple recipients** (e.g. a server KEK + a researcher key), the
 prerequisite for encrypted pipelines whose output is decryptable both

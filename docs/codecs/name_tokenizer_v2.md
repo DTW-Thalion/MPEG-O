@@ -39,8 +39,8 @@ substream is independently auto-picked between rANS-O0 (codec id 1)
 and raw passthrough (codec id 0), smaller wins.
 
 For full algorithm specification including per-strategy semantics,
-column-type-table rules, and per-column delta state, see
-`docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md` §3.
+column-type-table rules, and per-column delta state, see the design
+spec §3.
 
 ## 2. Wire format
 
@@ -149,8 +149,6 @@ with `@compression = 15`. Readers reject any other layout for
 
 ## 7. Forward references
 
-- Spec: `docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md`
-- Plan: `docs/superpowers/plans/2026-05-04-name-tokenized-v2.md`
 - Format spec: `docs/format-spec.md` §10.6b
 - v1 codec: `docs/codecs/name_tokenizer.md`
 - Phase 0 prototype: `tools/perf/name_tok_v2_prototype/`

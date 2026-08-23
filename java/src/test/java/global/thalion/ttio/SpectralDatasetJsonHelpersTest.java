@@ -21,8 +21,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * attribute-fallback writer path; the bulk of the existing test corpus
  * round-trips identifications/quantifications/provenance through the
  * HDF5 compound-dataset path, never the JSON-attribute fallback.
- *
- * <p>Per docs/superpowers/plans/2026-05-09-coverage-restoration.md J.6.</p>
  */
 class SpectralDatasetJsonHelpersTest {
 

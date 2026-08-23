@@ -3,8 +3,6 @@
 CRAM 3.1 fqzcomp port, byte-equal with htscodecs across all 4 corpora.
 
 - Date: 2026-05-02
-- Spec: `docs/superpowers/specs/2026-05-02-l2x-m94z-richer-context-stage2-design.md`
-- Plan: `docs/superpowers/plans/2026-05-02-l2x-m94z-richer-context-stage2.md`
 - Reference implementation: htscodecs commit
   [`7dd27f4b2bfe0ffdce413337972b3ad68550c3bf`](https://github.com/samtools/htscodecs/commit/7dd27f4b2bfe0ffdce413337972b3ad68550c3bf)
   (2026-03-11, master)

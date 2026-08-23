@@ -123,9 +123,7 @@ even when `TTIO_MASSLYNX_FIXTURE` is set.
 - Java: the existing code follows standard Sun/Oracle Java style;
   `mvn verify` gates the build.
 - ObjC: OpenStep-style `@interface ... @end` documentation
-  comments (Inherits From / Conforms To / Declared In headers);
-  see `docs/superpowers/skills/openstep/openstep.md` for the
-  template if you're adding a new public class.
+  comments (Inherits From / Conforms To / Declared In headers).
 
 For non-trivial changes, run the full Python suite + the
 language-specific suites you touched, plus the cross-language

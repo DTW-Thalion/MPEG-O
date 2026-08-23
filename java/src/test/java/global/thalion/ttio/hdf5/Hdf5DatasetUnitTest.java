@@ -47,8 +47,6 @@ import static org.junit.jupiter.api.Assertions.*;
  *       {@code length == 3}).</li>
  *   <li>{@link Hdf5Dataset#getDatasetId} accessor.</li>
  * </ul>
- *
- * <p>Per docs/superpowers/plans/2026-05-09-coverage-restoration.md J.5.</p>
  */
 class Hdf5DatasetUnitTest {
 

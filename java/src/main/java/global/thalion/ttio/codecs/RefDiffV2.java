@@ -8,8 +8,6 @@ package global.thalion.ttio.codecs;
 /**
  * REF_DIFF v2 — CRAM-style bit-packed sequence diff codec (codec id 14).
  *
- * <p>Spec: docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md
- *
  * <p>High-level API; delegates to {@link TtioRansNative#encodeRefDiffV2} /
  * {@link TtioRansNative#decodeRefDiffV2} which call the C library
  * entries {@code ttio_ref_diff_v2_encode/decode}.

@@ -443,7 +443,6 @@ the entire block).</p></li>
 <p>The wire-format magic is <code class="docutils literal notranslate"><span class="pre">M94Z</span></code> (replaces M94 v1’s <code class="docutils literal notranslate"><span class="pre">FQZN</span></code>).</p>
 <p>This is the <strong>pure-Python prototype</strong> for byte-exact algorithm
 validation. Cython acceleration is a follow-on phase (M94.Z.2).</p>
-<p>Spec: <code class="docutils literal notranslate"><span class="pre">docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md</span></code>.</p>
 <dl class="simple">
 <dt>Public API:</dt><dd><p>encode(qualities, read_lengths, revcomp_flags, <a href="#id1"><span class="problematic" id="id2">*</span></a>, params=None) -&gt; bytes
 decode_with_metadata(blob, revcomp_flags=None) -&gt; (qualities, read_lengths, revcomp_flags_used)</p>

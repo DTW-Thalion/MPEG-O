@@ -130,8 +130,6 @@ round-trip when needed.
 
 ## References
 
-- Spec: `docs/superpowers/specs/2026-05-03-mate-info-v2-design.md`
-- Plan: `docs/superpowers/plans/2026-05-03-mate-info-v2.md`
 - Wire format: `docs/format-spec.md` §10.9b
 - Cross-language gate: `python/tests/integration/test_mate_info_v2_cross_language.py`
 - Compression gate: `python/tests/integration/test_mate_info_v2_compression_gate.py`

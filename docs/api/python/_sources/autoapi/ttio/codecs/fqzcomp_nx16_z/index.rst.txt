@@ -25,7 +25,6 @@ ttio.codecs.fqzcomp_nx16_z
    This is the **pure-Python prototype** for byte-exact algorithm
    validation. Cython acceleration is a follow-on phase (M94.Z.2).
 
-   Spec: ``docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md``.
 
    Public API:
        encode(qualities, read_lengths, revcomp_flags, *, params=None) -> bytes

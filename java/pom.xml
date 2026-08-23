@@ -259,8 +259,7 @@
                                  classes ARE coverage-GATED in
                                  workbench-live.yml via the
                                  `live-coverage` profile at the bottom
-                                 of this pom. See docs/superpowers/
-                                 plans/2026-06-16-r7-live-coverage-gate.md. -->
+                                 of this pom. -->
                             <excludes>
                                 <exclude>**/workbench/transport/WorkbenchTransportClient*</exclude>
                                 <exclude>**/workbench/auth/Login*</exclude>
@@ -469,8 +468,7 @@
              re-instruments them and runs a workbench-scoped check. The default
              `mvn verify` (no profile) and ci.yml's gates are unaffected — the
              base report/check stay at the `verify` phase, which the runner's
-             `mvn ... prepare-package` does not reach.
-             See docs/superpowers/plans/2026-06-16-r7-live-coverage-gate.md. -->
+             `mvn ... prepare-package` does not reach. -->
         <profile>
             <id>live-coverage</id>
             <build>

@@ -1,7 +1,7 @@
 # TTI-O Performance Refresh — 2026-06-06 (post-repair re-baseline)
 
-First trustworthy cross-SDK perf numbers since the suite was repaired (perf-suite P0:
-`docs/superpowers/specs/2026-06-06-perf-repair-p0-design.md`). The harness had been broken
+First trustworthy cross-SDK perf numbers since the suite was repaired
+(perf-suite P0). The harness had been broken
 and the CI gate a silent no-op since the codec-v2/registry refactors — see
 `docs/architecture/2026-06-06-perf-suite-analysis.md`. These numbers replace the stale
 2026-04-27/30 baseline in `tools/perf/baseline.json`.

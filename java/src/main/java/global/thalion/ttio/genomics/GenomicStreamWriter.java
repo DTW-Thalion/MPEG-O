@@ -152,8 +152,7 @@ public final class GenomicStreamWriter implements AutoCloseable {
                             long estimatedBytes) {}
 
     /** Per-run sticky qualities strategy: block 0 auto-tunes, the winner
-     *  is pinned for the rest of the run (spec docs/superpowers/plans/
-     *  2026-08-19-fqz-v5-sticky-strategy-spec.md). -1 = not yet pinned. */
+     *  is pinned for the rest of the run. -1 = not yet pinned. */
     private int qualStrategyHint = pinnedHint();
     private final boolean qualExhaustive = exhaustiveTune();
 

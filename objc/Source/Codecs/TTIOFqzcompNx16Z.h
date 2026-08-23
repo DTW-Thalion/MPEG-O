@@ -2,10 +2,8 @@
  * TTIOFqzcompNx16Z.h — CRAM-mimic FQZCOMP_NX16 (rANS-Nx16) codec.
  *
  * M94.Z is a separate codec from M94 v1 (TTIOFqzcompNx16). It mirrors
- * python/src/ttio/codecs/fqzcomp_nx16_z.py byte-for-byte. See the
- * M94.Z design spec
- *   docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md
- * for the algorithm and wire format. Algorithm summary:
+ * python/src/ttio/codecs/fqzcomp_nx16_z.py byte-for-byte. Algorithm
+ * summary:
  *
  *   - L = 2^15, B = 16-bit renorm chunks, b·L = 2^31.
  *   - T = 4096 fixed total (power-of-2, T | b·L exactly).

@@ -46,8 +46,6 @@ import static org.junit.jupiter.api.Assertions.*;
  *       output and the empty-string branch).</li>
  *   <li>{@link Hdf5Group#childNames} on a multi-child group.</li>
  * </ul>
- *
- * <p>Per docs/superpowers/plans/2026-05-09-coverage-restoration.md J.5.</p>
  */
 class Hdf5GroupUnitTest {
 

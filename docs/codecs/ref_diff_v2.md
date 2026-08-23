@@ -13,8 +13,7 @@
 
 This document specifies the REF_DIFF_V2 codec used by TTI-O to encode
 the genomic `sequences` channel as a per-read diff against an embedded
-reference. Where this document and the design spec
-(`docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md`) disagree,
+reference. Where this document and the design spec disagree,
 the code is authoritative.
 
 ## 1. What it does
@@ -273,6 +272,3 @@ the cross-language conformance matrix for current status.
   §10.10b (REF_DIFF_V2 storage layout).
 - Removed v1 codec: [`ref_diff.md`](ref_diff.md).
 - Sibling delta integer codec: [`delta_rans.md`](delta_rans.md).
-- Design spec (narrative, non-authoritative):
-  `docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md`.
-- Plan: `docs/superpowers/plans/2026-05-03-ref-diff-v2.md`.

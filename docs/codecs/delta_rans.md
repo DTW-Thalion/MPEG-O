@@ -9,8 +9,7 @@
 This document specifies the DELTA_RANS_ORDER0 codec used by TTI-O for
 lossless integer-channel compression starting with v1.2.0. It is a
 delta + zigzag + varint + rANS order-0 wrapper designed for
-sorted-ascending integer channels, built to the design spec at
-`docs/superpowers/specs/2026-04-30-m95-delta-rans-design.md`.
+sorted-ascending integer channels.
 
 M95 runs alongside M83 (`RANS_ORDER0`, codec id `4`) and M94.Z
 (`FQZCOMP_NX16_Z`, codec id `12`); all three codecs coexist in the
@@ -200,9 +199,6 @@ numbered §95a-§95c to keep the codec-spec section sequence contiguous.
 | §95b  | Integer-channel auto-defaults are **gated on v1.5 candidacy** (same gate as M94.Z).                                                                                                    | Preserves M82 byte-parity for files that do not opt into the v1.5 codec stack. The gate is the same condition used to select M94.Z on `qualities`.                                       |
 | §95c  | `positions` gets DELTA_RANS_ORDER0 by default; **other integer channels get RANS_ORDER0**. `mate_info_pos` is non-monotonic, so delta is unhelpful.                                     | Only sorted-ascending channels benefit from delta encoding. Applying delta to non-monotonic channels (flags, mapping qualities, mate positions) increases entropy and hurts compression.    |
 
-See `docs/superpowers/specs/2026-04-30-m95-delta-rans-design.md`
-for the full design discussion.
-
 ---
 
 ## 7. Limitations
@@ -224,5 +220,3 @@ References:
 - Duda 2014, arXiv:1311.2540 — base rANS algorithm (M83 dependency).
 - Google Protocol Buffers encoding spec — unsigned LEB128 varint
   format reference.
-- Design spec:
-  `docs/superpowers/specs/2026-04-30-m95-delta-rans-design.md`.

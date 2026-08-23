@@ -85,8 +85,7 @@ This is codec-tier work — independent of the HDF5 framing fix.
 Levers worth exploring (in approximate order of likely yield):
 
 1. Adaptive freq updates inside a block (CRAM does this; M94.Z is
-   static-per-block by design — see
-   `docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md` §1.3).
+   static-per-block by design).
 2. Larger context window (current `qbits=12, pbits=2, sloc=14` =
    16384 contexts; CRAM uses up to 4096 contexts but with adaptive
    updates it sees more effective patterns).

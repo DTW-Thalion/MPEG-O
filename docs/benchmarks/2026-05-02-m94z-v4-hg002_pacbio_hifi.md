@@ -8,7 +8,6 @@
 - BAM load: 1.53s
 - n_qualities: 264,190,341 ; n_reads: 14,284
 - CRAM reference: 86,094,472 bytes (86.094 MB)
-- Spec: `docs/superpowers/specs/2026-05-02-l2x-m94z-richer-context-stage1-design.md`
 
 ## Per-candidate compression
 

@@ -1,7 +1,4 @@
-"""Python ctypes wrapper for NAME_TOKENIZED v2 (codec id 15).
-
-Spec: docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md
-"""
+"""Python ctypes wrapper for NAME_TOKENIZED v2 (codec id 15)."""
 from __future__ import annotations
 
 import ctypes

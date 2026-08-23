@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * <p>Spec references:</p>
  * <ul>
- *   <li>{@code docs/superpowers/specs/2026-05-26-subjects-samples-design.md} §6 — wire schemas</li>
+ *   <li>spec §6 — wire schemas</li>
  *   <li>spec §11 — null handling: optional strings ↔ Arrow null,
  *       sentinel 0 ↔ Arrow null for {@code birth_year} +
  *       {@code collected_at}, {@code attributes_json} always present.</li>

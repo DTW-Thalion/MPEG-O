@@ -1,8 +1,6 @@
 /*
  * TTIORefDiffV2.h -- CRAM-style bit-packed sequence diff codec (codec id 14).
  *
- * Spec: docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md
- *
  * Direct link to the C library entries ttio_ref_diff_v2_encode /
  * _decode in libttio_rans (header at <ttio_rans.h>). Pure-ObjC
  * fallback returns nil + error if libttio_rans not linked at build

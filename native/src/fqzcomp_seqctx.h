@@ -1,8 +1,7 @@
 /* native/src/fqzcomp_seqctx.h
  *
  * Qualities V5 body coder: the V4-shaped adaptive quality model with a
- * sequence-context field spliced into the context word. Body layout
- * (spec docs/superpowers/specs/2026-08-16-qualities-v5-design.md 2.1):
+ * sequence-context field spliced into the context word. Body layout:
  *
  *   offset  size  field
  *     0       1   param_version = 1

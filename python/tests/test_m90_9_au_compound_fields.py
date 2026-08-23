@@ -124,8 +124,7 @@ class TestRoundTrip:
             # to `*`. This is documented, intentional behaviour after
             # Phase 2c removed the v1 mate_info layout. Verbatim
             # sentinel preservation is the goal of the deferred
-            # "bulk-mode wire format" (Phase 2c-T) — see
-            # docs/superpowers/specs/2026-05-04-phase-2c-T-transport-bulk-mode-placeholder.md.
+            # "bulk-mode wire format" (Phase 2c-T).
             #
             # Until bulk-mode lands, the per-AU wire path normalises
             # mate_chromosome via v2. The test asserts the post-

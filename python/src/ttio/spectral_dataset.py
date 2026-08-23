@@ -1205,8 +1205,7 @@ class WrittenRun:
     # float64 buffer into an int64 first-difference array and stores
     # the fixed-point scaling factor on the signal_channels group.
     # "float_delta_zstd" stores each channel as a lossless FDZ1 codec
-    # stream (codec id 17, @compression on the dataset; see
-    # docs/superpowers/specs/2026-08-16-float-delta-codec-design.md).
+    # stream (codec id 17, @compression on the dataset).
     # Phase 2 of that spec: "gzip" on a TTIOMassSpectrum run resolves
     # to float_delta_zstd unless opt_disable_float_delta is set;
     # non-MS runs keep the chunked-zlib layout.

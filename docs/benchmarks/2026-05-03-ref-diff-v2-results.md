@@ -96,8 +96,6 @@ flag `WrittenGenomicRun.opt_disable_ref_diff_v2` (Python) /
 
 ## References
 
-- Spec: `docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md`
-- Plan: `docs/superpowers/plans/2026-05-03-ref-diff-v2.md`
 - Wire format: `docs/format-spec.md` §10.10b
 - Cross-language gate: `python/tests/integration/test_ref_diff_v2_cross_language.py`
 - Compression gate: `python/tests/integration/test_ref_diff_v2_compression_gate.py`

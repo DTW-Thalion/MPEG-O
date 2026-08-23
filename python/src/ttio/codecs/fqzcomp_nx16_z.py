@@ -34,8 +34,7 @@ VERSION_V2_NATIVE = 2  # M94.Z V2: body produced by libttio_rans
 VERSION_V3_ADAPTIVE = 3  # M94.Z V3: adaptive Range Coder
 VERSION_V4_FQZCOMP = 4  # M94.Z V4: CRAM 3.1 fqzcomp_qual port
 VERSION_V5_SEQCTX = 5   # M94.Z V5: sequence-context body; emitted only
-                        # when it beats V4 by exact size (spec at
-                        # docs/superpowers/specs/2026-08-16-qualities-v5-design.md)
+                        # when it beats V4 by exact size
 VERSION_V6_SEGMENTED = 6  # M94.Z V6: segmented adaptive body, decoded
                           # without sequences (docs/codecs/m94z_v6.md)
 
