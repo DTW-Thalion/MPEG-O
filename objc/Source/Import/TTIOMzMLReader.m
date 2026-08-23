@@ -20,6 +20,7 @@
 
 #import "TTIOMzMLReader.h"
 #import "Import/TTIOSpectralStreamSource.h"
+#import "Import/TTIOXMLStreamParser.h"
 #import "Run/TTIOWrittenSpectralBatch.h"
 #import "TTIOBase64.h"
 #import "TTIOCVTermMapper.h"
@@ -48,6 +49,11 @@ const NSUInteger TTIOMzMLReaderProgressIntervalSpectra = 100;
 /** When set, finished spectra go here instead of the run buffer and
  *  no dataset is built at </run>. */
 @property (nonatomic, copy) void (^spectrumSink)(TTIOMassSpectrum *spectrum);
+
+/** Parse straight off the filesystem. Peak memory is one spectrum's
+ *  worth of decoded arrays plus the largest base64 text node, so a
+ *  multi-gigabyte mzML parses without the file ever being resident. */
+- (BOOL)parseFileAtPath:(NSString *)path error:(NSError **)error;
 @end
 
 /* The producer side of +streamFromPath:runName:batchSpectra:progress:
@@ -232,17 +238,12 @@ static const NSUInteger kMzMLStreamQueueCapacity = 4;
                      progress:(TTIOProgressBlock)progress
                         error:(NSError **)error
 {
-    NSData *data = [NSData dataWithContentsOfFile:path];
-    if (!data) {
-        if (error) {
-            *error = [NSError errorWithDomain:TTIOMzMLReaderErrorDomain
-                                         code:TTIOMzMLReaderErrorParseFailed
-                                     userInfo:@{NSLocalizedDescriptionKey:
-                        [NSString stringWithFormat:@"Cannot read %@", path]}];
-        }
+    TTIOMzMLReader *r = [[self alloc] init];
+    r.progressBlock = progress ?: TTIOProgressDiscard();
+    if (![r parseFileAtPath:path error:error]) {
         return nil;
     }
-    return [self parseData:data progress:progress error:error];
+    return r;
 }
 
 + (instancetype)parseData:(NSData *)data error:(NSError **)error
@@ -291,15 +292,30 @@ static const NSUInteger kMzMLStreamQueueCapacity = 4;
 
 - (BOOL)parseData:(NSData *)data error:(NSError **)error
 {
-    NSXMLParser *parser = [[NSXMLParser alloc] initWithData:data];
-    parser.delegate = self;
-    parser.shouldProcessNamespaces = NO;
-    parser.shouldReportNamespacePrefixes = NO;
-    parser.shouldResolveExternalEntities = NO;
+    NSError *parseError = nil;
+    BOOL ok = [TTIOXMLStreamParser parseData:data delegate:self error:&parseError];
+    return [self finishParse:ok parserError:parseError error:error];
+}
 
-    BOOL ok = [parser parse];
+- (BOOL)parseFileAtPath:(NSString *)path error:(NSError **)error
+{
+    NSError *parseError = nil;
+    BOOL ok = [TTIOXMLStreamParser parseFileAtPath:path
+                                          delegate:self
+                                             error:&parseError];
+    return [self finishParse:ok parserError:parseError error:error];
+}
+
+/* Shared tail of both drivers: promote whatever error the delegate or
+ * the XML layer recorded, then confirm the document actually carried a
+ * usable <run>. */
+- (BOOL)finishParse:(BOOL)parsed
+        parserError:(NSError *)parseError
+              error:(NSError **)error
+{
+    BOOL ok = parsed;
     if (!ok || _internalError) {
-        NSError *e = _internalError ?: [parser parserError];
+        NSError *e = _internalError ?: parseError;
         if (!e) {
             e = [NSError errorWithDomain:TTIOMzMLReaderErrorDomain
                                     code:TTIOMzMLReaderErrorParseFailed
@@ -885,16 +901,7 @@ didStartElement:(NSString *)elementName
                     }
                 };
                 NSError *err = nil;
-                NSData *data = [NSData dataWithContentsOfFile:path];
-                BOOL ok = NO;
-                if (!data) {
-                    err = [NSError errorWithDomain:TTIOMzMLReaderErrorDomain
-                                              code:TTIOMzMLReaderErrorParseFailed
-                                          userInfo:@{NSLocalizedDescriptionKey:
-                                              [NSString stringWithFormat:@"Cannot read %@", path]}];
-                } else {
-                    ok = [r parseData:data error:&err];
-                }
+                BOOL ok = [r parseFileAtPath:path error:&err];
                 if (ok && !cancelled && pending.count > 0) {
                     TTIOWrittenSpectralBatch *b = [TTIOWrittenSpectralBatch batchWithSpectra:pending
                                                                                 channelNames:channelNames];

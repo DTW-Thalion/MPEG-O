@@ -444,3 +444,93 @@ void testMzMLReaderM74(void)
     }
     unlink([path fileSystemRepresentation]);
 }
+
+/* One <binary> node larger than libxml2's 10 MB text-node ceiling,
+ * parsed off the filesystem. Uncompressed Orbitrap runs cross that
+ * ceiling with a single chromatogram, and the reader has to lift it
+ * (XML_PARSE_HUGE) rather than fail the document. */
+void testMzMLReaderHugeBinaryNode(void)
+{
+    const NSUInteger n = 1000000;   /* 8 MB raw -> ~10.7 MB of base64 */
+    double *mz = malloc(n * sizeof(double));
+    double *in = malloc(n * sizeof(double));
+    if (!mz || !in) {
+        free(mz); free(in);
+        PASS(0, "huge-node fixture allocated");
+        return;
+    }
+    for (NSUInteger i = 0; i < n; i++) {
+        mz[i] = 100.0 + (double)i * 0.001;
+        in[i] = (double)(i % 997);
+    }
+
+    NSString *path = [NSString stringWithFormat:@"/tmp/ttio_test_mzml_%d_huge.mzML",
+                      (int)getpid()];
+    @autoreleasepool {
+        NSString *mzb = base64OfDoubles(mz, n);
+        NSString *inb = base64OfDoubles(in, n);
+        PASS(mzb.length > 10 * 1000 * 1000,
+             "fixture m/z node exceeds libxml2's 10 MB text ceiling");
+
+        NSString *xml = [NSString stringWithFormat:
+@"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+@"<mzML xmlns=\"http://psi.hupo.org/ms/mzml\" version=\"1.1.0\">\n"
+@"  <cvList count=\"1\"><cv id=\"MS\" fullName=\"PSI-MS\" URI=\"\"/></cvList>\n"
+@"  <run id=\"huge_run\">\n"
+@"    <spectrumList count=\"1\">\n"
+@"      <spectrum index=\"0\" id=\"scan=1\" defaultArrayLength=\"%lu\">\n"
+@"        <cvParam cvRef=\"MS\" accession=\"MS:1000511\" name=\"ms level\" value=\"1\"/>\n"
+@"        <cvParam cvRef=\"MS\" accession=\"MS:1000130\" name=\"positive scan\"/>\n"
+@"        <binaryDataArrayList count=\"2\">\n"
+@"          <binaryDataArray>\n"
+@"            <cvParam cvRef=\"MS\" accession=\"MS:1000523\" name=\"64-bit float\"/>\n"
+@"            <cvParam cvRef=\"MS\" accession=\"MS:1000576\" name=\"no compression\"/>\n"
+@"            <cvParam cvRef=\"MS\" accession=\"MS:1000514\" name=\"m/z array\"/>\n"
+@"            <binary>%@</binary>\n"
+@"          </binaryDataArray>\n"
+@"          <binaryDataArray>\n"
+@"            <cvParam cvRef=\"MS\" accession=\"MS:1000523\" name=\"64-bit float\"/>\n"
+@"            <cvParam cvRef=\"MS\" accession=\"MS:1000576\" name=\"no compression\"/>\n"
+@"            <cvParam cvRef=\"MS\" accession=\"MS:1000515\" name=\"intensity array\"/>\n"
+@"            <binary>%@</binary>\n"
+@"          </binaryDataArray>\n"
+@"        </binaryDataArrayList>\n"
+@"      </spectrum>\n"
+@"    </spectrumList>\n"
+@"  </run>\n"
+@"</mzML>\n", (unsigned long)n, mzb, inb];
+
+        NSError *werr = nil;
+        BOOL wrote = [xml writeToFile:path
+                           atomically:YES
+                             encoding:NSUTF8StringEncoding
+                                error:&werr];
+        PASS(wrote, "huge-node mzML fixture written");
+        if (!wrote) { free(mz); free(in); return; }
+    }
+
+    NSError *err = nil;
+    NSDate *t0 = [NSDate date];
+    TTIOSpectralDataset *ds = [TTIOMzMLReader readFromFilePath:path error:&err];
+    NSTimeInterval dt = -[t0 timeIntervalSinceNow];
+
+    PASS(ds != nil, "mzML with a 10 MB+ binary node parses from a file path");
+    PASS(err == nil, "no parse error on the huge binary node");
+
+    TTIOAcquisitionRun *run = ds.msRuns[@"huge_run"];
+    PASS(run != nil, "huge-node run keyed by id");
+
+    TTIOMassSpectrum *s0 = [run spectrumAtIndex:0 error:&err];
+    PASS(s0 != nil, "huge-node spectrum retrievable");
+    PASS(arrayMatchesDoubles(s0.mzArray, mz, n),
+         "all 1M m/z values survive the streaming parse");
+    PASS(arrayMatchesDoubles(s0.intensityArray, in, n),
+         "all 1M intensity values survive the streaming parse");
+
+    printf("    [bench] 21 MB mzML, 10.7 MB binary node, parse %.1f ms\n",
+           dt * 1000.0);
+
+    unlink([path fileSystemRepresentation]);
+    free(mz);
+    free(in);
+}

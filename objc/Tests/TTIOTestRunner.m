@@ -21,6 +21,7 @@ extern void testEncryption(void);
 extern void testQueryAndStreaming(void);
 extern void testMzMLReader(void);
 extern void testMzMLReaderM74(void);
+extern void testMzMLReaderHugeBinaryNode(void);
 extern void testMilestone10(void);
 extern void testMilestone11(void);
 extern void testMilestone12(void);
@@ -261,6 +262,10 @@ int main(int argc, const char *argv[])
         START_SET("mzML Reader M74 (activation + isolation)")
             testMzMLReaderM74();
         END_SET("mzML Reader M74 (activation + isolation)")
+
+        START_SET("mzML Reader: 10 MB+ binary node, streamed from a path")
+            testMzMLReaderHugeBinaryNode();
+        END_SET("mzML Reader: 10 MB+ binary node, streamed from a path")
 
         START_SET("Milestone 10: protocols + modality-agnostic")
             testMilestone10();

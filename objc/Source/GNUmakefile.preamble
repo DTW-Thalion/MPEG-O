@@ -45,3 +45,16 @@ ifeq ($(shell test -f $(TTIO_RANS_NATIVE_LIB) && test -f $(TTIO_RANS_NATIVE_HDR)
   ADDITIONAL_LDFLAGS   += -L../../native/_build -lttio_rans
   ADDITIONAL_LDFLAGS   += -Wl,-rpath,$(abspath ../../native/_build)
 endif
+
+# ---------------------------------------------------------------------------
+# libxml2 for Import/TTIOXMLStreamParser
+# ---------------------------------------------------------------------------
+# The incremental xmlTextReader behind TTIOXMLStreamParser lets the mzML
+# importer parse multi-gigabyte documents in bounded memory.
+# gnustep-base already links libxml2, so only the version-specific
+# header directory has to be added; -lxml2 is in
+# libTTIO_LIBRARIES_DEPEND_UPON.
+LIBXML2_CFLAGS := $(shell xml2-config --cflags 2>/dev/null || \
+                          pkg-config --cflags libxml-2.0 2>/dev/null)
+ADDITIONAL_CPPFLAGS  += $(LIBXML2_CFLAGS)
+ADDITIONAL_OBJCFLAGS += $(LIBXML2_CFLAGS)

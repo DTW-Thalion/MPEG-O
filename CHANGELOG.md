@@ -11,6 +11,21 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed
+- **mzML is parsed incrementally.** `TTIOMzMLReader` read the whole
+  document with `+[NSData dataWithContentsOfFile:]` and parsed it with
+  `NSXMLParser`, which does not set `XML_PARSE_HUGE`. A 1.73 GB
+  Orbitrap Exploris run with 342546 spectra and uncompressed arrays
+  failed with libxml2's "Huge input lookup" after 339968 spectra, exit
+  2, 21.4 GB peak RSS, leaving a partial .tio. `TTIOXMLStreamParser`
+  drives libxml2's `xmlTextReader` and sends the same
+  `NSXMLParserDelegate` callbacks, so the reader's element handling is
+  unchanged: that import completes at 255 MiB peak RSS in 39.8 s, the
+  minimum of 3 runs, and a 0.94 GB timsTOF PASEF run takes 25.3 s at
+  249 MiB. The Python and
+  Java readers already parsed from the file.
+
+
 ### Added
 - **M94.Z V6, a segmented qualities variant.** V4 and V5 code a block
   as one adaptive chain, so a 64 MiB block cannot be split across
