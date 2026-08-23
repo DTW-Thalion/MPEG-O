@@ -83,6 +83,13 @@ static void _buildStdChannelEncoding(void)
 @implementation TTIOInFlightUnit
 @end
 
+@interface TTIOAcquisitionRun ()
+/* Defined below, used by the two view builders above it. */
+- (instancetype)_initAsUnitViewOfRun:(TTIOAcquisitionRun *)parent
+                                unit:(TTIOSpectralUnit)u
+                             columns:(NSDictionary<NSString *, NSData *> *)cols;
+@end
+
 @implementation TTIOAcquisitionRun
 {
     NSUInteger _iterThreads;
@@ -103,6 +110,14 @@ static void _buildStdChannelEncoding(void)
     // before the group existed and for runs whose channels fell
     // out of step, which is not an error.
     TTIOSpectralBlockIndex      *_spectralBlockIndex;
+    // Unit-view state. A view handed to an -iterBlocksFrom: visitor
+    // holds its unit's decoded channel columns and builds a spectrum
+    // only when one is asked for. Materialising a whole unit up front
+    // cost 14 per cent against the ordered reader at one thread.
+    NSDictionary<NSString *, NSData *> *_unitColumns;   // nil unless a view
+    NSUInteger                   _unitFirstSpectrum;
+    NSUInteger                   _unitCount;
+    unsigned long long           _unitValueStart;
     NSMutableDictionary<NSString *, id<TTIOStorageDataset>> *_storageDatasets;
     NSArray<NSString *>         *_channelNames;          // ordered list
     NSUInteger                   _streamPosition;
@@ -1462,6 +1477,69 @@ static void _buildStdChannelEncoding(void)
                                     blockValueStarts:bsD.mutableBytes count:nBlocks];
 }
 
+/* A view over one unit. Holds the unit's decoded columns and nothing
+ * else; -spectrumAtIndex: slices one spectrum out of them on demand, so
+ * a caller that reads part of a unit pays for that part. */
+- (instancetype)_initAsUnitViewOfRun:(TTIOAcquisitionRun *)parent
+                                unit:(TTIOSpectralUnit)u
+                             columns:(NSDictionary<NSString *, NSData *> *)cols
+{
+    if ((self = [super init])) {
+        _name                     = parent->_name;
+        _acquisitionMode          = parent->_acquisitionMode;
+        _instrumentConfig         = parent->_instrumentConfig;
+        _spectrumIndex            = parent->_spectrumIndex;
+        _channelNames             = parent->_channelNames;
+        _spectrumClassName        = parent->_spectrumClassName;
+        _modality                 = parent->_modality;
+        _nucleusType              = parent->_nucleusType;
+        _spectrometerFrequencyMHz = parent->_spectrometerFrequencyMHz;
+        _solvent                  = parent->_solvent;
+        _unitColumns              = cols;
+        _unitFirstSpectrum        = u.firstSpectrum;
+        _unitCount                = u.nSpectra;
+        _unitValueStart           = u.valueStart;
+    }
+    return self;
+}
+
+/* View-local index in, run-global metadata out: spectrum k of the view
+ * is run spectrum _unitFirstSpectrum + k, and its msLevel, polarity and
+ * retention time come from the run's spectrum index at that global
+ * position. */
+- (id)_unitSpectrumAtIndex:(NSUInteger)index error:(NSError **)error
+{
+    if (index >= _unitCount) {
+        if (error) *error = TTIOMakeError(TTIOErrorOutOfRange,
+            @"index %lu beyond unit spectrum count %lu",
+            (unsigned long)index, (unsigned long)_unitCount);
+        return nil;
+    }
+    NSUInteger i = _unitFirstSpectrum + index;
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    NSUInteger off = (NSUInteger)((unsigned long long)[_spectrumIndex offsetAt:i]
+                                  - _unitValueStart);
+    NSUInteger len = [_spectrumIndex lengthAt:i];
+    NSMutableDictionary<NSString *, TTIOSignalArray *> *arrays =
+        [NSMutableDictionary dictionaryWithCapacity:_channelNames.count];
+    for (NSString *ch in _channelNames) {
+        NSData *col = _unitColumns[ch];
+        if (!col || (off + len) * sizeof(double) > col.length) {
+            if (error) *error = TTIOMakeError(TTIOErrorDatasetRead,
+                @"unit column '%@' is short for spectrum %lu", ch, (unsigned long)i);
+            return nil;
+        }
+        NSData *d = [NSData dataWithBytes:(const uint8_t *)col.bytes + off * sizeof(double)
+                                   length:len * sizeof(double)];
+        arrays[ch] = [[TTIOSignalArray alloc] initWithOwnedBuffer:d length:len
+                                                         encoding:enc axis:nil];
+    }
+    return [self _spectrumAtIndex:i channels:arrays error:error];
+}
+
 /* A sibling run holding just this unit's spectra.
  *
  * Each channel is read once for the unit's whole value extent and then
@@ -1486,27 +1564,9 @@ static void _buildStdChannelEncoding(void)
         cols[ch] = d;
     }
 
-    NSMutableArray *spectra = [NSMutableArray arrayWithCapacity:u.nSpectra];
-    for (NSUInteger k = 0; k < u.nSpectra; k++) {
-        NSUInteger i = u.firstSpectrum + k;
-        NSUInteger off = (NSUInteger)((unsigned long long)[_spectrumIndex offsetAt:i]
-                                      - u.valueStart);
-        NSUInteger len = [_spectrumIndex lengthAt:i];
-        NSMutableDictionary *arrays =
-            [NSMutableDictionary dictionaryWithCapacity:_channelNames.count];
-        for (NSString *ch in _channelNames) {
-            NSData *d = [NSData dataWithBytes:(const uint8_t *)cols[ch].bytes + off * sizeof(double)
-                                       length:len * sizeof(double)];
-            arrays[ch] = [[TTIOSignalArray alloc] initWithOwnedBuffer:d length:len
-                                                             encoding:enc axis:nil];
-        }
-        id sp = [self _spectrumAtIndex:i channels:arrays error:error];
-        if (!sp) return nil;
-        [spectra addObject:sp];
-    }
-    return [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
-                                      acquisitionMode:_acquisitionMode
-                                     instrumentConfig:_instrumentConfig];
+    return [[TTIOAcquisitionRun alloc] _initAsUnitViewOfRun:self
+                                                       unit:u
+                                                    columns:cols];
 }
 
 /* Units in flight is a memory setting before it is a concurrency one:
@@ -1663,26 +1723,9 @@ static void _buildStdChannelEncoding(void)
         cols[ch] = acc;
     }
 
-    NSMutableArray *spectra = [NSMutableArray arrayWithCapacity:u.nSpectra];
-    for (NSUInteger k = 0; k < u.nSpectra; k++) {
-        NSUInteger i = u.firstSpectrum + k;
-        NSUInteger off = (NSUInteger)((unsigned long long)[_spectrumIndex offsetAt:i] - u.valueStart);
-        NSUInteger len = [_spectrumIndex lengthAt:i];
-        NSMutableDictionary *arrays =
-            [NSMutableDictionary dictionaryWithCapacity:_channelNames.count];
-        for (NSString *ch in _channelNames) {
-            NSData *d = [NSData dataWithBytes:(const uint8_t *)cols[ch].bytes + off * sizeof(double)
-                                       length:len * sizeof(double)];
-            arrays[ch] = [[TTIOSignalArray alloc] initWithOwnedBuffer:d length:len
-                                                             encoding:enc axis:nil];
-        }
-        id sp = [self _spectrumAtIndex:i channels:arrays error:error];
-        if (!sp) return nil;
-        [spectra addObject:sp];
-    }
-    return [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
-                                      acquisitionMode:_acquisitionMode
-                                     instrumentConfig:_instrumentConfig];
+    return [[TTIOAcquisitionRun alloc] _initAsUnitViewOfRun:self
+                                                       unit:u
+                                                    columns:cols];
 }
 
 - (BOOL)iterBlocksFrom:(NSUInteger)from
@@ -1843,6 +1886,8 @@ static void _buildStdChannelEncoding(void)
 
 - (id)spectrumAtIndex:(NSUInteger)index error:(NSError **)error
 {
+    if (_unitColumns) return [self _unitSpectrumAtIndex:index error:error];
+
     if (_inMemorySpectra) {
         if (index >= _inMemorySpectra.count) {
             if (error) *error = TTIOMakeError(TTIOErrorOutOfRange,
@@ -1983,6 +2028,7 @@ static void _buildStdChannelEncoding(void)
 
 - (NSUInteger)count
 {
+    if (_unitColumns) return _unitCount;
     return _inMemorySpectra ? _inMemorySpectra.count : _spectrumIndex.count;
 }
 
