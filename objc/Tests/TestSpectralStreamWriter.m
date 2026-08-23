@@ -25,6 +25,7 @@
 #import "Providers/TTIOProviderRegistry.h"
 #import "Providers/TTIOMemoryProvider.h"
 #import "Providers/TTIOStorageProtocols.h"
+#include <math.h>
 #include <unistd.h>
 
 static NSString *sswFixture(void)
@@ -426,6 +427,58 @@ static void sswBlockIndexAbsentWithoutFdz(void)
     [prov close];
     [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
 }
+
+/* base_peak_intensities is computed by scanning -float64Buffer, which
+ * returns a freshly allocated conversion buffer for any precision
+ * other than float64. A float32 intensity array is the ordinary case
+ * for real mzML and is the one that takes that path. */
+static void sswBasePeakFromFloat32Intensity(void)
+{
+    const NSUInteger nSpec = 64, nPts = 128;
+    TTIOEncodingSpec *enc32 =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat32
+                       compressionAlgorithm:TTIOCompressionNone
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    TTIOEncodingSpec *enc64 =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionNone
+                                  byteOrder:TTIOByteOrderLittleEndian];
+
+    NSMutableArray<TTIOMassSpectrum *> *spectra = [NSMutableArray array];
+    NSMutableArray<NSNumber *> *expected = [NSMutableArray array];
+    for (NSUInteger k = 0; k < nSpec; k++) {
+        NSMutableData *mzD = [NSMutableData dataWithLength:nPts * sizeof(double)];
+        NSMutableData *inD = [NSMutableData dataWithLength:nPts * sizeof(float)];
+        double *mz = mzD.mutableBytes;
+        float *in = inD.mutableBytes;
+        float peak = 0;
+        for (NSUInteger i = 0; i < nPts; i++) {
+            mz[i] = 100.0 + (double)i * 0.5;
+            in[i] = (float)((k * 31 + i * 7) % 977) + 1.0f;
+            if (in[i] > peak) peak = in[i];
+        }
+        [expected addObject:@((double)peak)];
+        TTIOSignalArray *mzA = [[TTIOSignalArray alloc] initWithBuffer:mzD length:nPts
+                                                              encoding:enc64 axis:nil];
+        TTIOSignalArray *inA = [[TTIOSignalArray alloc] initWithBuffer:inD length:nPts
+                                                              encoding:enc32 axis:nil];
+        [spectra addObject:[[TTIOMassSpectrum alloc]
+            initWithMzArray:mzA intensityArray:inA msLevel:1
+                   polarity:TTIOPolarityPositive scanWindow:nil indexPosition:k
+            scanTimeSeconds:(double)k precursorMz:0 precursorCharge:0 error:NULL]];
+    }
+
+    TTIOWrittenSpectralBatch *b =
+        [TTIOWrittenSpectralBatch batchWithSpectra:spectra
+                                      channelNames:@[@"mz", @"intensity"]];
+    PASS(b != nil, "bpi: batch built from float32 intensity arrays");
+    const double *got = b.basePeakIntensities.bytes;
+    BOOL allMatch = (b.basePeakIntensities.length == nSpec * sizeof(double));
+    for (NSUInteger k = 0; allMatch && k < nSpec; k++) {
+        if (fabs(got[k] - [expected[k] doubleValue]) > 1e-9) allMatch = NO;
+    }
+    PASS(allMatch, "bpi: base peak of a float32 intensity array is the real maximum");
+}
 void testSpectralStreamWriterThreads(void);
 void testSpectralStreamWriterThreads(void)
 {
@@ -441,5 +494,6 @@ void testSpectralStreamWriter(void)
         sswZlibAndMemory();
         sswBlockIndex();
         sswBlockIndexAbsentWithoutFdz();
+        sswBasePeakFromFloat32Intensity();
     }
 }

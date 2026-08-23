@@ -294,7 +294,11 @@ static void _buildStdChannelEncoding(void)
 
             double maxI = 0;
             TTIOSignalArray *inA = ms.intensityArray;
-            const double *intP = [inA float64Buffer].bytes;
+            /* -float64Buffer hands back a fresh conversion buffer for
+             * any precision other than float64, and nothing else holds
+             * it: keep it alive across the scan. */
+            NSData *intBuf = [inA float64Buffer];
+            const double *intP = intBuf.bytes;
             NSUInteger m = inA.length;
             for (NSUInteger j = 0; j < m; j++) if (intP[j] > maxI) maxI = intP[j];
             bpp[i] = maxI;
@@ -320,7 +324,8 @@ static void _buildStdChannelEncoding(void)
             double maxI = 0;
             TTIOSignalArray *inA = s.signalArrays[@"intensity"];
             if (inA) {
-                const double *intP = [inA float64Buffer].bytes;
+                NSData *intBuf = [inA float64Buffer];
+                const double *intP = intBuf.bytes;
                 NSUInteger m = inA.length;
                 for (NSUInteger j = 0; j < m; j++) if (intP[j] > maxI) maxI = intP[j];
             }
