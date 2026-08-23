@@ -574,6 +574,60 @@ static void sibPlanningSourcesAgree(void)
     [[NSFileManager defaultManager] removeItemAtPath:zpath error:NULL];
 }
 
+/* The column accessor has to agree with the spectrum path value for
+ * value, or a bulk caller reading it is reading something else. */
+static void sibUnitColumnMatchesSpectra(void)
+{
+    id<TTIOStorageProvider> prov = nil;
+    TTIOAcquisitionRun *run = sibOpen(sibCorpusPath, &prov);
+    if (!run) { PASS(NO, "iterBlocks: corpus opens for the column test"); return; }
+
+    __block NSUInteger checked = 0, wrong = 0, unitsWithColumn = 0;
+    NSLock *lock = [NSLock new];
+    [run iterBlocksFrom:0 to:SIB_NSPEC threads:4 error:NULL
+             usingBlock:^(TTIOAcquisitionRun *view, NSUInteger viewStart,
+                          NSUInteger firstSpectrum, NSUInteger nSpectra, BOOL *stop) {
+        unsigned long long vstart = 0;
+        NSData *col = [view unitColumnForChannel:@"mz" valueStart:&vstart];
+        NSUInteger localChecked = 0, localWrong = 0;
+        if (col) {
+            const double *cv = col.bytes;
+            for (NSUInteger k = 0; k < nSpectra; k++) {
+                NSUInteger i = firstSpectrum + k;
+                TTIOMassSpectrum *sp = [view spectrumAtIndex:viewStart + k error:NULL];
+                NSData *buf = [sp.mzArray float64Buffer];
+                const double *sv = buf.bytes;
+                NSUInteger len = buf.length / sizeof(double);
+                NSUInteger off = (NSUInteger)((unsigned long long)
+                    [run.spectrumIndex offsetAt:i] - vstart);
+                for (NSUInteger j = 0; j < len; j++) {
+                    localChecked++;
+                    if (cv[off + j] != sv[j]) localWrong++;
+                }
+            }
+        }
+        [lock lock];
+        if (col) unitsWithColumn++;
+        checked += localChecked; wrong += localWrong;
+        [lock unlock];
+    }];
+
+    PASS(unitsWithColumn >= 2,
+         "iterBlocks: %lu units exposed a column", (unsigned long)unitsWithColumn);
+    PASS(checked > 0 && wrong == 0,
+         "iterBlocks: the column agrees with the spectra on all %lu values (%lu wrong)",
+         (unsigned long)checked, (unsigned long)wrong);
+
+    /* A run that is not a view has no columns. */
+    unsigned long long vs = 0;
+    PASS([run unitColumnForChannel:@"mz" valueStart:&vs] == nil,
+         "iterBlocks: a plain run exposes no unit column");
+    PASS([run unitColumnForChannel:@"nope" valueStart:NULL] == nil,
+         "iterBlocks: an unknown channel returns nil");
+
+    [prov close];
+}
+
 void testSpectralIterBlocks(void)
 {
     siuPlanBasics();
@@ -590,5 +644,6 @@ void testSpectralIterBlocks(void)
     sibParallel();
     sibStopHalts();
     sibPlanningSourcesAgree();
+    sibUnitColumnMatchesSpectra();
     [[NSFileManager defaultManager] removeItemAtPath:sibCorpusPath error:NULL];
 }

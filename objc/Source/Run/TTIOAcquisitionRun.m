@@ -1507,6 +1507,16 @@ static void _buildStdChannelEncoding(void)
  * is run spectrum _unitFirstSpectrum + k, and its msLevel, polarity and
  * retention time come from the run's spectrum index at that global
  * position. */
+- (NSData *)unitColumnForChannel:(NSString *)channel
+                      valueStart:(unsigned long long *)outValueStart
+{
+    if (!_unitColumns) return nil;
+    NSData *col = _unitColumns[channel];
+    if (!col) return nil;
+    if (outValueStart) *outValueStart = _unitValueStart;
+    return col;
+}
+
 - (id)_unitSpectrumAtIndex:(NSUInteger)index error:(NSError **)error
 {
     if (index >= _unitCount) {
