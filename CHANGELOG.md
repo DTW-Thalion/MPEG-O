@@ -12,6 +12,28 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Added
+- **`-[TTIOAcquisitionRun unitColumnForChannel:valueStart:]`, the unit's
+  decoded values without building a spectrum.** Only a view handed to an
+  `-iterBlocksFrom:to:threads:error:usingBlock:` visitor has columns;
+  every other run returns nil.
+
+  Constructing spectra is 73.7% of the ordered reader's wall time on
+  `5_TAP_Pdr1_R376W_PTM` (342546 spectra, 256 MB): decoding and scanning
+  the same bytes runs at 820.7 MB/s against 215.5 through
+  `-iterSpectraWithBatch:`, single-threaded, minima of 5 interleaved
+  passes with a contended control row. Broken down per step, the two
+  `NSData` copies are 23% of construction, the two `TTIOSignalArray`
+  wrappers 30%, the channel dictionary 11% and the `TTIOMassSpectrum`
+  itself 36%, so two thirds of the cost is the objects rather than the
+  data, and no amount of copy elimination reaches it.
+
+  Through `iterBlocks`, reading columns instead of spectra measures
+  207.4 to 1050.9 MB/s at one thread, 439.0 to 1188.3 at four and 771.4
+  to 1637.8 at sixteen. One thread reading columns beats sixteen threads
+  building spectra. A caller doing bulk arithmetic over a channel should
+  read the column; a caller that needs per-spectrum metadata still wants
+  the spectra.
+
 - **`-[TTIOAcquisitionRun iterBlocksFrom:to:threads:error:usingBlock:]`,
   a parallel block consumer for spectral runs.** The visitor is called
   once per scheduling unit, on a thread pool, out of order; that relaxed
