@@ -52,25 +52,35 @@ Per block of `B = 1 Mi` values (last block short):
 
 ```
 1. view the float64 values as uint64 (bit pattern, no numeric change)
-2. transform T, chosen per block by exact size comparison:
-     T=0  none
-     T=1  delta:  d[0] = u[0]; d[i] = u[i] - u[i-1]  (mod 2^64)
-3. byte-plane transpose: emit plane 0 (LSB of every value), then
-   plane 1, ... plane 7 — 8 planes of block_len bytes
-4. zstd-compress the concatenated planes (level 9 default;
-   writer-tunable 1-19, wire-invisible)
+2. transform T, a two-bit selector chosen per block by exact size
+   comparison across all four combinations:
+     bit 0  delta:  d[0] = u[0]; d[i] = u[i] - u[i-1]  (mod 2^64)
+     bit 1  plain:  the values enter the frame as little-endian
+                    uint64 rather than byte planes
+3. with bit 1 clear, byte-plane transpose: emit plane 0 (LSB of every
+   value), then plane 1, ... plane 7 — 8 planes of block_len bytes
+4. zstd-compress the result (level 9 default; writer-tunable 1-19,
+   wire-invisible)
 ```
 
-Decode inverts: zstd -> un-transpose -> (cumsum if T=1) -> view as
-float64. Everything is exact integer/bit manipulation; the values
-are bit-identical, NaNs and signed zeros included.
+Decode inverts: zstd -> un-transpose or read as little-endian uint64
+-> (cumsum if bit 0) -> view as float64. Everything is exact
+integer/bit manipulation; the values are bit-identical, NaNs and
+signed zeros included.
 
-The per-block transform selector exists because the two transforms
-win on different channels: at level 9, delta wins where the values
-ride a smooth grid (MS1 profile m/z: 67.6 MB delta vs 94.4 none)
-and none wins where the mantissas are noise-dominated (MS1
-intensity: 58.8 none vs 64.8 delta). The encoder tries both and
-keeps the smaller; one byte per block records the choice.
+The per-block transform selector exists because the transforms win on
+different channels: at level 9, delta wins where the values ride a
+smooth grid (MS1 profile m/z: 67.6 MB delta vs 94.4 none) and none
+wins where the mantissas are noise-dominated (MS1 intensity: 58.8
+none vs 64.8 delta). The transpose splits the same way and is
+selected the same way: on an Orbitrap Exploris run stored
+uncompressed it costs 31% on the m/z array and pays 20% on the
+intensity array, so an encoder that always transposed gave up 26% on
+m/z against plain zstd over the raw bytes. The encoder tries all four
+and keeps the smallest; one byte per block records the choice.
+
+A stream carrying bit 1 is rejected by decoders built before that bit
+was defined, which report the unknown transform and stop.
 
 ### 2.1 Wire format
 
@@ -83,10 +93,12 @@ Offset  Size  Field
 14      4     block_size        (u32 LE, values per block; 1 Mi default)
 18      4     n_blocks          (u32 LE)
 22      var   n_blocks x block:
-                1  transform     (0x00 none, 0x01 delta)
+                1  transform     (bit 0 delta, bit 1 plain;
+                                  0x04..0xff rejected)
                 4  body_length   (u32 LE)
-                body: one zstd frame (RFC 8878) of the transposed
-                      planes for this block
+                body: one zstd frame (RFC 8878) of this block's
+                      byte planes, or of its little-endian uint64
+                      values when bit 1 is set
 ```
 
 Integers little-endian per the §10.7 contract. Each block is

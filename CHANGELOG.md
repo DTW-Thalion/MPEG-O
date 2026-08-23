@@ -12,6 +12,25 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Changed
+- **FLOAT_DELTA_ZSTD (codec id 17) chooses the byte-plane transpose per
+  block instead of always applying it.** Bit 1 of the per-block
+  transform byte now means the values enter the zstd frame as plain
+  little-endian uint64; the encoder compares all four combinations of
+  that bit with the delta bit and keeps the smallest, as it already did
+  for the delta alone. The transpose pays on intensity arrays and costs
+  on m/z: on `5_TAP_Pdr1_R376W_PTM.mzML` (Orbitrap Exploris, 1.73 GB,
+  342546 spectra) the imported .tio goes from 83528409 to 63752405
+  bytes, about 23% smaller. Intensity blocks still choose the
+  transpose; m/z blocks no longer do. The two extra zstd passes per
+  block cost about 1.5% of import wall time, 39.74 s against 40.32 s
+  on the minima of 3 and 4 runs; the writer's block boundaries move
+  the output size about 1% between runs, so both sizes above are the
+  smallest observed.
+
+  A stream carrying the new bit is rejected by readers built before
+  this change, which report the unknown transform and stop. Streams
+  already written use transform 0x00 or 0x01 and decode unchanged.
+
 - **mzML is parsed incrementally.** `TTIOMzMLReader` read the whole
   document with `+[NSData dataWithContentsOfFile:]` and parsed it with
   `NSXMLParser`, which does not set `XML_PARSE_HUGE`. A 1.73 GB
@@ -22,8 +41,7 @@ public API is stable from onward.
   `NSXMLParserDelegate` callbacks, so the reader's element handling is
   unchanged: that import completes at 255 MiB peak RSS in 39.8 s, the
   minimum of 3 runs, and a 0.94 GB timsTOF PASEF run takes 25.3 s at
-  249 MiB. The Python and
-  Java readers already parsed from the file.
+  249 MiB. The Python and Java readers already parsed from the file.
 
 
 ### Added

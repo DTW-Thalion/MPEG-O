@@ -273,3 +273,66 @@ class TestDefaultFlip:
             ds = f["/study/ms_runs/r/signal_channels/mz_values"]
             assert ds.dtype == np.float64
             assert ds.compression is None
+
+
+class TestPlainTransform:
+    """Bit 1 of the transform keeps the values as little-endian uint64
+    instead of byte planes. It wins on m/z arrays, where the transpose
+    costs 31%."""
+
+    @staticmethod
+    def _bodies(u: np.ndarray, d: np.ndarray) -> dict[int, bytes]:
+        import zstandard
+
+        comp = zstandard.ZstdCompressor(level=1)
+        return {
+            fdz.TRANSFORM_NONE: comp.compress(fdz._transpose(u)),
+            fdz.TRANSFORM_DELTA: comp.compress(fdz._transpose(d)),
+            fdz.TRANSFORM_PLAIN: comp.compress(fdz._plain(u)),
+            fdz.TRANSFORM_PLAIN | fdz.TRANSFORM_DELTA: comp.compress(fdz._plain(d)),
+        }
+
+    def test_every_transform_decodes(self) -> None:
+        rng = np.random.default_rng(11)
+        arr = np.ascontiguousarray(rng.normal(0, 1e3, 5000))
+        u = arr.view(np.uint64)
+        d = np.empty_like(u)
+        d[0] = u[0]
+        np.subtract(u[1:], u[:-1], out=d[1:])
+
+        for transform, body in self._bodies(u, d).items():
+            stream = fdz.header_bytes(len(arr), 1) + fdz.block_bytes(transform, body)
+            np.testing.assert_array_equal(fdz.decode(stream), arr)
+            block = fdz.decode_block_bytes(transform, body, len(arr))
+            np.testing.assert_array_equal(block, arr)
+
+    def test_transform_above_the_mask_is_rejected(self) -> None:
+        arr = np.ascontiguousarray(np.linspace(1.0, 2.0, 64))
+        u = arr.view(np.uint64)
+        d = np.empty_like(u)
+        d[0] = u[0]
+        np.subtract(u[1:], u[:-1], out=d[1:])
+        body = self._bodies(u, d)[fdz.TRANSFORM_NONE]
+        stream = fdz.header_bytes(len(arr), 1) + fdz.block_bytes(0x04, body)
+        with pytest.raises(ValueError, match="unknown FDZ1 transform"):
+            fdz.decode(stream)
+        with pytest.raises(ValueError, match="unknown FDZ1 transform"):
+            fdz.decode_block_bytes(0x04, body, len(arr))
+
+    @pytest.mark.parametrize("name", sorted(_edge_arrays()))
+    def test_never_larger_than_a_transpose_only_encoder(self, name: str) -> None:
+        import zstandard
+
+        arr = _edge_arrays()[name]
+        if len(arr) == 0 or len(arr) > fdz.BLOCK_SIZE:
+            pytest.skip("encode_block takes 1..BLOCK_SIZE values")
+        arr = np.ascontiguousarray(arr)
+        u = arr.view(np.uint64)
+        d = np.empty_like(u)
+        d[0] = u[0]
+        np.subtract(u[1:], u[:-1], out=d[1:])
+        comp = zstandard.ZstdCompressor(level=fdz.ZSTD_LEVEL)
+        transpose_only = min(len(comp.compress(fdz._transpose(u))),
+                             len(comp.compress(fdz._transpose(d))))
+        _, body = fdz.encode_block(arr)
+        assert len(body) <= transpose_only

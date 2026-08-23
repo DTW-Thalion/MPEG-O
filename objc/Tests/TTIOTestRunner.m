@@ -91,6 +91,7 @@ extern void testEncodeExportCli(void);
 extern void testImageBase(void);
 extern void testM84BasePack(void);
 extern void testPackedReference(void);
+extern void testFloatDeltaZstdPlainTransform(void);
 extern void testFloatDeltaZstd(void);
 extern void testQualitiesV5(void);
 extern void testM85Quality(void);
@@ -523,6 +524,7 @@ int main(int argc, const char *argv[])
 
         START_SET("FLOAT_DELTA_ZSTD codec")
             testFloatDeltaZstd();
+            testFloatDeltaZstdPlainTransform();
             testQualitiesV5();
         END_SET("FLOAT_DELTA_ZSTD codec")
 

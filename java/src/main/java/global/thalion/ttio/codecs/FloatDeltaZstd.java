@@ -16,8 +16,9 @@ import java.nio.ByteOrder;
  * FLOAT_DELTA_ZSTD — lossless float64 channel codec (codec id 17).
  *
  * <p>Spec: {@code docs/superpowers/specs/2026-08-16-float-delta-codec-design.md}.
- * Per block: none/delta on the uint64 bit view (chosen by exact size
- * comparison), byte-plane transpose, one zstd frame. Values round-trip
+ * Per block: none or delta on the uint64 bit view, byte planes or plain
+ * little-endian values, all four compared by exact size, then one zstd
+ * frame. Values round-trip
  * bit-exactly. Per the spec's Option B decision, encoders MAY differ
  * byte-wise across languages; decoders MUST accept any conforming
  * stream — the shared golden fixture pins the decode side.</p>
@@ -32,7 +33,13 @@ public final class FloatDeltaZstd {
     public static final int HEADER_LEN = 22;
     public static final int BLOCK_SIZE = 1 << 20;
     public static final int TRANSFORM_NONE = 0x00;
+    /** Bit 0: prefix delta on the uint64 bit view. Bit 1: the values go
+     *  into the zstd frame as plain little-endian uint64 rather than 8
+     *  byte planes. The transpose pays on intensity arrays and costs on
+     *  m/z, so both are chosen per block by exact size. */
     public static final int TRANSFORM_DELTA = 0x01;
+    public static final int TRANSFORM_PLAIN = 0x02;
+    public static final int TRANSFORM_MASK = 0x03;
 
     private FloatDeltaZstd() {}
 
@@ -56,6 +63,32 @@ public final class FloatDeltaZstd {
             for (int i = 0; i < len; i++) {
                 out[off + i] |= (planes[base + i] & 0xFFL) << shift;
             }
+        }
+    }
+
+    private static byte[] plain(long[] u, int off, int len) {
+        ByteBuffer b = ByteBuffer.allocate(len * 8).order(ByteOrder.LITTLE_ENDIAN);
+        for (int i = 0; i < len; i++) b.putLong(u[off + i]);
+        return b.array();
+    }
+
+    private static void unplain(byte[] raw, long[] out, int off, int len) {
+        ByteBuffer b = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
+        for (int i = 0; i < len; i++) out[off + i] = b.getLong();
+    }
+
+    /** Undo one block's transform in place: raw body bytes to values. */
+    private static void detransform(byte[] raw, long[] out, int off, int len, int transform) {
+        if ((transform & ~TRANSFORM_MASK) != 0) {
+            throw new IllegalArgumentException("unknown FDZ1 transform " + transform);
+        }
+        if ((transform & TRANSFORM_PLAIN) != 0) {
+            unplain(raw, out, off, len);
+        } else {
+            untranspose(raw, out, off, len);
+        }
+        if ((transform & TRANSFORM_DELTA) != 0) {
+            for (int i = 1; i < len; i++) out[off + i] += out[off + i - 1];
         }
     }
 
@@ -86,10 +119,16 @@ public final class FloatDeltaZstd {
         long[] d = new long[Math.max(len, 1)];
         if (len > 0) d[0] = u[0];
         for (int i = 1; i < len; i++) d[i] = u[i] - u[i - 1];
-        byte[] bodyNone = zstd(transpose(u, 0, len));
-        byte[] bodyDelta = zstd(transpose(d, 0, len));
-        int transform = bodyDelta.length < bodyNone.length ? TRANSFORM_DELTA : TRANSFORM_NONE;
-        return new EncodedBlock(transform, transform == TRANSFORM_DELTA ? bodyDelta : bodyNone);
+        byte[][] bodies = new byte[TRANSFORM_MASK + 1][];
+        bodies[TRANSFORM_NONE] = zstd(transpose(u, 0, len));
+        bodies[TRANSFORM_DELTA] = zstd(transpose(d, 0, len));
+        bodies[TRANSFORM_PLAIN] = zstd(plain(u, 0, len));
+        bodies[TRANSFORM_PLAIN | TRANSFORM_DELTA] = zstd(plain(d, 0, len));
+        int best = TRANSFORM_NONE;
+        for (int t = 1; t <= TRANSFORM_MASK; t++) {
+            if (bodies[t].length < bodies[best].length) best = t;
+        }
+        return new EncodedBlock(best, bodies[best]);
     }
 
     /** The on-stream bytes of a block: 5-byte block header plus body. */
@@ -167,20 +206,14 @@ public final class FloatDeltaZstd {
     public static double[] decodeBlock(ByteRangeReader r, BlockTable t, int k) {
         int len = t.blockValues(k);
         byte[] body = r.read(t.offsets()[k], t.lengths()[k]);
-        byte[] planes = new byte[len * 8];
+        byte[] raw = new byte[len * 8];
         ZstdDecompressor dec = new ZstdDecompressor();
-        int inflated = dec.decompress(body, 0, body.length, planes, 0, planes.length);
-        if (inflated != planes.length) {
+        int inflated = dec.decompress(body, 0, body.length, raw, 0, raw.length);
+        if (inflated != raw.length) {
             throw new IllegalArgumentException("FDZ1 block inflated to the wrong size");
         }
         long[] u = new long[len];
-        untranspose(planes, u, 0, len);
-        int transform = t.transforms()[k];
-        if (transform == TRANSFORM_DELTA) {
-            for (int i = 1; i < len; i++) u[i] += u[i - 1];
-        } else if (transform != TRANSFORM_NONE) {
-            throw new IllegalArgumentException("unknown FDZ1 transform " + transform);
-        }
+        detransform(raw, u, 0, len, t.transforms()[k]);
         double[] out = new double[len];
         for (int i = 0; i < len; i++) out[i] = Double.longBitsToDouble(u[i]);
         return out;
@@ -221,19 +254,14 @@ public final class FloatDeltaZstd {
             }
             int off = bi * blockSize;
             int len = Math.min(blockSize, n - off);
-            byte[] planes = new byte[len * 8];
+            byte[] raw = new byte[len * 8];
             int inflated = dec.decompress(stream, in.position(), bodyLen,
-                    planes, 0, planes.length);
-            if (inflated != planes.length) {
+                    raw, 0, raw.length);
+            if (inflated != raw.length) {
                 throw new IllegalArgumentException("FDZ1 block inflated to the wrong size");
             }
             in.position(in.position() + bodyLen);
-            untranspose(planes, u, off, len);
-            if (transform == TRANSFORM_DELTA) {
-                for (int i = 1; i < len; i++) u[off + i] += u[off + i - 1];
-            } else if (transform != TRANSFORM_NONE) {
-                throw new IllegalArgumentException("unknown FDZ1 transform " + transform);
-            }
+            detransform(raw, u, off, len, transform);
         }
         if (in.remaining() != 0) {
             throw new IllegalArgumentException("trailing bytes after the last FDZ1 block");

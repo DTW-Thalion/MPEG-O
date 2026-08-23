@@ -224,4 +224,67 @@ class FloatDeltaZstdTest {
         }
         assertBitExact(goldenValues(), FloatDeltaZstd.decode(stream));
     }
+
+    /** An FDZ1 stream of one block carrying {@code transform}, built
+     *  from an independent transform so the decoder is checked against
+     *  something other than its own encoder. */
+    private static byte[] streamWithTransform(int transform, double[] values) {
+        int len = values.length;
+        long[] work = new long[len];
+        for (int i = 0; i < len; i++) work[i] = Double.doubleToRawLongBits(values[i]);
+        if ((transform & 0x01) != 0) {
+            for (int i = len - 1; i >= 1; i--) work[i] = work[i] - work[i - 1];
+        }
+        byte[] body = new byte[len * 8];
+        if ((transform & 0x02) != 0) {
+            for (int i = 0; i < len; i++) {
+                for (int b = 0; b < 8; b++) body[i * 8 + b] = (byte) (work[i] >>> (8 * b));
+            }
+        } else {
+            for (int plane = 0; plane < 8; plane++) {
+                for (int i = 0; i < len; i++) {
+                    body[plane * len + i] = (byte) (work[i] >>> (8 * plane));
+                }
+            }
+        }
+        io.airlift.compress.zstd.ZstdCompressor c =
+            new io.airlift.compress.zstd.ZstdCompressor();
+        byte[] buf = new byte[c.maxCompressedLength(body.length)];
+        int n = c.compress(body, 0, body.length, buf, 0, buf.length);
+
+        java.nio.ByteBuffer out = java.nio.ByteBuffer
+            .allocate(FloatDeltaZstd.HEADER_LEN + 5 + n)
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        out.put(FloatDeltaZstd.headerBytes(len, 1));
+        out.put((byte) transform).putInt(n).put(buf, 0, n);
+        return out.array();
+    }
+
+    private static double[] mzShaped(int n) {
+        double[] v = new double[n];
+        for (int i = 0; i < n; i++) v[i] = 300.0 + i * 0.017 + (i % 13) * 1e-7;
+        return v;
+    }
+
+    @Test
+    void everyTransformDecodes() {
+        double[] values = mzShaped(4096);
+        for (int t = 0; t <= FloatDeltaZstd.TRANSFORM_MASK; t++) {
+            assertBitExact(values, FloatDeltaZstd.decode(streamWithTransform(t, values)));
+        }
+    }
+
+    @Test
+    void transformAboveTheMaskIsRejected() {
+        double[] values = mzShaped(64);
+        byte[] stream = streamWithTransform(FloatDeltaZstd.TRANSFORM_NONE, values);
+        stream[FloatDeltaZstd.HEADER_LEN] = 0x04;
+        assertThrows(IllegalArgumentException.class, () -> FloatDeltaZstd.decode(stream));
+    }
+
+    @Test
+    void adaptiveEncoderRoundTripsMzShapedValues() {
+        double[] values = mzShaped(4096);
+        assertBitExact(values, FloatDeltaZstd.decode(FloatDeltaZstd.encode(values)));
+    }
 }
