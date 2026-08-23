@@ -121,6 +121,7 @@ TTIOTests_OBJC_FILES = \
 	TestReferenceResolverExternal.m \
 	TestFloatDeltaZstdBlocks.m \
 	TestSpectralStreamWriter.m \
+	TestSpectralIterBlocks.m \
 	TestFastqRecordScanner.m \
 	TestStreamingImporters.m \
 	TestStreamingExporters.m \

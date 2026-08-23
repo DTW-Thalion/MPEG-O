@@ -546,6 +546,203 @@ public class AcquisitionRun implements
      * @param index spectrum index in {@code [0, count())}
      * @return      newly constructed {@link Spectrum} of the appropriate subtype
      */
+    // ── parallel block consumer ──────────────────────────────────────
+
+    /** A run over one scheduling unit's spectra.
+     *
+     *  <p>Holds the unit's channel columns and assembles a spectrum only
+     *  when one is asked for, so a caller that reads part of a unit pays
+     *  for that part. Valid only for the duration of the visitor call. */
+    public static final class SpectralUnitView {
+        private final AcquisitionRun run;
+        private final int firstSpectrum, nSpectra;
+        private final long valueStart;
+        private final java.util.Map<String, double[]> columns;
+
+        SpectralUnitView(AcquisitionRun run, int firstSpectrum, int nSpectra,
+                         long valueStart, java.util.Map<String, double[]> columns) {
+            this.run = run; this.firstSpectrum = firstSpectrum;
+            this.nSpectra = nSpectra; this.valueStart = valueStart;
+            this.columns = columns;
+        }
+
+        /** Spectra in this unit. */
+        public int count() { return nSpectra; }
+
+        /** Spectrum {@code k} of the unit; its index in the whole run is
+         *  {@code firstSpectrum + k}, and its msLevel, polarity and
+         *  retention time come from that run position. */
+        public Spectrum objectAtIndex(int k) {
+            if (k < 0 || k >= nSpectra) {
+                throw new IndexOutOfBoundsException(
+                    "index " + k + " beyond unit spectrum count " + nSpectra);
+            }
+            final int i = firstSpectrum + k;
+            final int off = (int) (run.spectrumIndex.offsetAt(i) - valueStart);
+            final int len = run.spectrumIndex.lengthAt(i);
+            return run.buildSpectrum(i, c -> {
+                double[] col = columns.get(c);
+                if (col == null || off + len > col.length) return null;
+                return java.util.Arrays.copyOfRange(col, off, off + len);
+            });
+        }
+    }
+
+    /** Visitor for {@link #iterBlocks(int, int, int, SpectralBlockVisitor)}. */
+    public interface SpectralBlockVisitor {
+        /** {@code view} is a run over one unit's spectra and is valid
+         *  only for the duration of the call. Read spectrum {@code k} of
+         *  the delivered range as {@code view.objectAtIndex(viewStart + k)};
+         *  its index in the whole run is {@code firstSpectrum + k}. The
+         *  two differ whenever a range starts part-way into a block, so
+         *  a caller that indexes the view by {@code firstSpectrum} reads
+         *  the wrong spectra. */
+        void visit(SpectralUnitView view, int viewStart, int firstSpectrum, int nSpectra);
+    }
+
+    /** One scheduling unit: whole spectra and the value extent covering
+     *  them. */
+    private static final class Unit {
+        final int firstSpectrum, nSpectra;
+        final long valueStart, valueEnd;
+        Unit(int f, int n, long vs, long ve) {
+            firstSpectrum = f; nSpectra = n; valueStart = vs; valueEnd = ve;
+        }
+    }
+
+    /** Units covering spectra {@code [lo, hi)}.
+     *
+     *  <p>Spectral blocks are cut on value boundaries while a spectrum is
+     *  located by value offset, so block edges fall inside spectra. A
+     *  spectrum belongs to the block holding its <em>first</em> value,
+     *  which partitions the spectra exactly once. A unit's extent then
+     *  runs to the end of its last spectrum and may lie past the owning
+     *  block's end, and a block holding no spectrum start owns nothing
+     *  and is skipped rather than emitted empty.
+     *
+     *  <p>Boundaries come from the FDZ1 block tables when every channel
+     *  has one and they agree, and from fixed spectrum counts otherwise.
+     *  Objective-C reads {@code blocks/index} as a shortcut for the first
+     *  case; the block starts it records are the same
+     *  {@code b * blockSize}, so the units are identical. */
+    private java.util.List<Unit> spectralUnits(int lo, int hi) {
+        java.util.List<Unit> units = new java.util.ArrayList<>();
+        if (lo >= hi) return units;
+
+        int blockSize = 0, nBlocks = 0;
+        java.util.List<String> names = channelNames();
+        if (lazyChannels != null && !names.isEmpty()) {
+            global.thalion.ttio.codecs.FloatDeltaZstd.BlockTable first = null;
+            boolean agree = true;
+            for (String c : names) {
+                LazyChannel lc = lazyChannels.get(c);
+                if (lc == null || lc.codec != 17) { agree = false; break; }
+                global.thalion.ttio.codecs.FloatDeltaZstd.BlockTable t = lc.table();
+                if (first == null) { first = t; continue; }
+                if (t.blockSize() != first.blockSize() || t.nBlocks() != first.nBlocks()) {
+                    agree = false; break;
+                }
+            }
+            if (agree && first != null && first.nBlocks() > 0) {
+                blockSize = first.blockSize();
+                nBlocks = first.nBlocks();
+            }
+        }
+
+        if (nBlocks > 0) {
+            int b = 0, i = lo;
+            while (i < hi) {
+                while (b + 1 < nBlocks
+                       && (long) (b + 1) * blockSize <= spectrumIndex.offsetAt(i)) b++;
+                long end = (b + 1 < nBlocks) ? (long) (b + 1) * blockSize : Long.MAX_VALUE;
+                int firstI = i;
+                while (i < hi && spectrumIndex.offsetAt(i) < end) i++;
+                units.add(new Unit(firstI, i - firstI, spectrumIndex.offsetAt(firstI),
+                                   spectrumIndex.offsetAt(i - 1) + spectrumIndex.lengthAt(i - 1)));
+            }
+            return units;
+        }
+
+        final int batch = 512;
+        for (int i = lo; i < hi; i += batch) {
+            int last = Math.min(i + batch, hi) - 1;
+            units.add(new Unit(i, last - i + 1, spectrumIndex.offsetAt(i),
+                               spectrumIndex.offsetAt(last) + spectrumIndex.lengthAt(last)));
+        }
+        return units;
+    }
+
+    /** Build one unit's view. Storage reads, so the caller's thread. */
+    private SpectralUnitView unitView(Unit u) {
+        final int count = (int) (u.valueEnd - u.valueStart);
+        final java.util.Map<String, double[]> cols = new java.util.LinkedHashMap<>();
+        for (String c : channelNames()) {
+            double[] v = channelRange(c, u.valueStart, count);
+            if (v != null) cols.put(c, v);
+        }
+        return new SpectralUnitView(this, u.firstSpectrum, u.nSpectra, u.valueStart, cols);
+    }
+
+    /** Visit the run's spectra one scheduling unit at a time, on a pool.
+     *
+     *  <p>The visitor runs on several threads at once and in no
+     *  particular order and must be safe that way. That relaxed ordering
+     *  is the whole difference from {@link #iterSpectra(int, int)},
+     *  whose in-order delivery on the calling thread is what bounds it.
+     *
+     *  <p>Storage reads stay on the calling thread; only spectrum
+     *  construction runs on the pool. At most {@code threads} views are
+     *  held at once, so memory follows the window rather than the unit
+     *  count.
+     *
+     *  <p>Python: {@code AcquisitionRun.for_each_block}; Objective-C:
+     *  {@code -iterBlocksFrom:to:threads:error:usingBlock:}. */
+    public void iterBlocks(int start, int stop, int threads, SpectralBlockVisitor fn) {
+        final int n = count();
+        final int lo = Math.max(start, 0), hi = Math.min(stop, n);
+        if (lo >= hi) return;
+        java.util.List<Unit> units = spectralUnits(lo, hi);
+        if (units.isEmpty()) return;
+
+        int nthreads = Math.max(1, threads == 0
+            ? global.thalion.ttio.Threads.resolve(null) : threads);
+        if (nthreads <= 1 || units.size() == 1) {
+            for (Unit u : units) fn.visit(unitView(u), 0, u.firstSpectrum, u.nSpectra);
+            return;
+        }
+
+        final int window = Math.min(nthreads, units.size());
+        final global.thalion.ttio.Threads.PoolScope scope =
+            global.thalion.ttio.Threads.pool(window);
+        try {
+            java.util.ArrayDeque<java.util.concurrent.Future<?>> inflight =
+                new java.util.ArrayDeque<>();
+            for (final Unit u : units) {
+                while (inflight.size() >= window) await(inflight.poll());
+                // Storage reads, this thread. Bounded by the window, so
+                // the columns of every unit are never resident at once.
+                final SpectralUnitView view = unitView(u);
+                inflight.add(scope.executor().submit(
+                    () -> fn.visit(view, 0, u.firstSpectrum, u.nSpectra)));
+            }
+            while (!inflight.isEmpty()) await(inflight.poll());
+        } finally {
+            scope.close();
+        }
+    }
+
+    private static void await(java.util.concurrent.Future<?> f) {
+        try {
+            f.get();
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(ie);
+        } catch (java.util.concurrent.ExecutionException ee) {
+            Throwable c = ee.getCause();
+            throw (c instanceof RuntimeException re) ? re : new RuntimeException(c);
+        }
+    }
+
     @Override
     public Spectrum objectAtIndex(int index) {
         long offset = spectrumIndex.offsetAt(index);

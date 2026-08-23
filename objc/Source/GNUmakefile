@@ -197,6 +197,7 @@ libTTIO_OBJC_FILES = \
 	Run/TTIOAcquisitionRun.m \
 	Run/TTIOWrittenSpectralBatch.m \
 	Run/TTIOSpectralBlockIndex.m \
+	Run/TTIOSpectralUnitPlan.m \
 	Run/TTIOSpectralStreamWriter.m \
 	Genomics/TTIOAlignedRead.m \
 	Genomics/TTIOBulkV2Blobs.m \

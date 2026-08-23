@@ -669,6 +669,131 @@ class AcquisitionRun:
                 ln = int(lengths[i])
                 yield self._build_spectrum(i, {c: a[o:o + ln] for c, a in arrays.items()})
 
+    # ── parallel block consumer ──────────────────────────────────────
+
+    def _spectral_units(self, lo: int, hi: int) -> list[tuple]:
+        """Scheduling units covering spectra ``[lo, hi)``.
+
+        Spectral blocks are cut on value boundaries while a spectrum is
+        located by value offset, so block edges fall inside spectra. A
+        spectrum belongs to the block holding its **first** value, which
+        partitions the spectra exactly once. A unit's value extent then
+        runs to the end of its last spectrum and may lie past the owning
+        block's end, and a block holding no spectrum start owns nothing
+        and is skipped rather than emitted empty.
+
+        Units come from the FDZ1 block tables when every channel has one
+        and they agree, and from fixed spectrum counts otherwise, which
+        covers numpress, decrypted and plain channels. Objective-C reads
+        ``blocks/index`` as a shortcut for the first case; the block
+        starts it records are the same ``b * block_size``, so the units
+        and everything observable about them are identical.
+
+        Returns ``(block, first_spectrum, n_spectra, value_start,
+        value_end)`` tuples.
+        """
+        offsets, lengths = self.index.offsets, self.index.lengths
+        units: list[tuple] = []
+        if lo >= hi:
+            return units
+
+        block_size = n_blocks = 0
+        names = list(self.channel_names)
+        if names and all(c in self._fdz_channels for c in names):
+            tables = [self._fdz_table(c) for c in names]
+            first = tables[0]
+            if all(t.block_size == first.block_size and t.n_blocks == first.n_blocks
+                   for t in tables):
+                block_size, n_blocks = int(first.block_size), int(first.n_blocks)
+
+        if n_blocks:
+            b, i = 0, lo
+            while i < hi:
+                while b + 1 < n_blocks and (b + 1) * block_size <= int(offsets[i]):
+                    b += 1
+                end = ((b + 1) * block_size) if b + 1 < n_blocks else (1 << 62)
+                start_i = i
+                while i < hi and int(offsets[i]) < end:
+                    i += 1
+                units.append((b, start_i, i - start_i, int(offsets[start_i]),
+                              int(offsets[i - 1]) + int(lengths[i - 1])))
+            return units
+
+        batch = 512
+        for i in range(lo, hi, batch):
+            last = min(i + batch, hi) - 1
+            units.append((len(units), i, last - i + 1, int(offsets[i]),
+                          int(offsets[last]) + int(lengths[last])))
+        return units
+
+    def for_each_block(self, fn, start: int = 0, stop: int | None = None, *,
+                       threads: int | None = None) -> None:
+        """Call ``fn(view, view_start, first_spectrum, n_spectra)`` once
+        per scheduling unit, on the pool.
+
+        Read spectrum ``k`` of the delivered range as
+        ``view[view_start + k]``; its index in the whole run is
+        ``first_spectrum + k``. The two differ whenever a range starts
+        part-way into a block, so a caller that indexes the view by
+        ``first_spectrum`` reads the wrong spectra.
+
+        ``fn`` is called from several threads at once and in no
+        particular order and must be safe that way. ``view`` is a run
+        over one unit's spectra, indexed from 0, valid only for the
+        duration of the call, and it builds a spectrum only when one is
+        asked for. That relaxed ordering is the whole difference from
+        :meth:`iter_spectra`, whose in-order delivery on the calling
+        thread is what bounds it.
+
+        ⚠️ **In CPython this buys nothing, and past a few workers it
+        costs.** The callback holds the GIL, so consumers serialise
+        against each other while still paying the contention; only the
+        decode overlaps, because it releases the GIL inside the native
+        call. The measured genomic equivalent went 6.2 MB/s serial, 6.1
+        at one worker, 6.8 at four and 4.5 at eight and above. The
+        compiled SDKs behave the other way round: Objective-C measures
+        213.3 MB/s ordered against 780.5 at 16 threads on an Orbitrap
+        Exploris run.
+
+        So an unset ``threads`` resolves to at most
+        ``_read_ahead_blocks()`` workers rather than to ``TTIO_THREADS``:
+        the default has to be the best measured setting, not the worst.
+        An explicit ``threads`` is honoured as given.
+
+        Java: ``AcquisitionRun.iterBlocks``; Objective-C:
+        ``-iterBlocksFrom:to:threads:error:usingBlock:``.
+        """
+        n = len(self)
+        if stop is None or stop > n:
+            stop = n
+        lo = max(start + n if start < 0 else start, 0)
+        if lo >= stop:
+            return
+
+        units = self._spectral_units(lo, stop)
+        if not units:
+            return
+
+        from ._threads import resolve_threads, pool_context
+        from .genomic_run import _read_ahead_blocks
+        nthreads = (resolve_threads(threads) if threads is not None
+                    else min(resolve_threads(None), _read_ahead_blocks()))
+        if nthreads <= 1 or len(units) == 1:
+            for u in units:
+                view = _SpectralUnitView(self, u)
+                fn(view, 0, u[1], u[2])
+            return
+
+        import concurrent.futures as _cf
+        window = min(nthreads, len(units))
+        with pool_context(window), _cf.ThreadPoolExecutor(
+                max_workers=window, thread_name_prefix="ttio-sblock") as pool:
+            def one(u: tuple) -> None:
+                fn(_SpectralUnitView(self, u), 0, u[1], u[2])
+            for fut in [pool.submit(one, u) for u in units]:
+                fut.result()
+
+
     def spectra(self) -> list[Spectrum]:
         """Return all spectra as a list.
 
@@ -1168,3 +1293,42 @@ def write_chromatograms_to_run_group(
     idx.create_dataset("target_mzs",    data=targets)
     idx.create_dataset("precursor_mzs", data=precs)
     idx.create_dataset("product_mzs",   data=prods)
+
+class _SpectralUnitView:
+    """A view over one scheduling unit.
+
+    Holds the unit's channel columns and builds a spectrum only when one
+    is indexed, so a caller that reads part of a unit pays for that part.
+    """
+
+    __slots__ = ("_run", "_first", "_n", "_value_start", "_columns")
+
+    def __init__(self, run: "AcquisitionRun", unit: tuple):
+        _, first, n, value_start, value_end = unit
+        self._run, self._first, self._n = run, first, n
+        self._value_start = value_start
+        count = value_end - value_start
+        self._columns = {}
+        for c in run.channel_names:
+            try:
+                self._columns[c] = run.channel_range(c, value_start, count)
+            except KeyError:
+                continue
+
+    def __len__(self) -> int:
+        return self._n
+
+    def __getitem__(self, k: int) -> Spectrum:
+        if k < 0:
+            k += self._n
+        if k < 0 or k >= self._n:
+            raise IndexError(f"index {k} beyond unit spectrum count {self._n}")
+        i = self._first + k
+        o = int(self._run.index.offsets[i]) - self._value_start
+        ln = int(self._run.index.lengths[i])
+        return self._run._build_spectrum(
+            i, {c: a[o:o + ln] for c, a in self._columns.items()})
+
+    def __iter__(self):
+        for k in range(self._n):
+            yield self[k]
