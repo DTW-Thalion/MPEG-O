@@ -18,9 +18,7 @@
 
 This document specifies the FQZCOMP_NX16_Z codec used by TTI-O for
 lossless quality-score compression in v1.0. It is a clean-room
-implementation of CRAM 3.1's `rANS-Nx16` discipline (htscodecs master),
-built to the design spec at
-`docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md`.
+implementation of CRAM 3.1's `rANS-Nx16` discipline (htscodecs master).
 
 The combination of static-per-block freq tables, 16-bit renormalisation,
 and a fixed power-of-two total `T = 4096` makes byte-pairing
@@ -292,9 +290,6 @@ numbered §90a-§90e to keep the codec-spec § sequence contiguous.
 | §90d  | `T = 4096` **fixed** (12-bit shift). `T` divides `b * L = 2^31` exactly (`2^31 / 2^12 = 2^19`).                                                                                                                                                                                                        | `floor(b*L / T)` is integer-exact, eliminating the rounding term that broke M94.X. Variable-T was attempted as Path 2 in M94.X and is now retired.                                          |
 | §90e  | **Bit-pack context model** (`sloc=14, qbits=12, pbits=2, dbits=0`). M94 v1 used SplitMix64.                                                                                                                                                                                                           | ~5 ops/symbol vs ~20 ops/symbol for SplitMix64; CRAM-style packing is reversible and collision-free by construction. Compression delta vs SplitMix64 is small; defer the `dtab` channel to M94.Z+. |
 
-See `docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md`
-sections 1-5 for the full design discussion and the byte-pairing proof.
-
 ---
 
 ## 7. Limitations and follow-ups
@@ -346,9 +341,7 @@ shift the pop count by thousands of chunks.
    complexity that broke M94.X. M94.Z's "adaptation" happens in the
    build pass only, before any encode.
 
-The design spec at
-`docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md` §2
-contains the formal byte-pairing proof.
+The design spec §2 contains the formal byte-pairing proof.
 
 ---
 

@@ -294,8 +294,7 @@ plaintext size is `n_elements` times the element width, so readers
 decode into an exact buffer.
 For `float_delta_zstd` (id 17) the payload is one self-contained
 FDZ1 stream exactly as the codec-17 on-disk format defines it
-(`docs/superpowers/specs/2026-08-16-float-delta-codec-design.md`:
-magic, header, per-block transform byte + zstd frame of the
+(magic, header, per-block transform byte + zstd frame of the
 transposed byte planes). Its `n_values` MUST equal the channel's
 `n_elements`; readers reject a mismatch. Encoders MAY differ
 byte-wise across languages; decoders MUST accept any conforming

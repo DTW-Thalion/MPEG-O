@@ -7,7 +7,7 @@
 # nonzero only if cmake configure, the build, or ctest fails. The C rANS
 # kernels are SIMD-dispatched (scalar/SSE4.1/AVX2 chosen at runtime by CPU),
 # so per-file line counts depend on the runner CPU and a floor would
-# false-fail. See docs/superpowers/specs/2026-06-17-r8-native-cython-coverage-design.md.
+# false-fail.
 #
 # Uses a dedicated build dir (native/_covbuild) so the uninstrumented
 # native/_build reused by other jobs / local dev is never contaminated.

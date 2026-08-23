@@ -29,8 +29,6 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>{@link SqliteProvider#toString} — both open-with-path and
  *       closed branches.</li>
  * </ul>
- *
- * <p>Per docs/superpowers/plans/2026-05-09-coverage-restoration.md J.6.</p>
  */
 class SqliteProviderHelpersTest {
 

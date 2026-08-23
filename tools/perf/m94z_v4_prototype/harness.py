@@ -245,7 +245,6 @@ def write_results_doc(
     lines.append(f"- n_qualities: {n_qualities:,} ; n_reads: {n_reads:,}")
     lines.append(f"- CRAM reference: {CRAM_BYTES:,} bytes "
                  f"({CRAM_BYTES/1e6:.3f} MB)")
-    lines.append(f"- Spec: `docs/superpowers/specs/2026-05-02-l2x-m94z-richer-context-stage1-design.md`")
     lines.append("")
     lines.append("## Per-candidate compression")
     lines.append("")

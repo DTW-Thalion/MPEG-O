@@ -103,8 +103,7 @@ additional_recipient_count: uint16
     wrapped_dek_len:     uint32 ; wrapped_dek:         bytes
 ```
 
-Compatibility properties (all proved against the real decoders;
-see `docs/superpowers/specs/2026-05-21-fd1-phase-a-multi-recipient-protection-metadata-spec.md`
+Compatibility properties (all proved against the real decoders,
 P1–P4):
 
 - **Single-recipient packets are byte-identical to §4.4** — the
@@ -164,8 +163,6 @@ container_not_server_decryptable` at submit time when it's absent
 or doesn't resolve. Absence ⇒ BYOK / researcher-only / PQC-to-
 researcher; the daemon can't process it.
 
-Spec proof + 7-point compatibility check:
-`docs/superpowers/specs/2026-05-22-fd1-c2a-server-kek-id-spec.md`.
 
 ### 4.2 AU packet header flags
 

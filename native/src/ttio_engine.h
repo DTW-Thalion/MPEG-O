@@ -13,8 +13,6 @@
  * Both engines produce identical bytes for the same job. That is what
  * makes spilling between them safe, and it is enforced as a build gate
  * rather than assumed.
- *
- * Spec: docs/superpowers/specs/2026-08-20-gpu-v6-phase2-encode.md
  */
 #ifndef TTIO_ENGINE_H
 #define TTIO_ENGINE_H

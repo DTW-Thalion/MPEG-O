@@ -1,7 +1,5 @@
 """Python ctypes wrapper for ref_diff v2 (CRAM-style sequence diff codec).
 
-Spec: docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md
-
 Encoded blob written as ``signal_channels/sequences/refdiff_v2`` uint8
 dataset with ``@compression = 14`` (REF_DIFF_V2). Requires
 ``TTIO_RANS_LIB_PATH`` to point at a built ``libttio_rans.so``;

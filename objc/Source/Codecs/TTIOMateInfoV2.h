@@ -1,8 +1,6 @@
 /*
  * TTIOMateInfoV2.h — CRAM-style inline mate-pair codec (codec id 13).
  *
- * Spec: docs/superpowers/specs/2026-05-03-mate-info-v2-design.md
- *
  * Direct link to the C library entries ttio_mate_info_v2_encode /
  * _decode in libttio_rans (header at <ttio_rans.h>). Pure-ObjC
  * fallback returns nil + error if libttio_rans not linked at build

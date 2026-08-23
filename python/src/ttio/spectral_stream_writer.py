@@ -6,8 +6,7 @@ produces (``spectrum_index/*``, ``signal_channels/<c>_values`` with
 ``@compression``); the datasets are extendable and appended per
 batch, and a codec-17 channel's FDZ1 header (``n_values``,
 ``n_blocks``) is written at close. Every existing spectral reader opens
-the result unchanged. Design:
-``docs/superpowers/specs/2026-08-16-streaming-blocks-v1-design.md`` 3.
+the result unchanged.
 
 SPDX-License-Identifier: Apache-2.0
 """

@@ -306,9 +306,7 @@ Cross-language byte-exactness is verified by
 
 References:
 
-- Design spec: `docs/superpowers/specs/2026-05-03-mate-info-v2-design.md`
   (starting point; where it disagrees with the code, the code wins).
-- Plan: `docs/superpowers/plans/2026-05-03-mate-info-v2.md`
 - Format spec: `docs/format-spec.md` §10.9 / §10.9b (on-disk schema).
 - rANS order-0 dependency: `native/include/ttio_rans.h`
   (`ttio_rans_o0_encode` / `_decode`).

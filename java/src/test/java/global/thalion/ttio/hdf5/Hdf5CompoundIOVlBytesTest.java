@@ -25,8 +25,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * (alone, alongside fixed columns, alongside multiple VL_BYTES columns,
  * and with empty / near-max-size cells). Round-trip parity is asserted
  * byte-for-byte.</p>
- *
- * <p>Per docs/superpowers/plans/2026-05-09-coverage-restoration.md §J.3.</p>
  */
 class Hdf5CompoundIOVlBytesTest {
 

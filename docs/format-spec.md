@@ -825,12 +825,12 @@ HDF5 filter pipeline (codec ids 1–3) or a dedicated per-channel
 | 9  | _RESERVED_9            | Reserved on the wire. Was the v1 REF_DIFF codec; superseded by id 14. |
 | 10 | _RESERVED_10           | Reserved on the wire. Was the FQZCOMP_NX16 v1 codec; superseded by id 12. |
 | 11 | DELTA_RANS_ORDER0      | Running delta + zigzag-varint + rANS-O0 wrapper for sorted-ascending integer arrays. Auto-default for the `positions` channel. See `docs/codecs/delta_rans.md`. |
-| 12 | FQZCOMP_NX16_Z         | CRAM-mimic lossless quality codec. Magic `M94Z`, V4 wire format. Static-per-block frequency tables (zlib-deflated in the header so the decoder skips the build pass), 16-bit renormalisation (`B = 16`, `b = 2^16`), `T = 4096` fixed (12-bit shift); `T \| b·L = 2^31` exactly, byte-pairing mathematically guaranteed. Bit-pack context model: 12 bits `prev_q` + 2 bits position bucket + 1 bit revcomp, masked to `2^14` slots. 4-way interleaved rANS states. **Default for the `qualities` channel.** Since qualities V5, the encoder also tries the S5/S6 sequence-context strategies when the run carries a base-parallel `sequences` channel and keeps the smallest stream by exact size; a winning sequence strategy is emitted as a `M94Z` version-5 stream whose body is the explicit 8-byte parameter block plus a range-coded stream, and whose decoder requires the decoded sequences as side input. Files where V4 wins stay byte-identical version-4 streams. Writers opt out per run with `opt_disable_qualities_v5` / `optDisableQualitiesV5`. Spec: `docs/superpowers/specs/2026-08-16-qualities-v5-design.md`. Clean-room implementation of CRAM 3.1 `rANS-Nx16` discipline; no htslib / tools-Java source consulted. See `docs/codecs/fqzcomp_nx16_z.md`. |
+| 12 | FQZCOMP_NX16_Z         | CRAM-mimic lossless quality codec. Magic `M94Z`, V4 wire format. Static-per-block frequency tables (zlib-deflated in the header so the decoder skips the build pass), 16-bit renormalisation (`B = 16`, `b = 2^16`), `T = 4096` fixed (12-bit shift); `T \| b·L = 2^31` exactly, byte-pairing mathematically guaranteed. Bit-pack context model: 12 bits `prev_q` + 2 bits position bucket + 1 bit revcomp, masked to `2^14` slots. 4-way interleaved rANS states. **Default for the `qualities` channel.** Since qualities V5, the encoder also tries the S5/S6 sequence-context strategies when the run carries a base-parallel `sequences` channel and keeps the smallest stream by exact size; a winning sequence strategy is emitted as a `M94Z` version-5 stream whose body is the explicit 8-byte parameter block plus a range-coded stream, and whose decoder requires the decoded sequences as side input. Files where V4 wins stay byte-identical version-4 streams. Writers opt out per run with `opt_disable_qualities_v5` / `optDisableQualitiesV5`. Clean-room implementation of CRAM 3.1 `rANS-Nx16` discipline; no htslib / tools-Java source consulted. See `docs/codecs/fqzcomp_nx16_z.md`. |
 | 13 | MATE_INLINE_V2         | Inlined per-record mate_info (chrom + pos + tlen) as a single channel. Replaces the M82 compound + per-field subgroup decomposition. **Default for the `mate_info` channel.** See `docs/codecs/mate_info_v2.md`. |
 | 14 | REF_DIFF_V2            | **Context-aware** reference-based sequence-diff codec. Encoder/decoder consume sibling channels (`positions`, `cigars`) and an external reference resolver alongside the channel bytes. Slice-based wire format with embedded reference at `/study/references/<reference_uri>/`. **Default for the `sequences` channel** when a reference is available; falls back to BASE_PACK silently when not. See `docs/codecs/ref_diff_v2.md`. |
 | 15 | NAME_TOKENIZED_V2      | 8-substream multi-token columnar codec for read names. Substreams: FLAG / POOL_IDX / MATCH_K / COL_TYPES / NUM_DELTA / DICT_CODE / DICT_LIT / VERB_LIT, each auto-picked between rANS-O0 and raw passthrough. Per-block reset every 4096 reads; magic `NTK2`. **Default for the `read_names` channel.** See `docs/codecs/name_tokenizer_v2.md`. |
 | 16 | ZSTD                   | Zstandard (RFC 8878). Wire-only: an opt-in codec for spectral access-unit channels on the transport stream (`transport-spec.md` §4.3). No on-disk `@compression` dispatch. |
-| 17 | FLOAT_DELTA_ZSTD       | Lossless float64 channel codec: per block of 2^20 values, none/delta on the uint64 bit view (chosen by exact size comparison), byte-plane transpose, one zstd frame. Magic `FDZ1`. Values round-trip bit-exactly (NaN payloads, signed zeros, Inf). The default for float64 channels of `TTIOMassSpectrum` runs (writers opt out via `opt_disable_float_delta` / `optDisableFloatDelta`); other spectral classes opt in via `signal_compression="float_delta_zstd"`. The dataset becomes a flat uint8 stream with `@compression = 17` and no HDF5 filter. Encoders MAY differ byte-wise across languages (zstd builds differ); decoders MUST accept any conforming stream — a shared golden fixture pins the decode side. Spec at `docs/superpowers/specs/2026-08-16-float-delta-codec-design.md`. |
+| 17 | FLOAT_DELTA_ZSTD       | Lossless float64 channel codec: per block of 2^20 values, none/delta on the uint64 bit view (chosen by exact size comparison), byte-plane transpose, one zstd frame. Magic `FDZ1`. Values round-trip bit-exactly (NaN payloads, signed zeros, Inf). The default for float64 channels of `TTIOMassSpectrum` runs (writers opt out via `opt_disable_float_delta` / `optDisableFloatDelta`); other spectral classes opt in via `signal_compression="float_delta_zstd"`. The dataset becomes a flat uint8 stream with `@compression = 17` and no HDF5 filter. Encoders MAY differ byte-wise across languages (zstd builds differ); decoders MUST accept any conforming stream — a shared golden fixture pins the decode side. |
 
 Ids `0`–`3` ride the HDF5 filter pipeline; ids `4`+ are signalled via
 the per-channel `@compression` attribute (see §10.5). Reserved ids
@@ -943,9 +943,8 @@ Under `blocks_v1` (section 10.12) this dataset holds one such blob per block, ba
 
 NAME_TOKENIZED_V2 is a multi-substream + DUP-pool + PREFIX-MATCH
 codec for read names. Wire magic `NTK2`, container version
-`0x01`. Default for the `read_names` channel. Spec at
-`docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md`
-(§4 has the authoritative byte-level layout).
+`0x01`. Default for the `read_names` channel. §4 of the design spec
+has the authoritative byte-level layout.
 
 Summary:
 
@@ -1101,8 +1100,7 @@ signal_channels/mate_info/
 ```
 
 The `inline_v2` blob carries a 34-byte container header + 4 substreams
-(MF / NS / NP / TS); full wire format spec at
-`docs/superpowers/specs/2026-05-03-mate-info-v2-design.md` §4.
+(MF / NS / NP / TS); full wire format in the design spec §4.
 
 The `chrom_names` sidecar is a compound dataset that maps chrom_ids
 (row index) to chromosome names. **This is necessary because mate
@@ -1408,8 +1406,7 @@ signal_channels/sequences/
 The `refdiff_v2` blob carries an outer container header (38 + uri_len
 bytes, magic "RDF2"), a slice index (32 bytes/entry, byte-compatible
 with v1), and per-slice bodies each with a 24-byte sub-header + 5
-rANS-O0-encoded substreams. Full wire format spec at
-`docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md` §4.
+rANS-O0-encoded substreams. Full wire format in the design spec §4.
 
 Under `blocks_v1` (section 10.12) this dataset holds one such blob per block, back to back, addressed through `blocks/index`.
 
@@ -1605,7 +1602,7 @@ metadata: who the data came from (`Subject`) and what was collected
 from them (`Sample`). Each is a parent group containing one HDF5
 **sub-group per row**, keyed by the row's primary key. The
 attribute schema mirrors the data model in the v1.4 subjects/samples
-design (`docs/superpowers/specs/2026-05-26-subjects-samples-design.md`).
+design.
 
 The transport-stream encoding of these two tables is documented in
 [`transport-spec.md`](transport-spec.md) §4.22 (`SUBJECT_METADATA`

@@ -119,8 +119,6 @@ codec id 8 (v1 NAME_TOKENIZED).
 
 ## References
 
-- Spec: `docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md`
-- Plan: `docs/superpowers/plans/2026-05-04-name-tokenized-v2.md`
 - Phase 0 prototype results: `docs/benchmarks/2026-05-04-name-tokenized-v2-phase0.md`
 - Codec doc: `docs/codecs/name_tokenizer_v2.md`
 - Format spec wire: `docs/format-spec.md` §10.6b

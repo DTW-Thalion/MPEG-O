@@ -1,6 +1,5 @@
 """FLOAT_DELTA_ZSTD — lossless float64 channel codec (codec id 17).
 
-Spec: ``docs/superpowers/specs/2026-08-16-float-delta-codec-design.md``.
 Per block of ``BLOCK_SIZE`` values: view the float64 bit patterns as
 uint64, then take whichever of the four transforms yields the smaller
 stream (bit 0 is a delta mod 2**64, bit 1 keeps the values as plain

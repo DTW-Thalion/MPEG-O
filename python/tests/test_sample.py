@@ -1,7 +1,6 @@
 """Stage 6 (transport-spec v0.11, Deferral 2): :class:`Sample` dataclass.
 
-Validation rules per design spec
-``docs/superpowers/specs/2026-05-26-subjects-samples-design.md`` §4.4.
+Validation rules per the design spec §4.4.
 Java parity: ``SpectralDatasetSubjectsSamplesTest``.
 """
 from __future__ import annotations

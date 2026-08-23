@@ -8,8 +8,6 @@ package global.thalion.ttio.codecs;
 /**
  * mate_info v2 — CRAM-style inline mate-pair codec (codec id 13).
  *
- * <p>Spec: docs/superpowers/specs/2026-05-03-mate-info-v2-design.md
- *
  * <p>High-level API; delegates to {@link TtioRansNative#encodeMateInfoV2}
  * / {@code decodeMateInfoV2} which call the C library entries
  * {@code ttio_mate_info_v2_encode/decode}.

@@ -1,8 +1,6 @@
 /*
  * TTIONameTokenizerV2.h -- column-aware tokenised read-name codec (codec id 15).
  *
- * Spec: docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md
- *
  * Direct link to the C library entries ttio_name_tok_v2_encode /
  * _decode in libttio_rans (header at <ttio_rans.h>). Pure-ObjC fallback
  * raises NSException / returns nil + error if libttio_rans is not

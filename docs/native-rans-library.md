@@ -379,8 +379,5 @@ Introspection: `[TTIOFqzcompNx16Z backendName]` returns
 
 ## 7. References
 
-- Plan: `docs/superpowers/plans/2026-04-30-fqzcomp-acceleration.md`
-- Spec: `docs/superpowers/specs/2026-04-30-fqzcomp-acceleration-design.md`
 - Codec doc: `docs/codecs/fqzcomp_nx16_z.md` §2 V2 wire format.
-- M94.Z spec: `docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md`.
 - Source (~3500 lines C, MIT-style internal license): `native/src/`.

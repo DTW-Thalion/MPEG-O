@@ -1,5 +1,4 @@
 /* NAME_TOKENIZED v2 codec implementation.
- * Spec: docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md
  *
  * Wire layout (big-endian magic, little-endian everything else):
  *   Container header:

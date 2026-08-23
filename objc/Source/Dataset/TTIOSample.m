@@ -8,8 +8,7 @@
  * Declared In:   Dataset/TTIOSample.h
  *
  * Biological / material Sample first-class entity. Stage 6 of
- * transport-spec v0.11 (Deferral 2). See design spec
- * docs/superpowers/specs/2026-05-26-subjects-samples-design.md.
+ * transport-spec v0.11 (Deferral 2).
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * Copyright (c) 2026 The Thalion Initiative

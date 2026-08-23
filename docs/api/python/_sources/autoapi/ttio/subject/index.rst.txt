@@ -7,8 +7,7 @@ ttio.subject
 
    ``Subject`` — study donor / patient / animal / object first-class entity.
 
-   See design spec ``docs/superpowers/specs/2026-05-26-subjects-samples-design.md``
-   sections 4.1 and 5 for the data model and on-disk layout. Stage 6 of
+   Stage 6 of
    transport-spec v0.11 (Deferral 2) makes this a first-class TTI-O entity
    persisted as ``/study/subjects/<external_id>/`` per-row HDF5 groups.
 

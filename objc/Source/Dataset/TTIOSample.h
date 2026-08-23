@@ -14,10 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
  * <code>TTIOSubject</code>, or a standalone sample with no recorded
  * subject. First-class TTI-O entity introduced in Stage 6 of the
  * transport-spec v0.11 work (Deferral 2). Persisted as
- * <code>/study/samples/&lt;sample_id&gt;/</code> per-row HDF5 groups,
- * see design spec
- * <code>docs/superpowers/specs/2026-05-26-subjects-samples-design.md</code>
- * §4.2 and §5.</p>
+ * <code>/study/samples/&lt;sample_id&gt;/</code> per-row HDF5 groups.</p>
  *
  * <p>The <code>sampleId</code> matches
  * <code>TTIOAcquisitionRun.sampleName</code> for the run →

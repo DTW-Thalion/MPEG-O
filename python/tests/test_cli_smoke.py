@@ -15,8 +15,6 @@ Targets:
   (``_json_double`` non-integer branch), 156-159 / 163-164
   (``_do_send`` / ``_do_recv``), and 176-252 (``_do_transcode``).
 
-Per docs/superpowers/plans/2026-05-09-coverage-restoration.md §P.3.
-
 SPDX-License-Identifier: Apache-2.0
 """
 from __future__ import annotations

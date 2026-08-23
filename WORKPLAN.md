@@ -31,9 +31,7 @@ as a record of what was built; current milestones use TTI-O names.
 >   `conformance/multi_recipient/`. Append-only on §4.4 →
 >   single-recipient packets stay byte-identical, so existing
 >   BYOK / envelope / PQC fixtures are unchanged. Server-side
->   FD-1 D+ continues in the `tti-workbench-server` repo. Spec
->   proofs at `docs/superpowers/specs/2026-05-21-fd1-phase-a-...md`
->   + `2026-05-22-fd1-c2a-server-kek-id-spec.md`.
+>   FD-1 D+ continues in the `tti-workbench-server` repo.
 > - **Per-AU decrypt-in-place** parity APIs in all 3 languages
 >   (PRs #161 + #162 + **#163**, 2026-05-23) — closes the
 >   long-standing "silent no-op on per-AU files" gap on the
@@ -95,10 +93,7 @@ as a record of what was built; current milestones use TTI-O names.
 > pre-session. Codec compute is no longer the bottleneck; remaining
 > gap is HDF5 framework + multi-omics infrastructure, accepted for
 > v1.2.0 scope per user direction. All codec-tier items complete;
-> M92 release prep follows. See
-> `docs/superpowers/specs/2026-04-28-m93-m94-m95-codec-design.md`
-> + `docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md`
-> + `docs/superpowers/specs/2026-04-30-m95-delta-rans-design.md`.
+> M92 release prep follows.
 >
 > **Phase 11 — cross-language perf sweep shipped 2026-05-01.** Five
 > focused wins, no wire-format breaks. Tasks #78–#81 + #83 from the
@@ -174,8 +169,7 @@ as a record of what was built; current milestones use TTI-O names.
 >   `python/tests/integration/test_m94z_v4_cross_language.py` (4
 >   parametrized cases, all PASS). V4 is now the default emit format in
 >   each language when its respective native library is loaded; V1/V2
->   read-compat preserved as the no-native fallback. Plan at
->   `docs/superpowers/plans/2026-05-02-l3-m94z-v4-java-objc-stage3.md`.
+>   read-compat preserved as the no-native fallback.
 >   Follow-ups (out of scope, separate tasks): Java/ObjC V4 perf
 >   benchmarks, V4 empty-input handling (V3 fallback at the Python
 >   layer was deferred from Stage 2 Task 12).
@@ -204,11 +198,7 @@ as a record of what was built; current milestones use TTI-O names.
 >   1800/1800 baseline. Java JNI + ObjC wrappers are **Stage 3
 >   follow-up** — Python is the load-bearing V4 path; the C plumbing
 >   is proven byte-exact and ready for binding without further model
->   work. Spec at
->   `docs/superpowers/specs/2026-05-02-l2x-m94z-richer-context-stage2-design.md`;
->   plan at
->   `docs/superpowers/plans/2026-05-02-l2x-m94z-richer-context-stage2.md`;
->   results at
+>   work. Results at
 >   `docs/benchmarks/2026-05-02-m94z-v4-stage2-results.md`; V4 wire
 >   format documented in `docs/codecs/fqzcomp_nx16_z.md` §2.
 >
@@ -245,8 +235,7 @@ as a record of what was built; current milestones use TTI-O names.
 >   or two-pass encoder picking smaller of c3/c0) rather than lock
 >   in a single bit budget. The 1.15× CRAM gate is chr22-v1.2.0-
 >   specific; multi-platform robustness is a separate acceptance
->   criterion. Plan + results:
->   `docs/superpowers/plans/2026-05-02-l2x-m94z-richer-context-stage1.md`,
+>   criterion. Results:
 >   `docs/benchmarks/2026-05-02-m94z-v4-multi-corpus.md` (cross-corpus
 >   summary, 4 corpora), per-corpus docs
 >   `2026-05-02-m94z-v4-{candidates, na12878_wes_chr22,
@@ -275,8 +264,7 @@ as a record of what was built; current milestones use TTI-O names.
 >   in `native/src/rans_o0.c`. Entry points
 >   `ttio_mate_info_v2_encode` / `ttio_mate_info_v2_decode`.
 > * **4-substream wire format:** MF / NS / NP / TS (34-byte container
->   header + auto-pick rANS-O0). Spec at
->   `docs/superpowers/specs/2026-05-03-mate-info-v2-design.md`.
+>   header + auto-pick rANS-O0).
 > * **Cross-language byte-exact gate:** 12/12 PASS (4 corpora ×
 >   Python ↔ Java ↔ ObjC) in
 >   `python/tests/integration/test_mate_info_v2_cross_language.py`.
@@ -297,8 +285,7 @@ as a record of what was built; current milestones use TTI-O names.
 > * **C kernel:** `native/src/ref_diff_v2.{c,h}` + rANS-O0 helpers.
 >   Entry points `ttio_ref_diff_v2_encode` / `ttio_ref_diff_v2_decode`.
 > * **5-substream wire format:** FLAG / BS / IN / SC / ESC (38 + uri_len
->   byte container header + per-slice bodies). Spec at
->   `docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md`.
+>   byte container header + per-slice bodies).
 > * **Cross-language byte-exact gate:** 3/3 PASS + 1 SKIP (hg002_pacbio
 >   BAM has SEQ=`*`) in
 >   `python/tests/integration/test_ref_diff_v2_cross_language.py`.
@@ -319,8 +306,7 @@ as a record of what was built; current milestones use TTI-O names.
 >   + DUP-pool (N=8) + PREFIX-MATCH + per-block reset (4096 reads).
 > * **8-substream wire format:** FLAG / POOL_IDX / MATCH_K / COL_TYPES
 >   / NUM_DELTA / DICT_CODE / DICT_LIT / VERB_LIT, each auto-picked
->   rANS-O0 vs raw. Spec at
->   `docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md`.
+>   rANS-O0 vs raw.
 > * **Phase 0 prototype** at `tools/perf/name_tok_v2_prototype/`
 >   validated the algorithm + chr22 ≥ 3 MB savings gate before any C
 >   work, per `feedback_phase_0_spec_proof`.
@@ -1003,8 +989,6 @@ identified in M92's smoke benchmark (TTI-O at 2.5× CRAM 3.1, target
   auto-deduplication across runs sharing a URI.
 - Format-version bumps `1.4 → 1.5` only when REF_DIFF is actually
   used (M82-only writes stay at `1.4` for byte-parity).
-- Spec: `docs/superpowers/specs/2026-04-28-m93-m94-m95-codec-design.md` §3 M93.
-- Plan: `docs/superpowers/plans/2026-04-28-m93-ref-diff-codec.md`.
 
 ### M94 — FQZCOMP_NX16 lossless quality codec ✓ (Python + ObjC + Java landed 2026-04-29)
 
@@ -1041,7 +1025,6 @@ identified in M92's smoke benchmark (TTI-O at 2.5× CRAM 3.1, target
 - Python reference: `python/src/ttio/codecs/delta_rans.py`.
   ObjC: `objc/Source/Codecs/TTIODeltaRans.{h,m}`.
   Java: `java/src/main/java/global/thalion/ttio/codecs/DeltaRans.java`.
-- Spec: `docs/superpowers/specs/2026-04-30-m95-delta-rans-design.md`.
 - Codec spec: `docs/codecs/delta_rans.md`.
 
 ### M94.X — FQZCOMP_NX16 variable-total rANS (ABANDONED 2026-04-29)
@@ -1079,9 +1062,6 @@ retained for backward compatibility.
   on `signal_channels/qualities`); benchmark adapter
   (`tools/benchmarks/formats.py`) updated to use the new codec id
   for quality compression.
-- Spec: `docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md`
-  (842-line design doc with byte-pairing proof + state-machine
-  diagrams).
 - Codec spec: `docs/codecs/fqzcomp_nx16_z.md`.
 
 ### M93/M94 — Cython acceleration ✓ (Python only, 2026-04-29)

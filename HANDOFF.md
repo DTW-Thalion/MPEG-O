@@ -16,10 +16,10 @@ through this repo are:
 
 | Phase | Scope | Status | Spec proof |
 |---|---|---|---|
-| **A-1 / A-2 / A-3 / A-4** | Multi-recipient `ProtectionMetadata` wire format in Python / Java / ObjC + cross-language conformance vectors | ✅ shipped 2026-05-21 / 22 | [`2026-05-21-fd1-phase-a-multi-recipient-protection-metadata-spec.md`](docs/superpowers/specs/2026-05-21-fd1-phase-a-multi-recipient-protection-metadata-spec.md) |
+| **A-1 / A-2 / A-3 / A-4** | Multi-recipient `ProtectionMetadata` wire format in Python / Java / ObjC + cross-language conformance vectors | ✅ shipped 2026-05-21 / 22 | — |
 | **B-1 / B-2** | Client envelope API (`upload_encrypted_multi` / `uploadEncryptedMulti`) in Python + Java | ✅ shipped 2026-05-22 | — |
 | **C-0** | Standalone ObjC key-wrap primitive (byte-compat with Java + Python) | ✅ shipped 2026-05-22 | — |
-| **C-2a / C-2a-4** | `server_kek_id` field in `ProtectionMetadata` (all 3 langs) + byte-parity vectors | ✅ shipped 2026-05-22 | [`2026-05-22-fd1-c2a-server-kek-id-spec.md`](docs/superpowers/specs/2026-05-22-fd1-c2a-server-kek-id-spec.md) |
+| **C-2a / C-2a-4** | `server_kek_id` field in `ProtectionMetadata` (all 3 langs) + byte-parity vectors | ✅ shipped 2026-05-22 | — |
 | **D+** | Server pipeline (decrypt → process → re-encrypt for researcher) | ⏳ active in `tti-workbench-server` (not this repo) | — |
 
 The most recent reference-impl-side surface (PRs #161 + #162 +
@@ -52,10 +52,6 @@ For ongoing work not coordinated through HANDOFF, see:
 - `CHANGELOG.md` § `[Unreleased]` — what's landed since the last
   tag.
 - `WORKPLAN.md` — milestone history + binding decisions.
-- `docs/superpowers/specs/` — spec proofs for wire-format-breaking
-  or wire-format-extending changes (e.g. FD-1 A / C-2a).
-- `docs/superpowers/plans/` — implementation plans for shipped
-  milestones (kept as historical record).
 - `tti-workbench-server` repository — daemon-side workstreams
   (FD-1 D+, S-series milestones, etc.) which the reference-impl
   side only feeds (via this repo's client SDK + ProtectionMetadata

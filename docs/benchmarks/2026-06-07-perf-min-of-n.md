@@ -8,8 +8,7 @@ SDK product code; the benches measure the same operations as before.
 codec paths, via four changes: min-of-N timing, an absolute floor, a 10× workload, and a
 small two-tier override list. The suite is now **manual-only** (removed from CI).
 
-See `docs/superpowers/specs/2026-06-06-perf-p1a-median-design.md` (+ its 2026-06-07 addendum)
-for the design and the empirical pivot from the originally-planned median-of-N.
+The design pivoted empirically from the originally-planned median-of-N.
 
 ## How to run (manual)
 

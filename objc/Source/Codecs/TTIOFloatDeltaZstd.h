@@ -5,8 +5,7 @@
  * FLOAT_DELTA_ZSTD — lossless float64 channel codec (codec id 17).
  * Per block: none or delta on the uint64 bit view, byte planes or
  * plain little-endian values, all four combinations compared by exact
- * size, then one zstd frame. Spec at
- * docs/superpowers/specs/2026-08-16-float-delta-codec-design.md.
+ * size, then one zstd frame.
  *
  * Per the spec's Option B decision, encoders MAY differ byte-wise
  * across languages; decoders MUST accept any conforming stream. The

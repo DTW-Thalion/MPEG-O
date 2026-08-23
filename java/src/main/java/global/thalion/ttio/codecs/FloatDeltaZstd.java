@@ -15,8 +15,7 @@ import java.nio.ByteOrder;
 /**
  * FLOAT_DELTA_ZSTD — lossless float64 channel codec (codec id 17).
  *
- * <p>Spec: {@code docs/superpowers/specs/2026-08-16-float-delta-codec-design.md}.
- * Per block: none or delta on the uint64 bit view, byte planes or plain
+ * <p>Per block: none or delta on the uint64 bit view, byte planes or plain
  * little-endian values, all four compared by exact size, then one zstd
  * frame. Values round-trip
  * bit-exactly. Per the spec's Option B decision, encoders MAY differ

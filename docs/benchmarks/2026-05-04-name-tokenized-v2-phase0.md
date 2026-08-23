@@ -110,8 +110,6 @@ Spec correction required before Task 3:
 
 ## References
 
-- Spec: `docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md`
-- Plan: `docs/superpowers/plans/2026-05-04-name-tokenized-v2.md`
 - Prototype: `tools/perf/name_tok_v2_prototype/`
 - Round-trip tests: `tools/perf/name_tok_v2_prototype/test_roundtrip.py` (9/9 PASS)
 - Benchmark runner: `tools/perf/name_tok_v2_prototype/benchmark.py`

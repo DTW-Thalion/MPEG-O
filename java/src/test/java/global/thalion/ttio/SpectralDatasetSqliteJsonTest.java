@@ -37,8 +37,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * dataset support). On re-open through {@code sqlite://},
  * {@code openViaProvider} reads those JSON attributes back via the
  * three {@code *FromJson} helpers.</p>
- *
- * <p>Per docs/superpowers/plans/2026-05-09-coverage-restoration.md J.6.</p>
  */
 class SpectralDatasetSqliteJsonTest {
 

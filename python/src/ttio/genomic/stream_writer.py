@@ -5,8 +5,7 @@ Reads are buffered until a block is full (``block_reads`` reads or
 ``block_bytes`` sequence bytes, whichever first), encoded through
 :func:`ttio.genomic._blocks.encode_block`, and appended to extendable
 per-channel datasets; ``blocks/index`` records where each block's
-blob lives. Format: ``docs/format-spec.md`` section 10.12; design:
-``docs/superpowers/specs/2026-08-16-streaming-blocks-v1-design.md``.
+blob lives. Format: ``docs/format-spec.md`` section 10.12.
 
 Cross-language equivalents
 --------------------------
@@ -134,8 +133,7 @@ class GenomicStreamWriter:
         self._base_count = 0
         self._block_count = 0
         # Per-run sticky qualities strategy: block 0 auto-tunes, the
-        # winner is pinned for the rest of the run (spec
-        # docs/superpowers/plans/2026-08-19-fqz-v5-sticky-strategy-spec.md).
+        # winner is pinned for the rest of the run.
         self._qual_hint = -1
         self._qual_exhaustive = os.environ.get("TTIO_M94Z_EXHAUSTIVE") == "1"
         # A positive TTIO_M94Z_HINT pins the strategy before block 0

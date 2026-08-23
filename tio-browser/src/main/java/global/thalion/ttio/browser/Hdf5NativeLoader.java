@@ -24,8 +24,6 @@ import java.util.stream.Stream;
  * without any system HDF5 install.
  *
  * <p>Idempotent — safe to call from multiple entry points.
- *
- * <p>See {@code docs/superpowers/specs/2026-05-09-hdf5-bundled-natives-design.md}.
  */
 public final class Hdf5NativeLoader {
 

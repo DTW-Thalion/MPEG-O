@@ -11,8 +11,6 @@ import java.util.List;
 /**
  * NAME_TOKENIZED v2 (codec id 15) — column-aware tokenised read-name codec.
  *
- * <p>Spec: docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md
- *
  * <p>Thin wrapper over the JNI bridge in {@link TtioRansNative}. List inputs
  * are converted to {@code String[]} once at the API boundary; everything
  * else happens in C (libttio_rans).

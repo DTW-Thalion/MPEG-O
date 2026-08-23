@@ -181,9 +181,6 @@ def main():
                     "reference encoder. Do not hand-edit. The recipient_block "
                     "and full body hex are the cross-language byte contract "
                     "(Python == Java == ObjC).",
-        "spec": "docs/superpowers/specs/"
-                "2026-05-21-fd1-phase-a-multi-recipient-protection-metadata-"
-                "spec.md",
         "vectors": out_vectors,
         "pre_phase_a_primary": {
             "_comment": "An un-upgraded (pre-Phase-A) reader of "

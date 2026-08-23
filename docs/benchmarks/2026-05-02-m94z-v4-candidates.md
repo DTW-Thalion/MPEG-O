@@ -4,7 +4,6 @@
 - Host: TTI-PC-0001 (Linux 6.6.87.2-microsoft-standard-WSL2)
 - Git HEAD: `24d98c9`
 - BAM load: 3.92s
-- Spec: `docs/superpowers/specs/2026-05-02-l2x-m94z-richer-context-stage1-design.md`
 
 ## Per-candidate compression
 

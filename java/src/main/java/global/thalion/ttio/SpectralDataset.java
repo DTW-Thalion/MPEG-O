@@ -831,8 +831,6 @@ public class SpectralDataset implements
      *  with first-class {@link Subject} + {@link Sample} lists.
      *  Subjects are persisted as {@code /study/subjects/<external_id>/}
      *  per-row groups; Samples as {@code /study/samples/<sample_id>/}.
-     *  See {@code docs/superpowers/specs/2026-05-26-subjects-samples-design.md}
-     *  §4 and §5.
      *
      *  <p>Validation per spec §4.4:</p>
      *  <ul>

@@ -1,8 +1,5 @@
 """FD-1 Phase A-1 — multi-recipient ProtectionMetadata (Python).
 
-Spec + proof: docs/superpowers/specs/
-2026-05-21-fd1-phase-a-multi-recipient-protection-metadata-spec.md.
-
 Covers the packet codec (append-only recipient block) and the
 storage-attribute carriage through write_encrypted_dataset /
 read_encrypted_to_file, asserting single-recipient stays byte-identical

@@ -54,5 +54,4 @@ python conformance/multi_recipient/gen_vectors.py
 
 **Do not hand-edit `vectors.json`.** A change to the golden bytes is a
 wire-format change — re-run the generator, review the diff, and justify it
-against the [Phase A spec](../../docs/superpowers/specs/2026-05-21-fd1-phase-a-multi-recipient-protection-metadata-spec.md).
-Spec §6 defines this corpus.
+against the Phase A spec. Spec §6 defines this corpus.
