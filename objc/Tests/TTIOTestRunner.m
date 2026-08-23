@@ -128,6 +128,7 @@ extern void testGenomicBlocks(void);
 extern void testGenomicStreamWriter(void);
 extern void testGenomicStreamWriterThreads(void);
 extern void testSpectralStreamWriterThreads(void);
+extern void testSpectralIterBlocks(void);
 extern void testFastqRecordScanner(void);
 extern void testThreads(void);
 extern void testBlocksV1Golden(void);
@@ -675,6 +676,10 @@ int main(int argc, const char *argv[])
             testSpectralStreamWriterThreads();
             testFastqRecordScanner();
         END_SET("Threads: knob, pool, block-parallel writer")
+
+        START_SET("spectral iterBlocks")
+            testSpectralIterBlocks();
+        END_SET("spectral iterBlocks")
 
         START_SET("Codecs: reference resolver, external FASTA")
             testReferenceResolverExternal();
