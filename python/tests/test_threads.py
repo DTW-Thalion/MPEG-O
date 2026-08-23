@@ -68,14 +68,18 @@ def test_read_ahead_window_env_override(monkeypatch):
 
 
 def test_v6_segment_threads_clamp(monkeypatch):
-    """Parity with Threads.resolveV6SegmentThreads (Java) and
-    +[TTIOThreads resolveV6SegmentThreads:] (ObjC)."""
+    """The argument is blocks in flight, not the pool size, and the
+    cap is the core count. Parity with Threads.resolveV6SegmentThreads
+    (Java) and +[TTIOThreads resolveV6SegmentThreads:] (ObjC)."""
     monkeypatch.setattr(os, "cpu_count", lambda: 32)
-    assert _threads.resolve_v6_segment_threads(1) == 8      # capped
+    assert _threads.resolve_v6_segment_threads(1) == 32     # the machine
     assert _threads.resolve_v6_segment_threads(4) == 8
     assert _threads.resolve_v6_segment_threads(16) == 2
     assert _threads.resolve_v6_segment_threads(64) == 2     # floor
-    assert _threads.resolve_v6_segment_threads(0) == 8      # read as one
+    assert _threads.resolve_v6_segment_threads(0) == 32     # read as one
+    # The product stays near the core count wherever it can.
+    for blocks in (1, 2, 4, 8, 16):
+        assert _threads.resolve_v6_segment_threads(blocks) * blocks <= 32
 
 
 def test_v6_segment_threads_env_override(monkeypatch):
@@ -96,3 +100,44 @@ def test_v6_segment_threads_env_override(monkeypatch):
     monkeypatch.delenv("TTIO_V6_SEGMENT_THREADS")
     assert _threads.resolve_v6_segment_threads(16) == 2
 
+
+def test_import_threads_caps_the_default_at_what_memory_affords(monkeypatch):
+    # A thread costs a gibibyte of the pipeline budget, so the default
+    # count is capped at what a quarter of physical memory affords.
+    monkeypatch.delenv("TTIO_THREADS", raising=False)
+    monkeypatch.delenv("TTIO_IMPORT_THREADS", raising=False)
+    monkeypatch.setattr(os, "cpu_count", lambda: 32)
+    per_thread = _threads.IMPORT_BLOCK_BYTES * 16
+
+    def phys(gib):
+        monkeypatch.setattr(
+            os, "sysconf",
+            lambda n: (gib << 30) // 4096 if n == "SC_PHYS_PAGES" else 4096)
+
+    phys(32)                       # 8 GiB quarter / 1 GiB a thread
+    assert _threads.resolve_import_threads() == 8
+    phys(256)                      # affords more than the plain default
+    assert _threads.resolve_import_threads() == 30
+    phys(1)                        # affords none: the floor is one
+    assert _threads.resolve_import_threads() == 1
+    assert (32 >> 2) << 30 == 8 * per_thread
+
+
+def test_import_threads_honours_what_the_caller_asked_for(monkeypatch):
+    monkeypatch.setattr(os, "cpu_count", lambda: 32)
+    monkeypatch.setattr(
+        os, "sysconf",
+        lambda n: (32 << 30) // 4096 if n == "SC_PHYS_PAGES" else 4096)
+    monkeypatch.delenv("TTIO_IMPORT_THREADS", raising=False)
+    # An explicit count is not capped.
+    monkeypatch.setenv("TTIO_THREADS", "30")
+    assert _threads.resolve_import_threads() == 30
+    # The import knob overrides the rule, and TTIO_THREADS with it.
+    monkeypatch.setenv("TTIO_IMPORT_THREADS", "3")
+    assert _threads.resolve_import_threads() == 3
+    monkeypatch.delenv("TTIO_THREADS")
+    assert _threads.resolve_import_threads() == 3
+    # Junk falls through to the count asked for.
+    monkeypatch.setenv("TTIO_IMPORT_THREADS", "junk")
+    monkeypatch.setenv("TTIO_THREADS", "12")
+    assert _threads.resolve_import_threads() == 12

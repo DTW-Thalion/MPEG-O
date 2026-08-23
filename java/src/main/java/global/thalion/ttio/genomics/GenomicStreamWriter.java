@@ -34,7 +34,16 @@ public final class GenomicStreamWriter implements AutoCloseable {
 
     public static final String LAYOUT = "blocks_v1";
     public static final int DEFAULT_BLOCK_READS = 1_000_000;
-    public static final long DEFAULT_BLOCK_BYTES = 256L << 20;
+    /* A block is the unit of encode concurrency and of residency, so a
+ * big one costs both: the pool cannot start a block that is still
+ * filling, and every block in flight is held whole. At 256 MiB a
+ * 2x250 import of 10.6 M reads was 11 blocks, which left 7 workers
+ * at 3.05x of one thread and 10.4 GiB resident. At 64 MiB the same
+ * import is 43.0 s against 70.3 s and 4.50 GiB against 10.38 GiB.
+ * The cost is context the codecs no longer share: 0.16% on 2x250,
+ * 0.05% on 150 bp FASTQ, and 0.46% on HiFi, where reads are long
+ * enough that a block holds few of them. */
+    public static final long DEFAULT_BLOCK_BYTES = 64L << 20;
     /** Chunk of the unfiltered channel datasets. */
     public static final int CHANNEL_CHUNK = 256 << 10;
 
@@ -311,6 +320,10 @@ public final class GenomicStreamWriter implements AutoCloseable {
         drainToBudget();
         WrittenGenomicRun fb = block;
         long est = estimateBlockBytes(block);
+        // Segment threads follow the blocks actually in flight, not the
+        // pool's size; see Threads.resolveV6SegmentThreads.
+        global.thalion.ttio.Threads.applyV6SegmentThreadsForBlocksInFlight(
+            inflight.size() + 1);
         inflight.add(new InFlight(block, scope.executor().submit(() -> GenomicBlocks.encodeBlock(fb, bctx)), est));
         inflightBytes += est;
         if (inflightBytes > maxInFlightBytesObserved) maxInFlightBytesObserved = inflightBytes;

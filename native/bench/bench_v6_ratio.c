@@ -142,6 +142,28 @@ int main(int argc, char **argv) {
         v4_total += l;
     }
 
+    /* Reference: each V5 strategy forced, so the umbrella's choice can
+     * be read as a margin rather than only as a winner. */
+    uint64_t v5_total[2] = { 0, 0 };
+    for (int si = 0; si < 2; si++) {
+        for (size_t b = 0; b < n_blk; b++) {
+            size_t l = cap;
+            int rc = ttio_m94z_qual_encode(qual + blocks[b].qual_off,
+                                           blocks[b].n_qual,
+                                           lens + blocks[b].first_read,
+                                           blocks[b].n_reads,
+                                           flags + blocks[b].first_read,
+                                           seq + blocks[b].qual_off,
+                                           si == 0 ? 5 : 6, 0, out, &l);
+            if (rc != 0) {
+                fprintf(stderr, "v5 s%d block %zu rc %d\n", si == 0 ? 5 : 6,
+                        b, rc);
+                return 1;
+            }
+            v5_total[si] += l;
+        }
+    }
+
     printf("# corpus %s: %zu reads, %zu qualities, %zu blocks\n", argv[1],
            n_reads, qn, n_blk);
     printf("# baseline (hint -1, sequences present): version %d, "
@@ -151,7 +173,17 @@ int main(int argc, char **argv) {
            "bits/qual, %+.2f%% vs baseline\n",
            (unsigned long long)v4_total, 8.0 * (double)v4_total / (double)qn,
            100.0 * ((double)v4_total - (double)base_total) / (double)base_total);
-    printf("qbits,qshift,pbits,pshift,dbits,ctx_bits,seg_symbols,"
+    for (int si = 0; si < 2; si++)
+        printf("# reference (V5-S%d forced, sequences): %llu bytes, %.4f "
+               "bits/qual, %+.2f%% vs baseline, %+.2f%% vs V4\n",
+               si == 0 ? 5 : 6, (unsigned long long)v5_total[si],
+               8.0 * (double)v5_total[si] / (double)qn,
+               100.0 * ((double)v5_total[si] - (double)base_total)
+                   / (double)base_total,
+               100.0 * ((double)v5_total[si] - (double)v4_total)
+                   / (double)v4_total);
+
+    printf("qbits,qshift,pbits,pshift,dbits,sbits,ctx_bits,seg_symbols,"
            "model_MB_per_seg,seed,bytes,bits_per_qual,delta_pct,encode_MBps\n");
     fflush(stdout);
 
@@ -160,7 +192,8 @@ int main(int argc, char **argv) {
      * V6_PSHIFTS=2,4 V6_SEGS=524288 */
     unsigned qbv[16], pbv[16], dbv[16], qsv[16], psv[16];
     uint32_t sgv[16];
-    size_t   qbn, pbn, dbn, qsn, psn, sgn, sdn;
+    unsigned sbv[16];
+    size_t   qbn, pbn, dbn, qsn, psn, sgn, sdn, sbn;
     unsigned sdv[16];
     qbn = axis("V6_QBITS", "8,9,10,11,12", qbv);
     pbn = axis("V6_PBITS", "4,5,6", pbv);
@@ -169,6 +202,7 @@ int main(int argc, char **argv) {
     { unsigned t[16]; sdn = axis("V6_SEEDS", "4096", t);
       for (size_t i = 0; i < sdn; i++) sdv[i] = t[i]; }
     psn = axis("V6_PSHIFTS", "4", psv);
+    sbn = axis("V6_SBITS", "0", sbv);
     {
         unsigned tmp[16];
         sgn = axis("V6_SEGS", "32768,65536,131072,262144,524288", tmp);
@@ -185,8 +219,12 @@ int main(int argc, char **argv) {
                 for (size_t qsi = 0; qsi < qsn; qsi++)
                 for (size_t psi = 0; psi < psn; psi++)
                 for (size_t sdi = 0; sdi < sdn; sdi++)
-                for (size_t si = 0; si < sgn; si++) {
+                for (size_t si = 0; si < sgn; si++)
+                for (size_t sbi = 0; sbi < sbn; sbi++) {
+                    unsigned sb = sbv[sbi];
                     unsigned seed = sdv[sdi];
+                    if (sb != TTIO_V6_SBITS_AUTO
+                        && qb + pb + db + sb > TTIO_V6_MAX_CTX_BITS) continue;
                     ttio_v6_param pm;
                     pm.qbits = (uint8_t)qb;
                     pm.qshift = (uint8_t)qsv[qsi];
@@ -194,6 +232,7 @@ int main(int argc, char **argv) {
                     pm.pshift = (uint8_t)psv[psi];
                     pm.dbits = (uint8_t)db;
                     pm.seed_total = (uint16_t)seed;
+                    pm.sbits = (uint8_t)sb;
 
                     uint64_t        total = 0;
                     int             bad = 0;
@@ -201,8 +240,10 @@ int main(int argc, char **argv) {
                     clock_gettime(CLOCK_MONOTONIC, &t0);
                     for (size_t b = 0; b < n_blk && !bad; b++) {
                         size_t l = cap;
-                        int rc = ttio_m94z_v6_encode(
-                            qual + blocks[b].qual_off, blocks[b].n_qual,
+                        int rc = ttio_m94z_v6_encode_seq(
+                            qual + blocks[b].qual_off,
+                            sb ? seq + blocks[b].qual_off : NULL,
+                            blocks[b].n_qual,
                             lens + blocks[b].first_read, blocks[b].n_reads,
                             &pm, sgv[si], threads, out, &l);
                         if (rc != 0) {
@@ -225,10 +266,12 @@ int main(int argc, char **argv) {
                     ttio_v6_alphabet probe;
                     ttio_v6_alphabet_build(qual + blocks[0].qual_off,
                                            blocks[0].n_qual, seed, &probe);
-                    double model_mb = (double)((size_t)1 << (qb + pb + db))
+                    unsigned sb_eff = (sb == TTIO_V6_SBITS_AUTO) ? 0u : sb;
+                    double model_mb = (double)((size_t)1 << (qb + pb + db + sb_eff))
                                     * (double)(probe.n + 2) * 4.0 / 1048576.0;
-                    printf("%u,%u,%u,%u,%u,%u,%u,%.2f,%u,%llu,%.4f,%+.2f,%.1f\n",
-                           qb, pm.qshift, pb, pm.pshift, db, qb + pb + db,
+                    printf("%u,%u,%u,%u,%u,%u,%u,%u,%.2f,%u,%llu,%.4f,%+.2f,%.1f\n",
+                           qb, pm.qshift, pb, pm.pshift, db, sb,
+                           qb + pb + db + sb,
                            sgv[si], model_mb, seed, (unsigned long long)total,
                            8.0 * (double)total / (double)qn,
                            100.0 * ((double)total - (double)base_total)

@@ -342,7 +342,7 @@ public class FastqReader {
     /** As above with the byte limit of
      *  {@link #iterBatches(String, String, String, AcquisitionMode, int, long)}. */
     public GenomicStreamSource stream(String name, String sampleName, int batchReads, long batchBytes) {
-        int streamThreads = global.thalion.ttio.Threads.resolve(null);
+        int streamThreads = global.thalion.ttio.Threads.resolveImportThreads();
         if (streamThreads > 1) {
             boolean shard = InputSegmenter.modeFor(path) == InputSegmenter.Mode.SHARD;
             return new GenomicStreamSource(name, () ->

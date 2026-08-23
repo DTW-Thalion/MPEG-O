@@ -10,14 +10,37 @@ class ThreadsTest {
     void v6SegmentThreadsClampToTheCoreCount() {
         int cores = Runtime.getRuntime().availableProcessors();
         int one = Threads.resolveV6SegmentThreads(1);
-        assertEquals(Math.min(8, Math.max(2, cores)), one,
-                     "one worker takes the machine, capped at eight");
+        assertEquals(Math.max(2, cores), one,
+                     "one block in flight takes the whole machine");
         assertEquals(2, Threads.resolveV6SegmentThreads(cores * 2),
-                     "more workers than cores still leaves the floor of two");
+                     "more blocks than cores still leaves the floor of two");
         assertEquals(one, Threads.resolveV6SegmentThreads(0),
-                     "zero workers is read as one");
-        int mid = Threads.resolveV6SegmentThreads(4);
-        assertTrue(mid >= 2 && mid <= 8, "stays inside the clamp");
+                     "zero blocks is read as one");
+        for (int blocks = 1; blocks <= cores; blocks *= 2) {
+            assertTrue(Threads.resolveV6SegmentThreads(blocks) * blocks <= cores
+                       || Threads.resolveV6SegmentThreads(blocks) == 2,
+                       "product stays near the core count at " + blocks);
+        }
+    }
+
+    /** A writer moves the count as blocks come and go. */
+    @Test
+    void applyingForBlocksInFlightSetsTheRulesValue() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+            global.thalion.ttio.codecs.TtioRansNative.isAvailable(),
+            "libttio_rans_jni not loaded");
+        int cores = Runtime.getRuntime().availableProcessors();
+        int saved = global.thalion.ttio.codecs.FqzcompNx16Z.getV6Threads();
+        try {
+            Threads.applyV6SegmentThreadsForBlocksInFlight(1);
+            assertEquals(Threads.resolveV6SegmentThreads(1),
+                         global.thalion.ttio.codecs.FqzcompNx16Z.getV6Threads());
+            Threads.applyV6SegmentThreadsForBlocksInFlight(cores * 2);
+            assertEquals(2, global.thalion.ttio.codecs.FqzcompNx16Z.getV6Threads(),
+                         "more blocks than cores sets the floor");
+        } finally {
+            global.thalion.ttio.codecs.FqzcompNx16Z.setV6Threads(saved);
+        }
     }
 
     /* The override reaches outside the clamp on purpose: a sweep has to
@@ -101,5 +124,45 @@ class ThreadsTest {
             assertEquals(1, global.thalion.ttio.codecs.FqzcompNx16Z.getAutotuneThreads());
         }
         assertEquals(before, global.thalion.ttio.codecs.FqzcompNx16Z.getAutotuneThreads());
+    }
+
+    /** A thread costs about a gibibyte of the pipeline budget, so the
+     *  default import count is capped at what a quarter of memory
+     *  affords; a count the caller asked for is not capped. */
+    @Test
+    void importThreadsCapTheDefaultButNotAnExplicitCount() {
+        String savedThreads = System.getProperty("ttio.threads");
+        String savedImport = System.getProperty("ttio.import.threads");
+        try {
+            System.clearProperty("ttio.threads");
+            System.clearProperty("ttio.import.threads");
+            org.junit.jupiter.api.Assumptions.assumeTrue(
+                System.getenv("TTIO_THREADS") == null
+                && System.getenv("TTIO_IMPORT_THREADS") == null,
+                "thread environment set");
+            int plain = Threads.resolve(null);
+            int imported = Threads.resolveImportThreads();
+            assertTrue(imported >= 1, "never zero");
+            assertTrue(imported <= plain, "never above the plain default");
+
+            System.setProperty("ttio.threads", "30");
+            assertEquals(30, Threads.resolveImportThreads(),
+                         "an explicit count is honoured uncapped");
+            System.setProperty("ttio.import.threads", "3");
+            assertEquals(3, Threads.resolveImportThreads(),
+                         "the import knob wins over the thread knob");
+            System.clearProperty("ttio.threads");
+            assertEquals(3, Threads.resolveImportThreads(),
+                         "and wins over the default");
+            System.setProperty("ttio.import.threads", "junk");
+            System.setProperty("ttio.threads", "12");
+            assertEquals(12, Threads.resolveImportThreads(),
+                         "junk falls through to the count asked for");
+        } finally {
+            if (savedThreads == null) System.clearProperty("ttio.threads");
+            else System.setProperty("ttio.threads", savedThreads);
+            if (savedImport == null) System.clearProperty("ttio.import.threads");
+            else System.setProperty("ttio.import.threads", savedImport);
+        }
     }
 }

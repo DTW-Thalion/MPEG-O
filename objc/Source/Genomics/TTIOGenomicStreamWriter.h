@@ -36,14 +36,15 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) TTIOCompression signalCompression;
 @property (nonatomic) BOOL optLegacyWholeChannel;
 @property (nonatomic, copy) NSArray<TTIOProvenanceRecord *> *provenanceRecords;
-/** Worker threads for block encode (0 = TTIO_THREADS, else cores minus 8;
+/** Worker threads for block encode (0 = TTIO_THREADS, else cores minus 2;
  *  1 = the serial path). With more than one, completed blocks encode on a
  *  queue and are written in order by the caller's thread, at most
  *  threads + 1 in flight. The file is byte for byte the one thread's. */
 @property (nonatomic) NSUInteger threads;
 /** Pipeline byte budget (0 = TTIO_MEMORY_BUDGET, else
- *  max(1 GiB, threads x blockBytes x 4)). The writer stalls block
- *  submission while its in-flight estimate exceeds half of it. */
+ *  max(1 GiB, min(threads x blockBytes x 16, physical memory / 2))).
+ *  The writer stalls block submission while its in-flight estimate
+ *  exceeds half of it. */
 @property (nonatomic) unsigned long long memoryBudgetBytes;
 
 /** Defaults: zlib, no overrides, default block policy. */

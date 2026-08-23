@@ -231,6 +231,11 @@ target_link_libraries(test_m94z_v6_block PRIVATE ttio_rans Threads::Threads)
 target_compile_options(test_m94z_v6_block PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME m94z_v6_block COMMAND test_m94z_v6_block)
 
+add_executable(test_m94z_v6_seqctx tests/test_m94z_v6_seqctx.c)
+target_link_libraries(test_m94z_v6_seqctx PRIVATE ttio_rans Threads::Threads)
+target_compile_options(test_m94z_v6_seqctx PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME m94z_v6_seqctx COMMAND test_m94z_v6_seqctx)
+
 add_executable(test_m94z_qual_umbrella tests/test_m94z_qual_umbrella.c)
 target_link_libraries(test_m94z_qual_umbrella ttio_rans)
 target_compile_options(test_m94z_qual_umbrella PRIVATE -Wall -Wextra -Wpedantic)
@@ -440,6 +445,10 @@ if(NOT TTIO_COVERAGE)
     add_executable(v6_acceptance tools/v6_acceptance.c)
     target_link_libraries(v6_acceptance PRIVATE ttio_rans)
     target_compile_options(v6_acceptance PRIVATE -O2)
+
+    add_executable(bench_m94z_qual bench/bench_m94z_qual.c)
+    target_link_libraries(bench_m94z_qual PRIVATE ttio_rans Threads::Threads)
+    target_compile_options(bench_m94z_qual PRIVATE -O3)
 
     add_executable(bench_v6_ratio bench/bench_v6_ratio.c)
     target_link_libraries(bench_v6_ratio PRIVATE ttio_rans Threads::Threads)

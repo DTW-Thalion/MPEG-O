@@ -192,6 +192,7 @@ typedef struct {
 
 typedef struct {
     sm_model qual[CTX_SIZE];
+    sm_symfreq *qual_arena;   /* one block behind every qual context */
     sm_model len[4];
     sm_model revcomp;
     sm_model sel;
@@ -427,16 +428,31 @@ static void fqz_qual_stats_pass1_run(fqz_stats_chunk *c)
 
         uint32_t tot = 0;
         for (; i < end && j > 0; i++, j--) {
-            tot += c->in[i];
-            c->qhist[c->in[i]]++;
-            c->qhistb[j & (FQZ_NP - 1)][c->in[i]]++;
-            qh       [j & (FQZ_NP - 1)][c->in[i]]++;
-            th       [j & (FQZ_NP - 1)]++;
+            unsigned q = c->in[i];
+            unsigned b = j & (FQZ_NP - 1);
+            tot += q;
+            qh[b][q]++;
+            th[b]++;
         }
         tot = last_len ? (uint32_t)((tot * 10.0) / last_len + 0.5) : 0;
 
         c->avg_qual[rec] = (int)tot;
         c->avg[MIN(2559u, tot)]++;
+    }
+
+    /* qhistb is qhist1 + qhist2 elementwise, and qhist is qhistb summed
+     * over the position buckets, so both are recoverable from the two
+     * the loop keeps. That takes two of the four read-modify-writes the
+     * inner loop did for every quality byte and does them once per
+     * chunk over a 32 x 256 table instead. */
+    for (int b = 0; b < FQZ_NP; b++) {
+        for (int q = 0; q < 256; q++) {
+            uint32_t v = c->qhist1[b][q] + c->qhist2[b][q];
+            if (v) {
+                c->qhistb[b][q] += v;
+                c->qhist[q]     += v;
+            }
+        }
     }
 }
 
@@ -1258,12 +1274,22 @@ static int fqz_create_models(fqz_model *m, const fqz_gparams *gp) {
     memset(m, 0, sizeof(*m));
     int max_sym_plus_one = gp->max_sym + 1;
 
+    /* One allocation for the whole bank rather than CTX_SIZE of them.
+     * At 65536 contexts the per-context calloc was the writer's limit:
+     * with 16 encoding threads the allocator lock took this function
+     * from 9.04 ms to 34.78 ms a call, 38% of the encode.
+     *
+     * The stride is the alphabet the file uses, not QMAX. max_sym rides
+     * in the header, so encoder and decoder build the same size, and no
+     * context is asked for a symbol above it. The entries this drops all
+     * held freq 0: sm_normalize stops at the first of them and the scan
+     * never reached one, so the order, and the stream, do not change. */
+    size_t stride = (size_t)max_sym_plus_one + 2;
+    m->qual_arena = (sm_symfreq *)calloc(stride * CTX_SIZE, sizeof(sm_symfreq));
+    if (!m->qual_arena) return -1;
     for (uint32_t i = 0; i < CTX_SIZE; i++) {
-        if (sm_init(&m->qual[i], QMAX, max_sym_plus_one) < 0) {
-            /* unwind */
-            for (uint32_t k = 0; k < i; k++) sm_destroy(&m->qual[k]);
-            return -1;
-        }
+        sm_init_at(&m->qual[i], max_sym_plus_one, max_sym_plus_one,
+                   m->qual_arena + (size_t)i * stride);
     }
     for (int i = 0; i < 4; i++)
         if (sm_init(&m->len[i], 256, 256) < 0) goto err;
@@ -1289,7 +1315,11 @@ err:
 }
 
 static void fqz_destroy_models(fqz_model *m) {
-    for (uint32_t i = 0; i < CTX_SIZE; i++) sm_destroy(&m->qual[i]);
+    /* The qual contexts point into qual_arena and do not own their
+     * storage, so the bank is one free rather than CTX_SIZE of them. */
+    free(m->qual_arena);
+    m->qual_arena = NULL;
+    for (uint32_t i = 0; i < CTX_SIZE; i++) m->qual[i].F = NULL;
     for (int i = 0; i < 4; i++) sm_destroy(&m->len[i]);
     sm_destroy(&m->revcomp);
     sm_destroy(&m->dup);

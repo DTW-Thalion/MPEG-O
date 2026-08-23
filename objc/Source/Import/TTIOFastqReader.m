@@ -565,7 +565,7 @@ static BOOL fqReadRecord(gzFile fh, NSMutableData *line, NSUInteger *lineNo,
                                  batchBytes:(unsigned long long)batchBytes
                                    progress:(TTIOProgressBlock)progress
 {
-    NSUInteger streamThreads = [TTIOThreads resolve:nil];
+    NSUInteger streamThreads = [TTIOThreads resolveImportThreads];
     TTIOGenomicBatchProducer producer;
     if (streamThreads > 1 && [TTIOInputSegmenter modeForPath:path] == TTIOInputModeShard) {
         producer = [TTIOFastqParallelProducer shardProducerForPath:path

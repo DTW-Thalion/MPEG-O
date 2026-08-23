@@ -25,10 +25,18 @@ public API is stable from onward.
   sequences channel.
 
   It trades ratio for that parallelism: measured against V4 at the
-  default 256 Ki segment, +5.99% on low-coverage chr22, +6.12% on HiFi,
-  +6.18% on NovaSeq WGS and +6.66% on 2x250 chr22. The cost is
-  per-segment model warm-up and falls as segments grow. Full table and
-  method in `docs/codecs/m94z_v6.md`.
+  default 1 Mi segment, +3.75% on low-coverage chr22, +4.31% on 2x250
+  chr22, +5.42% on HiFi and +5.89% on NovaSeq WGS. The cost is
+  per-segment model warm-up and falls as segments grow.
+
+  The default segment size is 1 Mi, not the 256 Ki first shipped in this
+  branch. 256 Ki was sized against the number of chains a GPU could run
+  at once, and that backend was removed; swept at the shipped context,
+  1 Mi is better on ratio for all four corpus classes and on encode
+  throughput, and still leaves 64 segments in a 64 MiB block. Segment
+  size is written into the body header, so streams already written keep
+  their own and decode unchanged. Full table and method in
+  `docs/codecs/m94z_v6.md`.
 
 - **Two environment variables that make the writer's thread split
   measurable.** `TTIO_V6_SEGMENT_THREADS` overrides

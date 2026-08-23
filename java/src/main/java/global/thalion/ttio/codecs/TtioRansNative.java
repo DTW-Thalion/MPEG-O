@@ -101,6 +101,10 @@ public final class TtioRansNative {
      *  running in sequence. */
     public static native void setV6Threads(int n);
 
+    public static native void setV6Sbits(int n);
+
+    public static native int getV6Sbits();
+
     /** @return the V6 segment thread count; 0 means defer to the
      *  auto-tune knob. */
     public static native int getV6Threads();

@@ -26,6 +26,7 @@
 #import "Genomics/TTIOAlignedRead.h"
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <time.h>
 #include <sys/resource.h>
@@ -103,6 +104,68 @@ int main(int argc, const char *argv[])
         NSString *windowArg = argc > 3 ? @(argv[3]) : @"1,2,4,8,16";
         int rounds = argc > 4 ? atoi(argv[4]) : 3;
         if (rounds < 1) rounds = 1;
+
+        /* par mode: the same full pass, every quality byte
+         * touched, but the reads built and consumed on the pool. */
+        if (argc > 5 && (strcmp(argv[5], "par") == 0
+                         || strcmp(argv[5], "pardecode") == 0)) {
+            BOOL decodeOnly = strcmp(argv[5], "pardecode") == 0;
+            NSUInteger th = argc > 6 ? (NSUInteger)atoi(argv[6]) : 0;
+            double bestT = 0;
+            for (int r = 0; r < rounds; r++) {
+                @autoreleasepool {
+                    NSError *err = nil;
+                    TTIOSpectralDataset *ds =
+                        [TTIOSpectralDataset readFromFilePath:path error:&err];
+                    NSString *nm = runName ?: [[ds.genomicRuns.allKeys
+                        sortedArrayUsingSelector:@selector(compare:)] firstObject];
+                    TTIOGenomicRun *g = ds.genomicRuns[nm];
+                    __block int64_t n = 0, nq = 0;
+                    double t0 = benchNow();
+                    BOOL ok = [g iterBlocksFrom:0 to:[g readCount] threads:th error:&err
+                                     usingBlock:^(TTIOGenomicRun *v, NSUInteger vs,
+                                                  NSUInteger f0, NSUInteger nr,
+                                                  BOOL *st) {
+                        (void)f0; (void)st;
+                        int64_t ln = 0, lq = 0;
+                        @autoreleasepool {
+                            if (decodeOnly) {
+                                /* The block's qualities as one buffer:
+                                 * the same decode, none of the per-read
+                                 * objects. */
+                                NSData *q = [v wholeQualitiesData];
+                                const uint8_t *p = q.bytes;
+                                int64_t s = 0;
+                                for (NSUInteger k = 0; k < q.length; k++) s += p[k];
+                                lq = (int64_t)q.length;
+                                ln = (int64_t)nr;
+                                if (s == -1) fprintf(stderr, " ");
+                            } else {
+                                for (NSUInteger k = 0; k < nr; k++) {
+                                    NSError *e = nil;
+                                    TTIOAlignedRead *rd = [v readAtIndex:vs + k error:&e];
+                                    if (!rd) break;
+                                    lq += (int64_t)rd.qualities.length;
+                                    ln++;
+                                }
+                            }
+                        }
+                        __sync_fetch_and_add(&n, ln);
+                        __sync_fetch_and_add(&nq, lq);
+                    }];
+                    double dt = benchNow() - t0;
+                    if (!ok) { fprintf(stderr, "parallel pass failed\n"); return 1; }
+                    if (bestT == 0 || dt < bestT) bestT = dt;
+                    printf("[obj-bench] par threads=%lu reads=%lld %.2f s: "
+                           "%.0f reads/s, %.1f MB/s qualities\n",
+                           (unsigned long)th, (long long)n, dt,
+                           (double)n / dt, (double)nq / dt / 1.0e6);
+                    [g close];
+                }
+            }
+            printf("[obj-bench] par best %.2f s\n", bestT);
+            return 0;
+        }
 
         NSUInteger blocks = 0, reads = 0;
         @autoreleasepool {

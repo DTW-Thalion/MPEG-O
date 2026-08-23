@@ -59,7 +59,10 @@ public record GenomicStreamSource(String name, Supplier<Iterator<WrittenGenomicR
                                               blockBytes != null ? blockBytes : o.blockBytes());
                     }
                     if (optLegacyWholeChannel) o = o.withLegacy(true);
-                    writer = new GenomicStreamWriter(study, name, o);
+                    // Same rule as the producer side, so the two halves
+                    // of the pipeline budget are sized off one count.
+                    writer = new GenomicStreamWriter(
+                        study, name, o, global.thalion.ttio.Threads.resolveImportThreads());
                 }
                 writer.appendBatch(batch);
                 n += batch.readCount();

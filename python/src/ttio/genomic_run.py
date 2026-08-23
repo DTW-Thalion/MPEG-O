@@ -303,6 +303,154 @@ class GenomicRun:
                 i = b_end
                 b += 1
 
+    def _block_window(self, nthreads: int, b_first: int, b_last: int) -> int:
+        """How many blocks may be in flight at once, given how many
+        threads want one each.
+
+        A block in flight is resident for as long as the caller is
+        inside it, so this is a memory setting before it is a
+        concurrency one, and the thread count is only an upper bound. A
+        block is charged 8 times its sequence bytes, the figure
+        ``resolve_memory_budget`` uses on the writing side, so
+        ``TTIO_MEMORY_BUDGET`` and the half-of-physical cap mean the
+        same thing to a reader as to a writer. The widest block in the
+        range sets the size, not the mean.
+
+        Java: ``GenomicRun.blockWindow``; Objective-C:
+        ``-_blockWindowForThreads:first:last:``.
+        """
+        from ._threads import resolve_memory_budget
+        t = self._block_table
+        widest = max(int(t.n_bases[b]) for b in range(b_first, b_last + 1))
+        if widest == 0:
+            return 1
+        budget = resolve_memory_budget(None, nthreads, widest)
+        admits = max(1, budget // (widest * 8))
+        blocks = b_last - b_first + 1
+        return max(1, min(nthreads, admits, blocks))
+
+    def for_each_block(self, fn, start: int = 0, stop: int | None = None, *,
+                       threads: int | None = None) -> None:
+        """Call ``fn(view, view_start, first_read, n_reads)`` once per
+        decoded block, on the pool.
+
+        Read record ``k`` of the delivered range as
+        ``view[view_start + k]``; its index in the whole run is
+        ``first_read + k``. The two differ whenever a range starts
+        part-way into a block, so a caller that indexes the view by
+        ``first_read`` reads the wrong records.
+
+        ``fn`` is called from several threads at once and in no
+        particular order, and must be safe to call that way; ``view`` is
+        a run over one block's reads, indexed from 0, valid only for the
+        duration of the call. That relaxed ordering is the whole
+        difference from :meth:`iter_reads`, whose in-order delivery on
+        the calling thread is what bounds it.
+
+        ⚠️ **In CPython this buys nothing, and past a few workers it
+        costs.** The callback holds the GIL, so the consumers serialise
+        against each other while still paying for the contention;
+        measured over 1.5M reads: serial ``iter_reads`` 6.2 MB/s, this
+        method 6.1 at one worker, 6.8 at four, and **4.5 at eight and
+        above** — slower than not threading at all. Only the decode
+        overlaps, because it releases the GIL inside the native call.
+        The compiled SDKs behave the other way round, which is why the
+        default is capped here and not there.
+
+        So an unset ``threads`` resolves to at most
+        ``_read_ahead_blocks()`` workers rather than to ``TTIO_THREADS``:
+        the default has to be the best measured setting, not the worst.
+        An explicit ``threads`` is honoured as given. The same
+        divergence already applies to the decode-ahead window, which is
+        a per-SDK setting for the same reason.
+
+        Java: ``GenomicRun.iterBlocks``; Objective-C:
+        ``-iterBlocksFrom:to:threads:error:usingBlock:``.
+        """
+        n = len(self)
+        if stop is None or stop > n:
+            stop = n
+        lo = max(start + n if start < 0 else start, 0)
+        if lo >= stop:
+            return
+        if self._layout != "blocks_v1":
+            fn(self, lo, lo, stop - lo)
+            return
+        import concurrent.futures as _cf
+        from ._threads import resolve_threads, pool_context
+        t = self._block_table
+        nthreads = (resolve_threads(threads) if threads is not None
+                    else min(resolve_threads(None), _read_ahead_blocks()))
+        b_first, b_last = t.block_for(lo), t.block_for(stop - 1)
+        window = self._block_window(nthreads, b_first, b_last)
+        blocks = b_last - b_first + 1
+        ahead_n = min(blocks, max(2, _read_ahead_blocks()))
+
+        # Below the decode-ahead depth, one consumer fed by that many
+        # decoders beats the same number of threads each decoding and
+        # then consuming its own block: decoding is the slower half, so
+        # until there are threads enough to cover it, pipelining wins
+        # over dividing.
+        if window < ahead_n:
+            self._for_each_block_pipelined(
+                fn, lo, stop, b_first, b_last, min(ahead_n, max(window, 1) * 4))
+            return
+
+        def one(b: int, view: "GenomicRun") -> None:
+            view = self._warm(view)
+            r0 = int(t.read_start[b])
+            frm, to = max(r0, lo), min(r0 + int(t.n_reads[b]), stop)
+            if to > frm:
+                fn(view, frm - r0, frm, to - frm)
+
+        with pool_context(window), _cf.ThreadPoolExecutor(
+                max_workers=window, thread_name_prefix="ttio-block") as pool:
+            pending: dict[int, "_cf.Future"] = {}
+
+            def submit(b: int) -> None:
+                # _prefetch_view runs here, on the calling thread: those
+                # are storage reads, and only the decode is safe to hand
+                # to the pool.
+                if b <= b_last and b not in pending:
+                    pending[b] = pool.submit(one, b, self._prefetch_view(b))
+
+            for b in range(b_first, min(b_last, b_first + window - 1) + 1):
+                submit(b)
+            for b in range(b_first, b_last + 1):
+                f = pending.pop(b, None)
+                if f is None:
+                    continue
+                f.result()
+                submit(b + window)
+
+    def _for_each_block_pipelined(self, fn, lo: int, stop: int, b_first: int,
+                                  b_last: int, ahead_n: int) -> None:
+        """One consumer on this thread, ``ahead_n`` decoders behind it.
+        The view is built lazily, so :meth:`_warm` has to run on the
+        pool: without it the channel decode lands on the consumer's
+        thread at its first read and the overlap is lost entirely."""
+        import concurrent.futures as _cf
+        from ._threads import pool_context
+        t = self._block_table
+        with pool_context(ahead_n), _cf.ThreadPoolExecutor(
+                max_workers=max(2, ahead_n),
+                thread_name_prefix="ttio-block-decode") as pool:
+            pending: dict[int, "_cf.Future"] = {}
+
+            def submit(b: int) -> None:
+                if b <= b_last and b not in pending:
+                    pending[b] = pool.submit(self._warm, self._prefetch_view(b))
+
+            for b in range(b_first, min(b_last, b_first + ahead_n - 1) + 1):
+                submit(b)
+            for b in range(b_first, b_last + 1):
+                view = pending.pop(b).result()
+                submit(b + ahead_n)
+                r0 = int(t.read_start[b])
+                frm, to = max(r0, lo), min(r0 + int(t.n_reads[b]), stop)
+                if to > frm:
+                    fn(view, frm - r0, frm, to - frm)
+
     def _prefetch_view(self, b: int) -> "GenomicRun":
         """The block view for ``b``, built on the caller's thread (storage
         reads) but not yet decoded; :meth:`_warm` decodes it and is safe

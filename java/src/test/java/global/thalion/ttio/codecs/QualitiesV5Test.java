@@ -246,6 +246,45 @@ class QualitiesV5Test {
         assertArrayEquals(c[0], dr.qualities());
     }
 
+    /** The width reaches the stream through setV6Sbits, and a decoder
+     *  needs the sequences only because the stream says so. Python:
+     *  test_v6_sequence_context_round_trips_and_shrinks; Objective-C:
+     *  TestQualitiesV5.m. */
+    @Test
+    void v6SequenceContextRoundTrips() {
+        byte[][] c = motifCorpus(2000, 100);
+        int[] lens = fill(2000, 100), flags = fill(2000, 0);
+        assertEquals(0, FqzcompNx16Z.getV6Sbits());
+        byte[] plain = FqzcompNx16Z.encode(c[0], lens, flags,
+            new FqzcompNx16Z.EncodeOptions()
+                .v4StrategyHint(FqzcompNx16Z.HINT_V6));
+        try {
+            FqzcompNx16Z.setV6Sbits(4);
+            assertEquals(4, FqzcompNx16Z.getV6Sbits());
+            byte[] withSeq = FqzcompNx16Z.encode(c[0], lens, flags, c[1],
+                new FqzcompNx16Z.EncodeOptions()
+                    .v4StrategyHint(FqzcompNx16Z.HINT_V6));
+            assertEquals(6, withSeq[4]);
+            assertArrayEquals(c[0],
+                FqzcompNx16Z.decode(withSeq, flags, () -> c[1]).qualities());
+            assertTrue(withSeq.length < plain.length,
+                       "the field pays where quality follows the base");
+
+            FqzcompNx16Z.setV6Sbits(FqzcompNx16Z.V6_SBITS_AUTO);
+            byte[] auto = FqzcompNx16Z.encode(c[0], lens, flags, c[1],
+                new FqzcompNx16Z.EncodeOptions()
+                    .v4StrategyHint(FqzcompNx16Z.HINT_V6));
+            assertArrayEquals(c[0],
+                FqzcompNx16Z.decode(auto, flags, () -> c[1]).qualities());
+            assertTrue(auto.length <= plain.length,
+                       "0 is a candidate, so auto never loses to it");
+        } finally {
+            FqzcompNx16Z.setV6Sbits(0);
+        }
+        /* Width 0 is what every stream written before the field carried. */
+        assertArrayEquals(c[0], FqzcompNx16Z.decode(plain, flags).qualities());
+    }
+
     @Test
     void v6DecodesWithoutSequencesOverload() {
         byte[][] c = motifCorpus(2000, 100);

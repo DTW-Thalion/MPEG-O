@@ -801,6 +801,15 @@ def decode_with_metadata(
                     "decoded sequences bytes"
                 )
             sequences = bytes(sequences_provider())
+        elif encoded[4] == VERSION_V6_SEGMENTED and sequences_provider is not None:
+            # A V6 stream needs the sequences only when its header
+            # carries a sequence-context width, which the native decoder
+            # reads for itself. So a provider is used when there is one
+            # and never demanded: a width of 0, which is every stream
+            # written before the field existed, decodes without one.
+            seq = sequences_provider()
+            if seq is not None:
+                sequences = bytes(seq)
         return _decode_v4_via_native(encoded, revcomp_flags,
                                      sequences=sequences)
 
@@ -828,6 +837,32 @@ def set_v6_threads(n: int) -> None:
     lib.ttio_m94z_set_v6_threads.argtypes = [ctypes.c_int]
     lib.ttio_m94z_set_v6_threads.restype = None
     lib.ttio_m94z_set_v6_threads(int(n))
+
+
+def set_v6_sbits(n: int) -> None:
+    """Width of M94.Z V6's sequence-context field for streams this process writes. 0, the default, is the context V6 shipped with and needs no sequences to decode. 255 asks the encoder to pick per block, coding a prefix of the block's first segment each way. Any other value is used as given, and encoding without sequences then fails rather than dropping the field silently. The width travels in the stream, so decoding never consults it.
+
+    Java: ``FqzcompNx16Z.setV6Sbits``; Objective-C:
+    ``+[TTIOFqzcompNx16Z setV6SequenceContextBits:]``."""
+    lib = load_ttio_rans()
+    if lib is None:
+        return
+    lib.ttio_m94z_set_v6_sbits.argtypes = [ctypes.c_int]
+    lib.ttio_m94z_set_v6_sbits.restype = None
+    lib.ttio_m94z_set_v6_sbits(int(n))
+
+
+def get_v6_sbits() -> int:
+    """The width :func:`set_v6_sbits` last set, 0 by default."""
+    lib = load_ttio_rans()
+    if lib is None:
+        return 0
+    lib.ttio_m94z_get_v6_sbits.restype = ctypes.c_int
+    return int(lib.ttio_m94z_get_v6_sbits())
+
+
+#: Ask the encoder to choose the width per block.
+V6_SBITS_AUTO = 255
 
 
 def get_v6_threads() -> int:

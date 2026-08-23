@@ -292,8 +292,9 @@ class FastqReader:
             raise ValueError("batch_reads must be >= 1")
         if batch_bytes < 1:
             raise ValueError("batch_bytes must be >= 1")
-        from .._threads import resolve_threads
-        n_threads = resolve_threads(threads)
+        from .._threads import resolve_threads, resolve_import_threads
+        n_threads = (resolve_threads(threads) if threads is not None
+                     else resolve_import_threads())
         if n_threads > 1:
             from . import fastq_parallel as _pp
             mode, ranges = _pp.plan_input(self._path, n_threads, batch_bytes)

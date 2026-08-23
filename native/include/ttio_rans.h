@@ -336,6 +336,16 @@ void ttio_m94z_set_autotune_threads(int n);
  * behaviour callers had before this existed. */
 void ttio_m94z_set_v6_threads(int n);
 int  ttio_m94z_get_v6_threads(void);
+
+/* Width of M94.Z V6's sequence-context field, for streams this
+ * process writes. 0, the default, is the context V6 shipped with and
+ * needs no sequences to decode. 255 asks the encoder to choose per
+ * block. Any other value is used as given, and encoding without
+ * sequences then fails rather than quietly dropping the field.
+ *
+ * The width travels in the stream, so decoding never consults this. */
+void ttio_m94z_set_v6_sbits(int n);
+int  ttio_m94z_get_v6_sbits(void);
 int  ttio_m94z_get_autotune_threads(void);
 
 int ttio_m94z_qual_encode(

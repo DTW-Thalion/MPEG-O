@@ -96,6 +96,20 @@ Java_global_thalion_ttio_codecs_TtioRansNative_getV6Threads(JNIEnv *env, jclass 
     return (jint)ttio_m94z_get_v6_threads();
 }
 
+JNIEXPORT void JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_setV6Sbits(JNIEnv *env, jclass cls, jint n)
+{
+    (void)env; (void)cls;
+    ttio_m94z_set_v6_sbits((int)n);
+}
+
+JNIEXPORT jint JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_getV6Sbits(JNIEnv *env, jclass cls)
+{
+    (void)env; (void)cls;
+    return (jint)ttio_m94z_get_v6_sbits();
+}
+
 JNIEXPORT jint JNICALL
 Java_global_thalion_ttio_codecs_TtioRansNative_qualStreamStrategy(
     JNIEnv *env, jclass cls, jbyteArray stream)

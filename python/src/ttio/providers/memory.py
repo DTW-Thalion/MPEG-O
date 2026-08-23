@@ -42,7 +42,7 @@ _STORES: dict[str, "_MemoryRoot"] = {}
 
 class _Dataset(StorageDataset):
     __slots__ = ("_name", "_precision", "_shape", "_chunks", "_fields",
-                 "_data", "_attrs", "_extendable")
+                 "_data", "_pending", "_attrs", "_extendable")
 
     def __init__(self, name: str, precision: Precision | None,
                  shape: tuple[int, ...],
@@ -55,6 +55,9 @@ class _Dataset(StorageDataset):
         self._chunks = chunks
         self._fields = fields
         self._data: np.ndarray | None = None
+        # Appends land here and are joined once, on read. Concatenating
+        # on every append made the cost quadratic in the append count.
+        self._pending: list[np.ndarray] = []
         self._attrs: dict[str, Any] = {}
         self._extendable = extendable
 
@@ -73,19 +76,26 @@ class _Dataset(StorageDataset):
             return arr
         return np.asarray(data)
 
+    def _materialise(self) -> None:
+        """Join any pending appends into ``_data``. Readers call this."""
+        if not self._pending:
+            return
+        parts = self._pending if self._data is None or len(self._data) == 0             else [self._data, *self._pending]
+        self._pending = []
+        self._data = np.concatenate(parts) if len(parts) > 1             else np.array(parts[0], copy=True)
+
     def append(self, data) -> None:
         if not self._extendable:
             raise TypeError(f"dataset '{self._name}' is not extendable")
         arr = self._coerce(data)
         if len(arr) == 0:
             return
-        if self._data is None or len(self._data) == 0:
-            self._data = np.array(arr, copy=True)
-        else:
-            self._data = np.concatenate([self._data, arr])
-        self._shape = (int(self._data.shape[0]),) + tuple(self._shape[1:])
+        self._pending.append(np.array(arr, copy=True))
+        n = (0 if self._data is None else int(self._data.shape[0]))             + sum(int(a.shape[0]) for a in self._pending)
+        self._shape = (n,) + tuple(self._shape[1:])
 
     def write_slice(self, offset: int, data) -> None:
+        self._materialise()
         arr = self._coerce(data)
         if self._data is None:
             self._data = np.zeros(self._shape, dtype=self._default_dtype())
@@ -112,6 +122,7 @@ class _Dataset(StorageDataset):
         return self._fields
 
     def read(self, offset: int = 0, count: int = -1) -> np.ndarray:
+        self._materialise()
         if self._data is None:
             return np.zeros(0, dtype=self._default_dtype())
         if len(self._shape) != 1:
@@ -140,6 +151,7 @@ class _Dataset(StorageDataset):
             raise ValueError(
                 f"dataset '{self._name}' expects shape {self._shape}, "
                 f"got {arr.shape}")
+        self._pending = []
         self._data = np.array(arr, copy=True)
 
     def has_attribute(self, name: str) -> bool:

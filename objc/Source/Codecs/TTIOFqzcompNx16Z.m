@@ -230,10 +230,16 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
                      sequencesProvider:(NSData * _Nullable (^_Nullable)(void))sequencesProvider
                                  error:(NSError * _Nullable *)error
 {
+    /* A V6 stream needs the sequences only when its header carries a
+     * sequence-context width, which the native decoder reads for
+     * itself. A provider is therefore used when there is one and never
+     * demanded: a width of 0, which is every stream written before the
+     * field existed, decodes without one. */
     if (data != nil && data.length >= 5
         && ((const uint8_t *)data.bytes)[4] == 6) {
+        NSData *seq = sequencesProvider ? sequencesProvider() : nil;
         return [self decodeQualData:data revcompFlags:revcompFlags
-                          sequences:nil error:error];
+                          sequences:seq error:error];
     }
     if (data != nil && data.length >= 5
         && ((const uint8_t *)data.bytes)[4] == 5) {
@@ -619,6 +625,16 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
         @"readLengths": readLengths,
     };
 #endif
+}
+
++ (void)setV6SequenceContextBits:(NSInteger)bits
+{
+    ttio_m94z_set_v6_sbits((int)bits);
+}
+
++ (NSInteger)v6SequenceContextBits
+{
+    return (NSInteger)ttio_m94z_get_v6_sbits();
 }
 
 + (NSInteger)strategyOfEncodedStream:(NSData *)stream
