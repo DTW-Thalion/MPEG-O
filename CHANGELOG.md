@@ -11,6 +11,46 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added
+- **MS runs carry a `blocks/index`, the table genomic runs already
+  had.** One compound row per FLOAT_DELTA_ZSTD block: the value range
+  it covers, and for every signal channel the byte offset, length and
+  codec of that block. The extent includes the block's 5-byte header,
+  so the bytes it names are a self-describing block. Without it a
+  consumer had to walk each channel's FDZ1 stream reading block
+  headers to learn the same offsets; with it, one compound read plans
+  a range read or a parallel decode, which is what the genomic side
+  has been able to do since `blocks_v1`. Written by all three SDKs and
+  read by `TTIOSpectralBlockIndex`.
+
+  The channel set of a spectral run is not fixed, so a reader recovers
+  it from the compound type rather than a constant: every
+  `<name>_off` column names one channel. The group is written only for
+  runs stored with codec 17 and only when every channel cut its blocks
+  at the same value boundaries; a run that fell out of step gets no
+  table rather than a wrong one. It is optional on read, so MS runs
+  written before it exists open unchanged.
+
+### Fixed
+- **`base_peak_intensities` was computed from a freed buffer.**
+  `-[TTIOSignalArray float64Buffer]` returns the array's own buffer
+  when the precision is already float64 and allocates a conversion
+  buffer for every other precision. Four callers scanned the result
+  through a raw pointer that nothing kept alive, so ARC released the
+  temporary and the scan read freed memory whenever the array was not
+  float64. Real mzML stores intensity as float32 and took that path on
+  every spectrum: on the 1.73 GB Orbitrap import the column came out
+  with a maximum of 6.859e+78 against a true 3.111e+09.
+
+  The damage was confined to `spectrum_index/base_peak_intensities`, a
+  queryable column, so the base-peak filter returned wrong results;
+  channel data goes through a different call site and is unaffected.
+  It was intermittent, because freed memory usually still holds the
+  old bytes. Two sites were in `TTIOWrittenSpectralBatch` and two in
+  the eager writer in `TTIOAcquisitionRun`. Repeated imports of one
+  file now produce byte-identical output, so the run to run variation
+  in .tio size was this bug rather than the threaded writer.
+
 ### Changed
 - **FLOAT_DELTA_ZSTD (codec id 17) chooses the byte-plane transpose per
   block instead of always applying it.** Bit 1 of the per-block
@@ -19,13 +59,11 @@ public API is stable from onward.
   that bit with the delta bit and keeps the smallest, as it already did
   for the delta alone. The transpose pays on intensity arrays and costs
   on m/z: on `5_TAP_Pdr1_R376W_PTM.mzML` (Orbitrap Exploris, 1.73 GB,
-  342546 spectra) the imported .tio goes from 83528409 to 63752405
-  bytes, about 23% smaller. Intensity blocks still choose the
-  transpose; m/z blocks no longer do. The two extra zstd passes per
-  block cost about 1.5% of import wall time, 39.74 s against 40.32 s
-  on the minima of 3 and 4 runs; the writer's block boundaries move
-  the output size about 1% between runs, so both sizes above are the
-  smallest observed.
+  342546 spectra) the signal channels go from 72509598 to 53494074
+  bytes, 26.2% smaller, and the whole .tio by about 23%. Intensity
+  blocks still choose the transpose; m/z blocks no longer do. The two
+  extra zstd passes per block cost about 1.5% of import wall time,
+  39.74 s against 40.32 s on the minima of 3 and 4 runs.
 
   A stream carrying the new bit is rejected by readers built before
   this change, which report the unknown transform and stop. Streams

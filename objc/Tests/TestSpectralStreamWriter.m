@@ -15,6 +15,7 @@
 #import "Run/TTIOInstrumentConfig.h"
 #import "ValueClasses/TTIOEncodingSpec.h"
 #import "ValueClasses/TTIOEnums.h"
+#import "Run/TTIOSpectralBlockIndex.h"
 #import "Run/TTIOSpectralStreamWriter.h"
 #import "Run/TTIOWrittenSpectralBatch.h"
 #import "Spectra/TTIOSpectrum.h"
@@ -24,6 +25,7 @@
 #import "Providers/TTIOProviderRegistry.h"
 #import "Providers/TTIOMemoryProvider.h"
 #import "Providers/TTIOStorageProtocols.h"
+#include <math.h>
 #include <unistd.h>
 
 static NSString *sswFixture(void)
@@ -322,6 +324,161 @@ static void sswThreadedByteIdentical(void)
     [[NSFileManager defaultManager] removeItemAtPath:b error:NULL];
 }
 
+
+/* blocks/index on an MS run: the spectral counterpart of the genomic
+ * block table. Every row must name bytes that are the block for the
+ * value range it claims. */
+static void sswBlockIndex(void)
+{
+    /* 40000 spectra of 64 points is 2 560 000 values: three FDZ blocks
+     * with a short one at the end. */
+    NSArray *spectra = sswSynthSpectra(40000, 64, 21);
+    NSString *path = sswTmp("block-index");
+    if (!sswWriteSynth(path, spectra, 1)) return;
+    const unsigned long long totalValues = 40000ULL * 64ULL;
+
+    NSError *err = nil;
+    id<TTIOStorageProvider> prov = nil;
+    id<TTIOStorageGroup> study = sswStudy(path, TTIOStorageOpenModeRead, &prov);
+    id<TTIOStorageGroup> run = [[study openGroupNamed:@"ms_runs" error:&err]
+                                    openGroupNamed:@"r" error:&err];
+    PASS(run != nil, "bi: run group opens");
+
+    TTIOSpectralBlockIndex *bi = [TTIOSpectralBlockIndex readFromRunGroup:run error:&err];
+    PASS(bi != nil, "bi: blocks/index present on an FDZ-compressed MS run");
+    if (!bi) { [prov close]; return; }
+
+    NSUInteger expected = (NSUInteger)((totalValues + [TTIOFloatDeltaZstd blockSize] - 1)
+                                       / [TTIOFloatDeltaZstd blockSize]);
+    PASS(bi.count == expected, "bi: one row per FDZ block (%lu)", (unsigned long)bi.count);
+    PASS(bi.valueCount == totalValues, "bi: rows account for every value");
+    PASS(bi.channelNames.count == 2, "bi: both channels named in the table");
+
+    BOOL tiles = YES;
+    unsigned long long cursor = 0;
+    for (NSUInteger k = 0; k < bi.count; k++) {
+        if ([bi valueStartAt:k] != cursor) tiles = NO;
+        cursor += [bi valuesAt:k];
+    }
+    PASS(tiles && cursor == totalValues, "bi: block value ranges tile the channel");
+
+    PASS([bi codecOf:@"mz" at:0] == (NSUInteger)TTIOCompressionFloatDeltaZstd,
+         "bi: table records codec 17 for mz");
+    PASS([bi blockForValue:0] == 0, "bi: value 0 maps to block 0");
+    PASS([bi blockForValue:totalValues - 1] == bi.count - 1,
+         "bi: the last value maps to the last block");
+    PASS([bi blockForValue:totalValues] == NSNotFound,
+         "bi: a value past the end has no block");
+
+    /* Every recorded extent must be exactly one self-describing block:
+     * a 5-byte header whose length field accounts for the rest. */
+    BOOL extentsAgree = YES, transformsKnown = YES;
+    for (NSString *ch in @[@"mz", @"intensity"]) {
+        NSData *all = sswChannelBytes(path, [ch stringByAppendingString:@"_values"]);
+        const uint8_t *p = all.bytes;
+        for (NSUInteger k = 0; k < bi.count; k++) {
+            unsigned long long off = [bi offsetOf:ch at:k];
+            unsigned long long len = [bi lengthOf:ch at:k];
+            if (off + len > all.length || len < 5) { extentsAgree = NO; break; }
+            uint32_t bodyLen = (uint32_t)p[off + 1] | ((uint32_t)p[off + 2] << 8)
+                             | ((uint32_t)p[off + 3] << 16) | ((uint32_t)p[off + 4] << 24);
+            if (5 + (unsigned long long)bodyLen != len) extentsAgree = NO;
+            if ((p[off] & ~0x03) != 0) transformsKnown = NO;
+        }
+    }
+    PASS(extentsAgree, "bi: every extent is one block, header length included");
+    PASS(transformsKnown, "bi: every block header carries a known transform");
+
+    [prov close];
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+}
+
+/* A run written without codec 17 has no blocks to describe. */
+static void sswBlockIndexAbsentWithoutFdz(void)
+{
+    NSArray *spectra = sswSynthSpectra(50, 32, 5);
+    NSString *path = sswTmp("block-index-none");
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+    NSError *err = nil;
+    id<TTIOStorageProvider> prov = nil;
+    id<TTIOStorageGroup> study = sswStudy(path, TTIOStorageOpenModeCreate, &prov);
+    TTIOInstrumentConfig *cfg = [[TTIOInstrumentConfig alloc]
+        initWithManufacturer:@"" model:@"" serialNumber:@"" sourceType:@""
+                analyzerType:@"" detectorType:@""];
+    TTIOSpectralStreamWriterOptions *o = [TTIOSpectralStreamWriterOptions
+        msOptionsWithMode:TTIOAcquisitionModeMS1DDA
+             channelNames:@[@"mz", @"intensity"] instrumentConfig:cfg];
+    o.signalCompression = TTIOCompressionZlib;
+    o.optDisableFloatDelta = YES;
+    TTIOSpectralStreamWriter *w = [[TTIOSpectralStreamWriter alloc]
+        initWithStudyGroup:study runName:@"r" options:o];
+    BOOL ok = YES;
+    for (TTIOMassSpectrum *sp in spectra) ok = ok && [w appendSpectrum:sp error:&err];
+    ok = ok && [w close:&err];
+    [prov close];
+    PASS(ok, "bi: zlib run written");
+
+    prov = nil;
+    study = sswStudy(path, TTIOStorageOpenModeRead, &prov);
+    id<TTIOStorageGroup> run = [[study openGroupNamed:@"ms_runs" error:&err]
+                                    openGroupNamed:@"r" error:&err];
+    TTIOSpectralBlockIndex *bi = [TTIOSpectralBlockIndex readFromRunGroup:run error:NULL];
+    PASS(bi == nil, "bi: no blocks/index on a run without codec 17");
+    [prov close];
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+}
+
+/* base_peak_intensities is computed by scanning -float64Buffer, which
+ * returns a freshly allocated conversion buffer for any precision
+ * other than float64. A float32 intensity array is the ordinary case
+ * for real mzML and is the one that takes that path. */
+static void sswBasePeakFromFloat32Intensity(void)
+{
+    const NSUInteger nSpec = 64, nPts = 128;
+    TTIOEncodingSpec *enc32 =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat32
+                       compressionAlgorithm:TTIOCompressionNone
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    TTIOEncodingSpec *enc64 =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionNone
+                                  byteOrder:TTIOByteOrderLittleEndian];
+
+    NSMutableArray<TTIOMassSpectrum *> *spectra = [NSMutableArray array];
+    NSMutableArray<NSNumber *> *expected = [NSMutableArray array];
+    for (NSUInteger k = 0; k < nSpec; k++) {
+        NSMutableData *mzD = [NSMutableData dataWithLength:nPts * sizeof(double)];
+        NSMutableData *inD = [NSMutableData dataWithLength:nPts * sizeof(float)];
+        double *mz = mzD.mutableBytes;
+        float *in = inD.mutableBytes;
+        float peak = 0;
+        for (NSUInteger i = 0; i < nPts; i++) {
+            mz[i] = 100.0 + (double)i * 0.5;
+            in[i] = (float)((k * 31 + i * 7) % 977) + 1.0f;
+            if (in[i] > peak) peak = in[i];
+        }
+        [expected addObject:@((double)peak)];
+        TTIOSignalArray *mzA = [[TTIOSignalArray alloc] initWithBuffer:mzD length:nPts
+                                                              encoding:enc64 axis:nil];
+        TTIOSignalArray *inA = [[TTIOSignalArray alloc] initWithBuffer:inD length:nPts
+                                                              encoding:enc32 axis:nil];
+        [spectra addObject:[[TTIOMassSpectrum alloc]
+            initWithMzArray:mzA intensityArray:inA msLevel:1
+                   polarity:TTIOPolarityPositive scanWindow:nil indexPosition:k
+            scanTimeSeconds:(double)k precursorMz:0 precursorCharge:0 error:NULL]];
+    }
+
+    TTIOWrittenSpectralBatch *b =
+        [TTIOWrittenSpectralBatch batchWithSpectra:spectra
+                                      channelNames:@[@"mz", @"intensity"]];
+    PASS(b != nil, "bpi: batch built from float32 intensity arrays");
+    const double *got = b.basePeakIntensities.bytes;
+    BOOL allMatch = (b.basePeakIntensities.length == nSpec * sizeof(double));
+    for (NSUInteger k = 0; allMatch && k < nSpec; k++) {
+        if (fabs(got[k] - [expected[k] doubleValue]) > 1e-9) allMatch = NO;
+    }
+    PASS(allMatch, "bpi: base peak of a float32 intensity array is the real maximum");
+}
 void testSpectralStreamWriterThreads(void);
 void testSpectralStreamWriterThreads(void)
 {
@@ -335,5 +492,8 @@ void testSpectralStreamWriter(void)
     @autoreleasepool {
         sswStreamedEqualsEager();
         sswZlibAndMemory();
+        sswBlockIndex();
+        sswBlockIndexAbsentWithoutFdz();
+        sswBasePeakFromFloat32Intensity();
     }
 }

@@ -151,4 +151,53 @@ class SpectralStreamWriterTest {
         assertArrayEquals(mz, b.channels().get("mz"), 0.0);
         b.close();
     }
+
+    /** blocks/index on an MS run: the spectral counterpart of the
+     *  genomic block table. Every row must name bytes that are the
+     *  block for the value range it claims. */
+    @Test
+    void blocksIndexDescribesEveryFdzBlock(@TempDir Path tmp) throws Exception {
+        AcquisitionRun run = mzml();
+        Path out = writeStreamed(tmp, run, 64);
+        try (StorageProvider p = ProviderRegistry.open(out.toString(),
+                StorageProvider.Mode.READ, "hdf5")) {
+            StorageGroup rg = p.rootGroup().openGroup("study")
+                .openGroup("ms_runs").openGroup("run_0001");
+            assertTrue(rg.hasChild("blocks"), "no blocks group on an FDZ-compressed run");
+            StorageDataset idx = rg.openGroup("blocks").openDataset("index");
+            List<java.util.Map<String, Object>> rows = idx.readRows();
+            assertFalse(rows.isEmpty(), "blocks/index is empty");
+
+            long total = 0;
+            for (int i = 0; i < run.spectrumCount(); i++) total += run.spectrumIndex().lengthAt(i);
+            long expectedRows = (total + FloatDeltaZstd.BLOCK_SIZE - 1) / FloatDeltaZstd.BLOCK_SIZE;
+            assertEquals(expectedRows, rows.size(), "one row per FDZ block");
+
+            long cursor = 0;
+            for (java.util.Map<String, Object> r : rows) {
+                assertEquals(cursor, ((Number) r.get("value_start")).longValue(),
+                    "block value ranges must tile the channel");
+                cursor += ((Number) r.get("n_values")).longValue();
+            }
+            assertEquals(total, cursor, "rows account for every value");
+
+            // Each recorded extent must be exactly one self-describing
+            // block: a 5-byte header whose length field accounts for
+            // the rest, and a transform within the defined bits.
+            for (String ch : run.channelNames()) {
+                byte[] raw = (byte[]) rg.openGroup("signal_channels")
+                    .openDataset(ch + "_values").readAll();
+                for (java.util.Map<String, Object> r : rows) {
+                    int off = ((Number) r.get(ch + "_off")).intValue();
+                    long len = ((Number) r.get(ch + "_len")).longValue();
+                    int bodyLen = (raw[off + 1] & 0xFF) | ((raw[off + 2] & 0xFF) << 8)
+                        | ((raw[off + 3] & 0xFF) << 16) | ((raw[off + 4] & 0xFF) << 24);
+                    assertEquals(len, 5L + bodyLen, "extent must match the block header");
+                    assertEquals(0, raw[off] & ~0x03, "transform must be a defined one");
+                    assertEquals(Enums.Compression.FLOAT_DELTA_ZSTD.ordinal(),
+                        ((Number) r.get(ch + "_codec")).intValue());
+                }
+            }
+        }
+    }
 }
