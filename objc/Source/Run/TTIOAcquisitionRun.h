@@ -238,6 +238,40 @@
                        error:(NSError **)error
                   usingBlock:(void (^)(id spectrum, NSUInteger index, BOOL *stop))block;
 
+/**
+ * Visit the run's spectra one scheduling unit at a time.
+ *
+ * <p>The block runs on several threads at once and in no particular
+ * order, so it must be safe to call that way. That relaxed ordering is
+ * the whole difference from
+ * <code>-iterSpectraWithBatch:threads:error:usingBlock:</code>, whose
+ * ordering guarantee is what costs the parallelism.</p>
+ *
+ * <p>Spectrum <code>k</code> of <code>0 ..&lt; nSpectra</code> is
+ * <code>[view spectrumAtIndex:viewStart + k]</code> and its run index
+ * is <code>firstSpectrum + k</code>.</p>
+ *
+ * <p>Setting <code>*stop</code> stops further units being scheduled.
+ * Units already in flight still run, so the block may be called after
+ * it asks to stop.</p>
+ *
+ * @param from    First spectrum index, inclusive.
+ * @param to      Last spectrum index, exclusive.
+ * @param threads 0 to resolve from <code>TTIO_THREADS</code>.
+ * @param error   Populated on failure.
+ * @param block   Visitor.
+ * @return NO on a read failure, YES otherwise.
+ */
+- (BOOL)iterBlocksFrom:(NSUInteger)from
+                    to:(NSUInteger)to
+               threads:(NSUInteger)threads
+                 error:(NSError **)error
+            usingBlock:(void (^)(TTIOAcquisitionRun *view,
+                                 NSUInteger viewStart,
+                                 NSUInteger firstSpectrum,
+                                 NSUInteger nSpectra,
+                                 BOOL *stop))block;
+
 /** Write chromatograms under <code>runGroup/chromatograms/</code> in the
  *  layout <code>-writeToGroup:name:error:</code> uses. */
 + (BOOL)writeChromatograms:(NSArray<TTIOChromatogram *> *)chromatograms

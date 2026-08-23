@@ -28,6 +28,8 @@
 #import "Spectra/TTIOUVVisSpectrum.h"
 #import "Spectra/TTIOChromatogram.h"
 #import "Codecs/TTIOFloatDeltaZstd.h"
+#import "Run/TTIOSpectralBlockIndex.h"
+#import "Run/TTIOSpectralUnitPlan.h"
 #import "Core/TTIOSignalArray.h"
 #import "ValueClasses/TTIOEnums.h"
 #import "ValueClasses/TTIOEncodingSpec.h"
@@ -90,6 +92,10 @@ static void _buildStdChannelEncoding(void)
     // (readSliceAtOffset:count:error:) so a future non-HDF5 provider
     // can host a run without per-class migration.
     id<TTIOStorageGroup>         _storageSignalGroup;    // nil when in-memory
+    // blocks/index of a codec-17 run. nil for every run written
+    // before the group existed and for runs whose channels fell
+    // out of step, which is not an error.
+    TTIOSpectralBlockIndex      *_spectralBlockIndex;
     NSMutableDictionary<NSString *, id<TTIOStorageDataset>> *_storageDatasets;
     NSArray<NSString *>         *_channelNames;          // ordered list
     NSUInteger                   _streamPosition;
@@ -965,6 +971,8 @@ static void _buildStdChannelEncoding(void)
     run->_instrumentConfig     = cfg;
     run->_spectrumIndex        = idx;
     run->_storageSignalGroup   = channels;
+    run->_spectralBlockIndex   = [TTIOSpectralBlockIndex readFromRunGroup:runGroup
+                                                                   error:NULL];
     run->_storageDatasets      = channelDatasets;
     run->_channelNames         = [channelNames copy];
     run->_spectrumClassName    = [className copy];
@@ -1361,6 +1369,89 @@ static void _buildStdChannelEncoding(void)
         return [self _fdzRange:channelName start:start count:count threads:nthreads error:error];
     }
     return [self channelRange:channelName start:start count:count error:error];
+}
+
+#pragma mark - Parallel block consumer
+
+/* Units covering [from,to). A spectrum belongs to the block holding its
+ * first value; see TTIOSpectralUnitPlan. */
+- (NSArray<NSValue *> *)_unitsFrom:(NSUInteger)from to:(NSUInteger)to
+{
+    NSUInteger n = [self count];
+    NSUInteger hi = MIN(to, n);
+    if (from >= hi) return @[];
+
+    NSMutableData *offD = [NSMutableData dataWithLength:hi * sizeof(unsigned long long)];
+    NSMutableData *lenD = [NSMutableData dataWithLength:hi * sizeof(unsigned int)];
+    unsigned long long *off = offD.mutableBytes;
+    unsigned int *len = lenD.mutableBytes;
+    for (NSUInteger i = 0; i < hi; i++) {
+        off[i] = (unsigned long long)[_spectrumIndex offsetAt:i];
+        len[i] = (unsigned int)[_spectrumIndex lengthAt:i];
+    }
+
+    TTIOSpectralBlockIndex *bi = _spectralBlockIndex;
+    if (!bi || bi.count == 0) {
+        /* No block structure known: one unit, delivered whole. Task 5
+         * of the plan replaces this with the header walk and the
+         * spectrum-count batches. */
+        TTIOSpectralUnit u;
+        u.block = 0;
+        u.firstSpectrum = from;
+        u.nSpectra = hi - from;
+        u.valueStart = off[from];
+        u.valueEnd = off[hi - 1] + (unsigned long long)len[hi - 1];
+        return @[[NSValue valueWithBytes:&u objCType:@encode(TTIOSpectralUnit)]];
+    }
+
+    NSMutableData *bsD = [NSMutableData dataWithLength:bi.count * sizeof(unsigned long long)];
+    unsigned long long *bs = bsD.mutableBytes;
+    for (NSUInteger b = 0; b < bi.count; b++) bs[b] = [bi valueStartAt:b];
+
+    return [TTIOSpectralUnitPlan unitsForSpectraFrom:from to:hi
+                                             offsets:off lengths:len
+                                    blockValueStarts:bs count:bi.count];
+}
+
+/* A sibling run holding just this unit's spectra. */
+- (TTIOAcquisitionRun *)_viewForUnit:(TTIOSpectralUnit)u error:(NSError **)error
+{
+    NSMutableArray *spectra = [NSMutableArray arrayWithCapacity:u.nSpectra];
+    for (NSUInteger k = 0; k < u.nSpectra; k++) {
+        id sp = [self spectrumAtIndex:u.firstSpectrum + k error:error];
+        if (!sp) return nil;
+        [spectra addObject:sp];
+    }
+    return [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                      acquisitionMode:_acquisitionMode
+                                     instrumentConfig:_instrumentConfig];
+}
+
+- (BOOL)iterBlocksFrom:(NSUInteger)from
+                    to:(NSUInteger)to
+               threads:(NSUInteger)threads
+                 error:(NSError **)error
+            usingBlock:(void (^)(TTIOAcquisitionRun *view, NSUInteger viewStart,
+                                 NSUInteger firstSpectrum, NSUInteger nSpectra,
+                                 BOOL *stop))userBlock
+{
+    (void)threads;   /* the pool arrives with the parallel path */
+    NSArray<NSValue *> *units = [self _unitsFrom:from to:to];
+    if (units.count == 0) return YES;
+
+    BOOL halted = NO;
+    for (NSValue *v in units) {
+        if (halted) break;
+        TTIOSpectralUnit u; [v getValue:&u];
+        NSError *ie = nil;
+        TTIOAcquisitionRun *view = [self _viewForUnit:u error:&ie];
+        if (!view) { if (error) *error = ie; return NO; }
+        /* The view holds exactly this unit's spectra, so viewStart is 0.
+         * It stays a parameter because a view sharing a wider decode
+         * needs a non-zero offset. */
+        userBlock(view, 0, u.firstSpectrum, u.nSpectra, &halted);
+    }
+    return YES;
 }
 
 - (BOOL)iterSpectraWithBatch:(NSUInteger)batch
