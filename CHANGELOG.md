@@ -12,6 +12,40 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Added
+- **`-[TTIOAcquisitionRun iterBlocksFrom:to:threads:error:usingBlock:]`,
+  a parallel block consumer for spectral runs.** The visitor is called
+  once per scheduling unit, on a thread pool, out of order; that relaxed
+  ordering is the whole difference from
+  `-iterSpectraWithBatch:threads:`, whose ordering guarantee is what
+  costs the parallelism. Spectrum `k` of a call is
+  `[view spectrumAtIndex:viewStart + k]` and its run index is
+  `firstSpectrum + k`.
+
+  Spectral blocks are cut on value boundaries while a spectrum is
+  located by value offset, so block edges fall inside spectra. A
+  spectrum belongs to the block holding its first value, which
+  partitions the spectra exactly once; a unit's extent can then run past
+  its own block's end, and a block holding no spectrum start emits
+  nothing rather than an empty unit. Units are planned from
+  `blocks/index` when present, from the FDZ1 block tables when not, and
+  from fixed spectrum counts for a channel with no FDZ1 stream, so the
+  method works on every MS run rather than only on one written since
+  `blocks/index` existed.
+
+  HDF5 is not thread-safe, so storage reads stay on the calling thread
+  and only decode and spectrum construction go to the pool. Memory sizes
+  the in-flight window, charged from the widest unit in the range across
+  every channel, and `TTIO_MEMORY_BUDGET` binds it. Setting `*stop`
+  stops scheduling; units already in flight still run.
+
+  On `5_TAP_Pdr1_R376W_PTM` (Orbitrap Exploris, 342546 spectra, 256.0 MB
+  of float64), minima of 5 interleaved passes: 213.3 MB/s for the
+  ordered reader against 443.5 at 4 threads and 780.5 at 16, so 3.66x.
+  Parallelism is capped by the unit count, 16 here, so 30 threads is
+  within noise of 16. At one thread the new method is 5.6% slower than
+  the ordered reader; the two cross at two threads. Objective-C only for
+  now.
+
 - **MS runs carry a `blocks/index`, the table genomic runs already
   had.** One compound row per FLOAT_DELTA_ZSTD block: the value range
   it covers, and for every signal channel the byte offset, length and

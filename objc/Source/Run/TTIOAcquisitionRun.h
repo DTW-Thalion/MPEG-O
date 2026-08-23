@@ -255,6 +255,12 @@
  * Units already in flight still run, so the block may be called after
  * it asks to stop.</p>
  *
+ * <p>At one thread this is about 6 per cent slower than
+ * <code>-iterSpectraWithBatch:threads:</code>, because a unit is
+ * several times a batch and the channel codec's one-block cache serves
+ * the smaller reads better. The two cross at two threads. Passing 0
+ * resolves the count from <code>TTIO_THREADS</code>.</p>
+ *
  * @param from    First spectrum index, inclusive.
  * @param to      Last spectrum index, exclusive.
  * @param threads 0 to resolve from <code>TTIO_THREADS</code>.
