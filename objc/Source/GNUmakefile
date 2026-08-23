@@ -86,6 +86,7 @@ libTTIO_HEADER_FILES = \
 	Query/TTIOStreamReader.h \
 	Import/TTIOBase64.h \
 	Import/TTIOCVTermMapper.h \
+	Import/TTIOXMLStreamParser.h \
 	Import/TTIOMzMLReader.h \
 	Import/TTIONmrMLReader.h \
 	Import/TTIOThermoRawReader.h \
@@ -242,6 +243,7 @@ libTTIO_OBJC_FILES = \
 	Import/TTIOImporterRegistry.m \
 	Import/TTIOBase64.m \
 	Import/TTIOCVTermMapper.m \
+	Import/TTIOXMLStreamParser.m \
 	Import/TTIOMzMLReader.m \
 	Import/TTIONmrMLReader.m \
 	Import/TTIOThermoRawReader.m \
@@ -324,7 +326,7 @@ libTTIO_OBJC_FILES = \
 libTTIO_OBJCC_FILES = \
 	Transport/TTIOArrowIpcBridge.mm
 
-libTTIO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lzstd -lcrypto -lsqlite3 -lwebsockets -larrow -lstdc++
+libTTIO_LIBRARIES_DEPEND_UPON += -lxml2 -lhdf5 -lhdf5_hl -lz -lzstd -lcrypto -lsqlite3 -lwebsockets -larrow -lstdc++
 
 -include GNUmakefile.preamble
 include $(GNUSTEP_MAKEFILES)/library.make
