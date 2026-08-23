@@ -61,6 +61,7 @@ static const NSUInteger kChannelChunk = 65536;
     o.solvent = _solvent;
     o.provenanceRecords = _provenanceRecords;
     o.threads = _threads;
+    o.memoryBudgetBytes = _memoryBudgetBytes;
     return o;
 }
 
@@ -84,6 +85,13 @@ typedef struct { NSString *name; TTIOPrecision precision; } TTIOIndexColumnSpec;
     TTIOThreadPool *_pool;
     NSMutableDictionary<NSString *, NSMutableArray<TTIOInFlightFdz *> *> *_fdzInflight;
     NSCondition *_fdzCond;
+    /* Bytes of FDZ1 encode work in flight, summed across every channel
+     * because memory is global while -_drainFdz:until: is per channel.
+     * A block is 2^20 float64 values, so a count-only cap admits
+     * threads x channels x 8 MB of copies with no memory bound. */
+    unsigned long long _fdzInflightBytes;
+    unsigned long long _maxInFlightBytesObserved;
+    unsigned long long _memoryBudgetBytes;
     id<TTIOStorageGroup> _study;
     NSString *_name;
     TTIOSpectralStreamWriterOptions *_opt;
@@ -162,6 +170,13 @@ static NSArray *ttioM74Columns(void)
         _pool = [TTIOThreadPool poolWithThreads:_threads];
         _fdzInflight = [NSMutableDictionary dictionary];
         _fdzCond = [NSCondition new];
+        _memoryBudgetBytes =
+            [TTIOThreads resolveMemoryBudget:(_opt.memoryBudgetBytes
+                                                  ? @(_opt.memoryBudgetBytes) : nil)
+                                     threads:_threads
+                                  blockBytes:(unsigned long long)
+                                                 [TTIOFloatDeltaZstd blockSize]
+                                                 * sizeof(double)];
         _fdzValues = [NSMutableDictionary dictionary];
         _fdzBlocks = [NSMutableDictionary dictionary];
         _blockRows = [NSMutableArray array];
@@ -201,9 +216,33 @@ static NSArray *ttioM74Columns(void)
 }
 
 - (NSUInteger)threads { return _threads; }
+- (unsigned long long)memoryBudgetBytes { return _memoryBudgetBytes; }
+- (unsigned long long)maxInFlightBytesObserved { return _maxInFlightBytesObserved; }
 
 /** Append completed blocks of a channel in emission order; wait on the
  *  oldest until at most blockUntil remain in flight. */
+/** Drain until the bytes in flight fit the writer's half of the budget.
+ *
+ *  <p>Drains the channel holding the most work first, so one busy
+ *  channel cannot starve the others out of the window. The count window
+ *  of -_drainFdz:until: stays the upper bound; this adds the byte bound
+ *  the count cannot give.</p> */
+- (BOOL)_drainFdzToBudget:(NSError **)error
+{
+    unsigned long long half = _memoryBudgetBytes / 2ull;
+    while (_fdzInflightBytes > half) {
+        NSString *fullest = nil;
+        NSUInteger most = 0;
+        for (NSString *ch in _fdzInflight) {
+            NSUInteger n = _fdzInflight[ch].count;
+            if (n > most) { most = n; fullest = ch; }
+        }
+        if (!fullest || most == 0) break;   /* nothing left to drain */
+        if (![self _drainFdz:fullest until:(most - 1) error:error]) return NO;
+    }
+    return YES;
+}
+
 - (BOOL)_drainFdz:(NSString *)c until:(NSUInteger)blockUntil error:(NSError **)error
 {
     NSMutableArray<TTIOInFlightFdz *> *q = _fdzInflight[c];
@@ -218,6 +257,8 @@ static NSArray *ttioM74Columns(void)
         while (!f.done) [_fdzCond wait];
         [_fdzCond unlock];
         [q removeObjectAtIndex:0];
+        unsigned long long charged = (unsigned long long)f.nValues * sizeof(double);
+        _fdzInflightBytes -= charged <= _fdzInflightBytes ? charged : _fdzInflightBytes;
         if (!f.encoded) {
             if (error) *error = f.error ?: TTIOMakeError(TTIOErrorDatasetWrite,
                 @"FLOAT_DELTA_ZSTD block encode failed for '%@'", c);
@@ -495,12 +536,19 @@ static NSData *ttioZeros(TTIOPrecision p, NSUInteger n)
         }
         return [self _appendFdz:c encoded:[TTIOFloatDeltaZstd blockBytes:b] nValues:nValues error:error];
     }
+    /* The count window is the upper bound; the byte window is the one
+     * the count cannot give. Both apply. */
     if (![self _drainFdz:c until:_threads error:error]) return NO;
+    if (![self _drainFdzToBudget:error]) return NO;
     if (!_fdzInflight[c]) _fdzInflight[c] = [NSMutableArray array];
     TTIOInFlightFdz *f = [TTIOInFlightFdz new];
     f.nValues = nValues;
     [_fdzInflight[c] addObject:f];
     NSData *copy = [values copy];   /* the caller reuses its buffer */
+    _fdzInflightBytes += (unsigned long long)copy.length;
+    if (_fdzInflightBytes > _maxInFlightBytesObserved) {
+        _maxInFlightBytesObserved = _fdzInflightBytes;
+    }
     NSCondition *cond = _fdzCond;
     [_pool.queue addOperationWithBlock:^{
         TTIOFDZEncodedBlock *b = nil;

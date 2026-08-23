@@ -39,6 +39,16 @@ NS_ASSUME_NONNULL_BEGIN
  *  the caller's thread; the file is byte for byte the one thread's. */
 @property (nonatomic) NSUInteger threads;
 
+/** Ceiling on the bytes of encode work in flight, 0 to resolve.
+ *
+ *  <p>Resolved as
+ *  <code>max(1 GiB, min(threads x blockBytes x 16, physical memory / 2))</code>
+ *  by <code>+[TTIOThreads resolveMemoryBudget:threads:blockBytes:]</code>,
+ *  the same resolver the genomic writer and the readers use, so
+ *  <code>TTIO_MEMORY_BUDGET</code> means one thing across the
+ *  library.</p> */
+@property (nonatomic) unsigned long long memoryBudgetBytes;
+
 /** Mass-spectrometry defaults: zlib (which resolves to codec 17 on
  *  <code>TTIOMassSpectrum</code> runs unless disabled), 4096 per batch. */
 + (instancetype)msOptionsWithMode:(TTIOAcquisitionMode)mode
@@ -62,6 +72,16 @@ NS_ASSUME_NONNULL_BEGIN
 /** Spectra written plus those still buffered. */
 @property (nonatomic, readonly) NSUInteger spectrumCount;
 @property (nonatomic, readonly) NSUInteger threads;
+
+/** The resolved byte ceiling on encode work in flight. */
+@property (nonatomic, readonly) unsigned long long memoryBudgetBytes;
+
+/** High-water mark of encode bytes in flight over the run's life.
+ *
+ *  <p>Reported so a caller, or a test, can see that the budget bound
+ *  anything: identical output proves the writer is correct under a
+ *  tight budget, not that the budget was consulted.</p> */
+@property (nonatomic, readonly) unsigned long long maxInFlightBytesObserved;
 
 /** Chromatograms written at close. */
 - (void)setChromatograms:(nullable NSArray<TTIOChromatogram *> *)chromatograms;
