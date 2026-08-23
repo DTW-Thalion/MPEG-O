@@ -66,6 +66,32 @@ public API is stable from onward.
   written before it exists open unchanged.
 
 ### Fixed
+- **`TTIOSpectralStreamWriter` capped encode work in flight by count, not
+  by memory.** `-_emitFdzBlock:` drained only until `threads` blocks
+  remained in flight for a channel. An FDZ1 block is 2^20 float64 values
+  and the method takes a copy of each, so at 30 threads across 2 channels
+  that admitted about 480 MB of copies with no memory bound. The genomic
+  writer has charged its in-flight work against
+  `+[TTIOThreads resolveMemoryBudget:threads:blockBytes:]` since the
+  writer-ceiling work; the spectral writer never did.
+
+  Bytes in flight are now summed across every channel, because memory is
+  global while the existing drain is per channel, and
+  `-_drainFdzToBudget:` drains the fullest channel first until they fit
+  the writer's half of the budget. The count window stays as the upper
+  bound. A new `memoryBudgetBytes` option takes an explicit ceiling and
+  0 resolves, matching the genomic writer, so `TTIO_MEMORY_BUDGET` means
+  one thing across the library.
+
+  On 20000 synthetic spectra the high-water mark falls from 18628608
+  bytes with the resolved budget to 8388608, exactly one block, with the
+  budget set to 1. Output is byte-identical either way. The writer also
+  reports `maxInFlightBytesObserved`: identical output shows the writer
+  is correct under a tight budget, not that the budget was consulted,
+  and the first version of this change was a silent no-op that passed
+  every other assertion because `-copyWithZone:` on the options class
+  dropped the new property.
+
 - **`base_peak_intensities` was computed from a freed buffer.**
   `-[TTIOSignalArray float64Buffer]` returns the array's own buffer
   when the precision is already float64 and allocates a conversion

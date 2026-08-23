@@ -482,8 +482,112 @@ static void sswBasePeakFromFloat32Intensity(void)
     PASS(allMatch, "bpi: base peak of a float32 intensity array is the real maximum");
 }
 void testSpectralStreamWriterThreads(void);
+/* As sswWriteSynth, with an explicit byte budget; 0 resolves. */
+static unsigned long long sswPeakWide = 0, sswPeakTight = 0;
+
+static BOOL sswWriteSynthBudget(NSString *path, NSArray<TTIOMassSpectrum *> *spectra,
+                                NSUInteger threads, unsigned long long budget)
+{
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+    NSError *err = nil;
+    id<TTIOStorageProvider> prov = nil;
+    id<TTIOStorageGroup> study = sswStudy(path, TTIOStorageOpenModeCreate, &prov);
+    TTIOInstrumentConfig *cfg = [[TTIOInstrumentConfig alloc]
+        initWithManufacturer:@"" model:@"" serialNumber:@"" sourceType:@""
+                analyzerType:@"" detectorType:@""];
+    TTIOSpectralStreamWriterOptions *o = [TTIOSpectralStreamWriterOptions
+        msOptionsWithMode:TTIOAcquisitionModeMS1DDA
+             channelNames:@[@"mz", @"intensity"] instrumentConfig:cfg];
+    o.batchSpectra = 1000;
+    o.threads = threads;
+    o.memoryBudgetBytes = budget;
+    TTIOSpectralStreamWriter *w = [[TTIOSpectralStreamWriter alloc]
+        initWithStudyGroup:study runName:@"r" options:o];
+    BOOL ok = YES;
+    for (TTIOMassSpectrum *sp in spectra) { ok = ok && [w appendSpectrum:sp error:&err]; }
+    ok = ok && [w close:&err];
+    if (budget == 0) sswPeakWide = w.maxInFlightBytesObserved;
+    else sswPeakTight = w.maxInFlightBytesObserved;
+    [prov close];
+    if (!ok) PASS(NO, "budget: write threads=%lu budget=%llu (%s)",
+                  (unsigned long)threads, budget,
+                  [[err localizedDescription] UTF8String] ?: "");
+    return ok;
+}
+
+/* The in-flight window is a memory setting before it is a concurrency
+ * one. An FDZ1 block is 2^20 float64 values, so a cap of `threads`
+ * blocks per channel admits threads x channels x 8 MB of copies with no
+ * memory bound at all.
+ *
+ * A tight budget makes -_emitFdzBlock: drain inside itself, and that
+ * drain writes to storage while the encode threads hold _fdzCond, so
+ * this doubles as the deadlock test for that path: it has to finish,
+ * and the bytes it writes have to match a run with the budget open. */
+static void sswByteGovernedWindow(void)
+{
+    NSArray *spectra = sswSynthSpectra(20000, 64, 29);
+    NSString *wide = sswTmp("budget-wide"), *tight = sswTmp("budget-tight");
+
+    if (!sswWriteSynthBudget(wide, spectra, 8, 0)) return;   /* resolved */
+    if (!sswWriteSynthBudget(tight, spectra, 8, 1)) return;  /* floored at 1 block */
+
+    for (NSString *ch in @[@"mz_values", @"intensity_values"]) {
+        NSData *a = sswChannelBytes(wide, ch), *b = sswChannelBytes(tight, ch);
+        PASS(a != nil && [a isEqualToData:b],
+             "budget: %s identical, resolved vs 1-byte budget (%lu vs %lu)",
+             [ch UTF8String], (unsigned long)a.length, (unsigned long)b.length);
+    }
+
+    /* Identical bytes prove correctness under a tight budget, not that
+     * the budget was consulted. The high-water mark is what shows it
+     * bound: a no-op budget would leave both runs at the same peak. */
+    PASS(sswPeakWide > sswPeakTight,
+         "budget: the byte window binds, peak in flight %llu resolved vs %llu at 1 byte",
+         sswPeakWide, sswPeakTight);
+
+    NSError *err = nil;
+    id<TTIOStorageProvider> prov = nil;
+    id<TTIOStorageGroup> study = sswStudy(tight, TTIOStorageOpenModeRead, &prov);
+    TTIOAcquisitionRun *run = [TTIOAcquisitionRun
+        readFromGroup:[study openGroupNamed:@"ms_runs" error:&err] name:@"r" error:&err];
+    PASS(run != nil && run.count == spectra.count,
+         "budget: the tight-budget run holds all %lu spectra (%s)",
+         (unsigned long)spectra.count, [[err localizedDescription] UTF8String] ?: "");
+    [prov close];
+
+    [[NSFileManager defaultManager] removeItemAtPath:wide error:NULL];
+    [[NSFileManager defaultManager] removeItemAtPath:tight error:NULL];
+}
+
+/* An unset budget resolves through the shared resolver. */
+static void sswBudgetResolves(void)
+{
+    NSString *path = sswTmp("budget-resolve");
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+    id<TTIOStorageProvider> prov = nil;
+    id<TTIOStorageGroup> study = sswStudy(path, TTIOStorageOpenModeCreate, &prov);
+    TTIOInstrumentConfig *cfg = [[TTIOInstrumentConfig alloc]
+        initWithManufacturer:@"" model:@"" serialNumber:@"" sourceType:@""
+                analyzerType:@"" detectorType:@""];
+    TTIOSpectralStreamWriterOptions *o = [TTIOSpectralStreamWriterOptions
+        msOptionsWithMode:TTIOAcquisitionModeMS1DDA
+             channelNames:@[@"mz", @"intensity"] instrumentConfig:cfg];
+    o.threads = 4;
+    TTIOSpectralStreamWriter *w = [[TTIOSpectralStreamWriter alloc]
+        initWithStudyGroup:study runName:@"r" options:o];
+    PASS(w.memoryBudgetBytes >= (1ull << 30),
+         "budget: an unset budget resolves to at least 1 GiB (%llu)",
+         w.memoryBudgetBytes);
+    [w close:NULL];
+    [prov close];
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+}
+
 void testSpectralStreamWriterThreads(void)
 {
+    sswByteGovernedWindow();
+    sswBudgetResolves();
     @autoreleasepool {
         sswThreadedByteIdentical();
     }
