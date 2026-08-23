@@ -1328,6 +1328,47 @@ class _SpectralUnitView:
     def __len__(self) -> int:
         return self._n
 
+    @property
+    def value_start(self) -> int:
+        """Run-global value index :meth:`column` starts at."""
+        return self._value_start
+
+    def column(self, channel: str):
+        """The unit's decoded values for one channel, without building a
+        single spectrum; ``None`` when the view has no such channel.
+
+        Building spectra dominates a bulk read, and in CPython it
+        dominates it completely. Measured on an Orbitrap Exploris run,
+        342546 spectra over 16 units, through ``for_each_block``, MB/s:
+
+        =========  =========  =========  ======
+        threads    spectra    columns    gain
+        =========  =========  =========  ======
+        1          98.9       1045.5     10.6x
+        4          102.4      1523.2     14.9x
+        16         100.6      1614.9     16.1x
+        =========  =========  =========  ======
+
+        Two things follow. Python's columns very nearly match
+        Objective-C's 1637.8, so the SDK's usual tenfold deficit is
+        per-spectrum object construction, not the data path. And unlike
+        the spectrum path, which is flat, the column path **scales with
+        workers**, because the numpy reduction releases the GIL. A
+        caller reading columns can raise ``threads`` past the capped
+        default and gain from it.
+
+        Spectrum ``k`` of the unit covers
+        ``run.index.offsets[first_spectrum + k] - view.value_start``
+        onward, for ``run.index.lengths[first_spectrum + k]`` values.
+
+        ⚠️ The array is the view's own buffer, not a copy. Do not
+        mutate it, and do not keep it past the visitor call.
+
+        Java: ``SpectralUnitView.column``; Objective-C:
+        ``-unitColumnForChannel:valueStart:``.
+        """
+        return self._columns.get(channel)
+
     def __getitem__(self, k: int) -> Spectrum:
         if k < 0:
             k += self._n

@@ -569,6 +569,38 @@ public class AcquisitionRun implements
         /** Spectra in this unit. */
         public int count() { return nSpectra; }
 
+        /** Run-global value index {@link #column} starts at. */
+        public long valueStart() { return valueStart; }
+
+        /** The unit's decoded values for one channel, without building a
+         *  single spectrum; {@code null} when the view has no such
+         *  channel.
+         *
+         *  <p>⚠️ In Java this buys little. Measured on an Orbitrap
+         *  Exploris run, 342546 spectra over 16 units, through
+         *  {@code iterBlocks}, MB/s: spectra 647.7 at one thread against
+         *  columns 750.5, and 747.9 against 771.7 at sixteen, so 1.16x
+         *  falling to 1.03x. The JIT and a generational collector make
+         *  per-spectrum construction cheap enough that skipping it
+         *  saves little.
+         *
+         *  <p>The other SDKs gain far more, because their construction
+         *  is dear: Objective-C 207.4 to 1050.9 MB/s at one thread,
+         *  Python 98.9 to 1045.5. Read the column when the arithmetic is
+         *  bulk and the metadata is not needed; do not expect the
+         *  other SDKs' multiples here.
+         *
+         *  <p>Spectrum {@code k} of the unit covers
+         *  {@code spectrumIndex().offsetAt(firstSpectrum + k) - valueStart()}
+         *  onward, for {@code lengthAt(firstSpectrum + k)} values.
+         *
+         *  <p>⚠️ The array is the view's own buffer, not a copy. Do not
+         *  mutate it, and do not keep it past the visitor call.
+         *
+         *  <p>Python: {@code SpectralUnitView.column}; Objective-C:
+         *  {@code -unitColumnForChannel:valueStart:}. */
+        public double[] column(String channel) { return columns.get(channel); }
+
         /** Spectrum {@code k} of the unit; its index in the whole run is
          *  {@code firstSpectrum + k}, and its msLevel, polarity and
          *  retention time come from that run position. */
