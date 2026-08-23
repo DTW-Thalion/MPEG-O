@@ -376,6 +376,66 @@ static void sibWindowIsMemoryGoverned(void)
     [prov close];
 }
 
+static void sibParallel(void)
+{
+    sibContentMatches(2, 0, SIB_NSPEC);
+    sibContentMatches(3, 0, SIB_NSPEC);   /* the genomic valley count */
+    sibContentMatches(4, 0, SIB_NSPEC);
+    sibContentMatches(8, 0, SIB_NSPEC);
+    /* Threaded and starting part-way into a block, which is the shape
+     * that returned the wrong records on the genomic side. */
+    sibContentMatches(4, 7, SIB_NSPEC - 11);
+    sibContentMatches(8, 513, SIB_NSPEC);
+}
+
+/* stop means stop scheduling. Units already in flight still run, so the
+ * contract is "returns YES and does not deliver everything", never
+ * "stops instantly". */
+static void sibStopHalts(void)
+{
+    id<TTIOStorageProvider> prov = nil;
+    TTIOAcquisitionRun *run = sibOpen(sibCorpusPath, &prov);
+    if (!run) { PASS(NO, "iterBlocks: corpus opens for the stop test"); return; }
+
+    __block NSUInteger seen = 0;
+    NSLock *lock = [NSLock new];
+    NSError *err = nil;
+    BOOL ok = [run iterBlocksFrom:0 to:SIB_NSPEC threads:4 error:&err
+                       usingBlock:^(TTIOAcquisitionRun *view, NSUInteger viewStart,
+                                    NSUInteger firstSpectrum, NSUInteger nSpectra,
+                                    BOOL *stop) {
+        [lock lock]; seen += nSpectra; [lock unlock];
+        *stop = YES;
+    }];
+    PASS(ok, "iterBlocks: stop still returns YES (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+    PASS(seen < SIB_NSPEC,
+         "iterBlocks: stop prevented full delivery (%lu of %d)",
+         (unsigned long)seen, SIB_NSPEC);
+    [prov close];
+}
+
+/* Without this the whole parallel suite is a false green: if
+ * -_fdzTablesForAllChannels returns nil the method quietly delivers on
+ * the calling thread and every content assertion still passes. */
+static void sibPoolPathIsActuallyTaken(void)
+{
+    id<TTIOStorageProvider> prov = nil;
+    TTIOAcquisitionRun *run = sibOpen(sibCorpusPath, &prov);
+    if (!run) { PASS(NO, "iterBlocks: corpus opens for the pool-path check"); return; }
+
+    NSDictionary *tables = [run _fdzTablesForAllChannels];
+    PASS(tables != nil && tables.count == 2,
+         "iterBlocks: the pool path is reachable, %lu channel tables built",
+         (unsigned long)tables.count);
+
+    NSArray<NSValue *> *units = [run _unitsFrom:0 to:SIB_NSPEC];
+    NSUInteger w = [run _unitWindowForThreads:8 units:units];
+    PASS(w > 1, "iterBlocks: window at 8 threads is %lu, so units run concurrently",
+         (unsigned long)w);
+    [prov close];
+}
+
 void testSpectralIterBlocks(void)
 {
     siuPlanBasics();
@@ -388,5 +448,8 @@ void testSpectralIterBlocks(void)
     if (!sibCorpusPath) return;
     sibSerial();
     sibWindowIsMemoryGoverned();
+    sibPoolPathIsActuallyTaken();
+    sibParallel();
+    sibStopHalts();
     [[NSFileManager defaultManager] removeItemAtPath:sibCorpusPath error:NULL];
 }

@@ -76,6 +76,13 @@ static void _buildStdChannelEncoding(void)
 @implementation TTIOInFlightFdzDecode
 @end
 
+@interface TTIOInFlightUnit : NSObject
+@property (nonatomic, strong, nullable) NSError *error;
+@property (nonatomic) BOOL done;
+@end
+@implementation TTIOInFlightUnit
+@end
+
 @implementation TTIOAcquisitionRun
 {
     NSUInteger _iterThreads;
@@ -1463,6 +1470,146 @@ static void _buildStdChannelEncoding(void)
     return window < 1 ? 1 : window;
 }
 
+/* Per-channel FDZ1 block tables, built here because building one is a
+ * storage read. Returns nil when any channel has no FDZ1 stream, which
+ * sends the caller to the serial path. */
+- (NSDictionary<NSString *, TTIOFDZBlockTable *> *)_fdzTablesForAllChannels
+{
+    if (_inMemorySpectra || !_storageDatasets) return nil;
+    NSMutableDictionary<NSString *, TTIOFDZBlockTable *> *out =
+        [NSMutableDictionary dictionaryWithCapacity:_channelNames.count];
+    for (NSString *ch in _channelNames) {
+        if (![_fdzChannels containsObject:ch]) return nil;
+        if (_decryptedChannels[ch] || _numpressChannels[ch] || _cachedFullChannels[ch]) {
+            return nil;
+        }
+        id<TTIOStorageDataset> ds = _storageDatasets[ch];
+        if (!ds) return nil;
+        TTIOFDZByteRangeReader reader = ^NSData *(NSUInteger offset, NSUInteger n) {
+            id raw = [ds readSliceAtOffset:offset count:n error:NULL];
+            return [raw isKindOfClass:[NSData class]] ? raw : nil;
+        };
+        TTIOFDZBlockTable *t;
+        @synchronized (self) {
+            if (!_fdzTables) _fdzTables = [NSMutableDictionary dictionary];
+            t = _fdzTables[ch];
+            if (!t) {
+                t = [TTIOFloatDeltaZstd readBlockTableWithReader:reader error:NULL];
+                if (t) _fdzTables[ch] = t;
+            }
+        }
+        if (!t) return nil;
+        out[ch] = t;
+    }
+    return out;
+}
+
+/* Raw bytes of every FDZ1 block the unit's value extent touches, keyed
+ * by channel then by the block's byte offset.
+ *
+ * ⛔ Storage reads. HDF5 is not thread-safe, so this runs on the calling
+ * thread and only the decode that consumes the result goes to the pool.
+ * A unit's extent can run past its own block's end, so this reads every
+ * block the extent spans, not just the owning one. */
+- (NSDictionary *)_rawBlocksForUnit:(TTIOSpectralUnit)u
+                             tables:(NSDictionary<NSString *, TTIOFDZBlockTable *> *)tables
+{
+    NSMutableDictionary *byChannel = [NSMutableDictionary dictionaryWithCapacity:tables.count];
+    for (NSString *ch in _channelNames) {
+        TTIOFDZBlockTable *t = tables[ch];
+        id<TTIOStorageDataset> ds = _storageDatasets[ch];
+        if (!t || !ds) return nil;
+        NSUInteger bs = t.blockSize;
+        if (bs == 0) return nil;
+        NSUInteger k0 = (NSUInteger)(u.valueStart / bs);
+        NSUInteger k1 = (NSUInteger)((u.valueEnd - 1) / bs);
+        NSMutableDictionary<NSNumber *, NSData *> *blocks = [NSMutableDictionary dictionary];
+        for (NSUInteger k = k0; k <= k1; k++) {
+            NSUInteger off = (NSUInteger)[t offsetAt:k];
+            NSUInteger len = (NSUInteger)[t lengthAt:k];
+            id raw = [ds readSliceAtOffset:off count:len error:NULL];
+            if (![raw isKindOfClass:[NSData class]]) return nil;
+            blocks[@(off)] = raw;
+        }
+        byChannel[ch] = blocks;
+    }
+    return byChannel;
+}
+
+/* Decode + materialise. Runs on the pool: every byte it needs is already
+ * in `raw`, so it performs no storage read. */
+- (TTIOAcquisitionRun *)_viewForUnit:(TTIOSpectralUnit)u
+                                 raw:(NSDictionary *)raw
+                              tables:(NSDictionary<NSString *, TTIOFDZBlockTable *> *)tables
+                               error:(NSError **)error
+{
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    NSUInteger nVals = (NSUInteger)(u.valueEnd - u.valueStart);
+    NSMutableDictionary<NSString *, NSData *> *cols =
+        [NSMutableDictionary dictionaryWithCapacity:_channelNames.count];
+
+    for (NSString *ch in _channelNames) {
+        TTIOFDZBlockTable *t = tables[ch];
+        NSDictionary<NSNumber *, NSData *> *blocks = raw[ch];
+        if (!t || !blocks) {
+            if (error) *error = TTIOMakeError(TTIOErrorDatasetRead,
+                @"channel '%@' has no pre-read bytes for the unit", ch);
+            return nil;
+        }
+        /* Serves any sub-range of a block already in memory. */
+        TTIOFDZByteRangeReader memReader = ^NSData *(NSUInteger offset, NSUInteger n) {
+            for (NSNumber *baseNum in blocks) {
+                NSUInteger base = baseNum.unsignedIntegerValue;
+                NSData *d = blocks[baseNum];
+                if (offset >= base && offset + n <= base + d.length) {
+                    return [d subdataWithRange:NSMakeRange(offset - base, n)];
+                }
+            }
+            return nil;
+        };
+        NSUInteger bs = t.blockSize;
+        NSMutableData *acc = [NSMutableData dataWithCapacity:nVals * sizeof(double)];
+        unsigned long long pos = u.valueStart;
+        while (pos < u.valueEnd) {
+            NSUInteger k = (NSUInteger)(pos / bs);
+            NSData *blk = [TTIOFloatDeltaZstd decodeBlock:k table:t reader:memReader error:error];
+            if (!blk) return nil;
+            unsigned long long blkStart = (unsigned long long)k * bs;
+            NSUInteger inBlk = (NSUInteger)(pos - blkStart);
+            NSUInteger avail = (NSUInteger)(blk.length / sizeof(double)) - inBlk;
+            NSUInteger want = (NSUInteger)MIN((unsigned long long)avail, u.valueEnd - pos);
+            [acc appendBytes:(const uint8_t *)blk.bytes + inBlk * sizeof(double)
+                      length:want * sizeof(double)];
+            pos += want;
+        }
+        cols[ch] = acc;
+    }
+
+    NSMutableArray *spectra = [NSMutableArray arrayWithCapacity:u.nSpectra];
+    for (NSUInteger k = 0; k < u.nSpectra; k++) {
+        NSUInteger i = u.firstSpectrum + k;
+        NSUInteger off = (NSUInteger)((unsigned long long)[_spectrumIndex offsetAt:i] - u.valueStart);
+        NSUInteger len = [_spectrumIndex lengthAt:i];
+        NSMutableDictionary *arrays =
+            [NSMutableDictionary dictionaryWithCapacity:_channelNames.count];
+        for (NSString *ch in _channelNames) {
+            NSData *d = [NSData dataWithBytes:(const uint8_t *)cols[ch].bytes + off * sizeof(double)
+                                       length:len * sizeof(double)];
+            arrays[ch] = [[TTIOSignalArray alloc] initWithOwnedBuffer:d length:len
+                                                             encoding:enc axis:nil];
+        }
+        id sp = [self _spectrumAtIndex:i channels:arrays error:error];
+        if (!sp) return nil;
+        [spectra addObject:sp];
+    }
+    return [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                      acquisitionMode:_acquisitionMode
+                                     instrumentConfig:_instrumentConfig];
+}
+
 - (BOOL)iterBlocksFrom:(NSUInteger)from
                     to:(NSUInteger)to
                threads:(NSUInteger)threads
@@ -1471,23 +1618,96 @@ static void _buildStdChannelEncoding(void)
                                  NSUInteger firstSpectrum, NSUInteger nSpectra,
                                  BOOL *stop))userBlock
 {
-    (void)threads;   /* the pool arrives with the parallel path */
     NSArray<NSValue *> *units = [self _unitsFrom:from to:to];
     if (units.count == 0) return YES;
+    NSUInteger nthreads = threads ? threads : [TTIOThreads resolve:nil];
 
-    BOOL halted = NO;
-    for (NSValue *v in units) {
-        if (halted) break;
-        TTIOSpectralUnit u; [v getValue:&u];
-        NSError *ie = nil;
-        TTIOAcquisitionRun *view = [self _viewForUnit:u error:&ie];
-        if (!view) { if (error) *error = ie; return NO; }
-        /* The view holds exactly this unit's spectra, so viewStart is 0.
-         * It stays a parameter because a view sharing a wider decode
-         * needs a non-zero offset. */
-        userBlock(view, 0, u.firstSpectrum, u.nSpectra, &halted);
+    NSDictionary<NSString *, TTIOFDZBlockTable *> *tables =
+        (nthreads > 1 && units.count > 1) ? [self _fdzTablesForAllChannels] : nil;
+
+    /* One unit, one thread, or a channel the pool path cannot serve:
+     * deliver on this thread. */
+    if (!tables) {
+        BOOL halted = NO;
+        for (NSValue *v in units) {
+            if (halted) break;
+            TTIOSpectralUnit u; [v getValue:&u];
+            NSError *ie = nil;
+            TTIOAcquisitionRun *view = [self _viewForUnit:u error:&ie];
+            if (!view) { if (error) *error = ie; return NO; }
+            userBlock(view, 0, u.firstSpectrum, u.nSpectra, &halted);
+        }
+        return YES;
     }
-    return YES;
+
+    NSUInteger window = [self _unitWindowForThreads:nthreads units:units];
+    TTIOThreadPool *pool = [TTIOThreadPool poolWithThreads:window];
+    if (pool.queue == nil) {
+        return [self iterBlocksFrom:from to:to threads:1 error:error usingBlock:userBlock];
+    }
+
+    NSMutableDictionary<NSNumber *, TTIOInFlightUnit *> *pending =
+        [NSMutableDictionary dictionary];
+    NSCondition *cond = [NSCondition new];
+    __block BOOL halted = NO;
+    BOOL ok = YES;
+    __weak typeof(self) weakSelf = self;
+
+    void (^submit)(NSUInteger) = ^(NSUInteger idx) {
+        typeof(self) sself = weakSelf;
+        if (!sself || idx >= units.count || pending[@(idx)] || halted) return;
+        TTIOSpectralUnit u; [units[idx] getValue:&u];
+        TTIOInFlightUnit *f = [TTIOInFlightUnit new];
+        pending[@(idx)] = f;
+        /* Storage reads, this thread. */
+        NSDictionary *raw = [sself _rawBlocksForUnit:u tables:tables];
+        if (!raw) {
+            f.error = TTIOMakeError(TTIOErrorDatasetRead,
+                @"unit %lu could not be read", (unsigned long)idx);
+            f.done = YES;
+            return;
+        }
+        [pool.queue addOperationWithBlock:^{
+            NSError *ie = nil;
+            @try {
+                TTIOAcquisitionRun *view = [sself _viewForUnit:u raw:raw tables:tables
+                                                          error:&ie];
+                if (view && !halted) {
+                    BOOL st = NO;
+                    userBlock(view, 0, u.firstSpectrum, u.nSpectra, &st);
+                    if (st) halted = YES;
+                } else if (!view && !ie) {
+                    ie = TTIOMakeError(TTIOErrorDatasetRead,
+                        @"unit %lu did not materialise", (unsigned long)idx);
+                }
+            } @catch (NSException *ex) {
+                ie = TTIOMakeError(TTIOErrorDatasetRead, @"%@: %@", ex.name, ex.reason);
+            }
+            [cond lock];
+            f.error = ie; f.done = YES;
+            [cond broadcast];
+            [cond unlock];
+        }];
+    };
+
+    for (NSUInteger i = 0; i < MIN(units.count, window); i++) submit(i);
+    for (NSUInteger i = 0; i < units.count && !halted; i++) {
+        TTIOInFlightUnit *f = pending[@(i)];
+        if (!f) continue;
+        [cond lock];
+        while (!f.done) [cond wait];
+        [cond unlock];
+        [pending removeObjectForKey:@(i)];
+        if (f.error) { if (error) *error = f.error; ok = NO; break; }
+        submit(i + window);
+    }
+    for (TTIOInFlightUnit *f in pending.allValues) {
+        [cond lock];
+        while (!f.done) [cond wait];
+        [cond unlock];
+    }
+    [pool close];
+    return ok;
 }
 
 - (BOOL)iterSpectraWithBatch:(NSUInteger)batch

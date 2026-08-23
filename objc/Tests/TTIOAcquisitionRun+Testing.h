@@ -15,4 +15,5 @@
 - (NSArray<NSValue *> *)_unitsFrom:(NSUInteger)from to:(NSUInteger)to;
 - (NSUInteger)_unitWindowForThreads:(NSUInteger)nthreads
                               units:(NSArray<NSValue *> *)units;
+- (NSDictionary *)_fdzTablesForAllChannels;
 @end
