@@ -306,14 +306,16 @@ static void sswThreadedByteIdentical(void)
     BOOL ok1 = [run iterSpectraWithBatch:4096 threads:1 error:&err
                               usingBlock:^(id sp, NSUInteger index, BOOL *stop) {
         TTIOSignalArray *ia = ((TTIOMassSpectrum *)sp).intensityArray;
-        const double *v = [ia float64Buffer].bytes;
+        NSData *vb = [ia float64Buffer];
+        const double *v = vb.bytes;
         double t = 0; for (NSUInteger i = 0; i < ia.length; i++) t += v[i];
         [sums1 addObject:@(t)];
     }];
     BOOL ok4 = [run iterSpectraWithBatch:4096 threads:4 error:&err
                               usingBlock:^(id sp, NSUInteger index, BOOL *stop) {
         TTIOSignalArray *ia = ((TTIOMassSpectrum *)sp).intensityArray;
-        const double *v = [ia float64Buffer].bytes;
+        NSData *vb = [ia float64Buffer];
+        const double *v = vb.bytes;
         double t = 0; for (NSUInteger i = 0; i < ia.length; i++) t += v[i];
         [sums4 addObject:@(t)];
     }];

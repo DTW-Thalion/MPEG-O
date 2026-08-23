@@ -30,13 +30,6 @@ const NSUInteger TTIOFastaWriterProgressIntervalReads = 1000;
 static NSString *const kErrDom = @"TTIOFastaWriterErrorDomain";
 
 
-// (name, sequence) record pair.
-typedef struct {
-    __unsafe_unretained NSString *name;
-    __unsafe_unretained NSData   *seq;
-} TTIORec;
-
-
 static BOOL write_records(NSArray<NSString *> *names,
                           NSArray<NSData *> *seqs,
                           NSString *path,
