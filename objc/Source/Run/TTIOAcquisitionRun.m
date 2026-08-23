@@ -1382,6 +1382,8 @@ static void _buildStdChannelEncoding(void)
 
 /* Units covering [from,to). A spectrum belongs to the block holding its
  * first value; see TTIOSpectralUnitPlan. */
+- (void)_testDropBlockIndex { _spectralBlockIndex = nil; }
+
 - (NSArray<NSValue *> *)_unitsFrom:(NSUInteger)from to:(NSUInteger)to
 {
     NSUInteger n = [self count];
@@ -1397,27 +1399,67 @@ static void _buildStdChannelEncoding(void)
         len[i] = (unsigned int)[_spectrumIndex lengthAt:i];
     }
 
+    NSMutableData *bsD = nil;
+    NSUInteger nBlocks = 0;
+
     TTIOSpectralBlockIndex *bi = _spectralBlockIndex;
-    if (!bi || bi.count == 0) {
-        /* No block structure known: one unit, delivered whole. Task 5
-         * of the plan replaces this with the header walk and the
-         * spectrum-count batches. */
-        TTIOSpectralUnit u;
-        u.block = 0;
-        u.firstSpectrum = from;
-        u.nSpectra = hi - from;
-        u.valueStart = off[from];
-        u.valueEnd = off[hi - 1] + (unsigned long long)len[hi - 1];
-        return @[[NSValue valueWithBytes:&u objCType:@encode(TTIOSpectralUnit)]];
+    if (bi && bi.count > 0) {
+        /* Tier 1: blocks/index. One compound read, no header walking. */
+        nBlocks = bi.count;
+        bsD = [NSMutableData dataWithLength:nBlocks * sizeof(unsigned long long)];
+        unsigned long long *bs = bsD.mutableBytes;
+        for (NSUInteger b = 0; b < nBlocks; b++) bs[b] = [bi valueStartAt:b];
+    } else {
+        /* Tier 2: the FDZ1 header walk. blocks/index is written only
+         * when every channel cut at the same value boundaries, so with
+         * it absent that has to be re-checked rather than assumed: the
+         * tables must agree on block size and count, or the boundaries
+         * are not shared and there is no single unit definition. */
+        NSDictionary<NSString *, TTIOFDZBlockTable *> *tables =
+            [self _fdzTablesForAllChannels];
+        TTIOFDZBlockTable *first = nil;
+        BOOL agree = (tables.count > 0);
+        for (NSString *ch in tables) {
+            TTIOFDZBlockTable *t = tables[ch];
+            if (!first) { first = t; continue; }
+            if (t.blockSize != first.blockSize || t.nBlocks != first.nBlocks) {
+                agree = NO;
+                break;
+            }
+        }
+        if (agree && first && first.nBlocks > 0) {
+            nBlocks = first.nBlocks;
+            bsD = [NSMutableData dataWithLength:nBlocks * sizeof(unsigned long long)];
+            unsigned long long *bs = bsD.mutableBytes;
+            for (NSUInteger b = 0; b < nBlocks; b++) {
+                bs[b] = (unsigned long long)b * first.blockSize;
+            }
+        }
     }
 
-    NSMutableData *bsD = [NSMutableData dataWithLength:bi.count * sizeof(unsigned long long)];
-    unsigned long long *bs = bsD.mutableBytes;
-    for (NSUInteger b = 0; b < bi.count; b++) bs[b] = [bi valueStartAt:b];
+    if (nBlocks == 0) {
+        /* Tier 3: no FDZ1 stream to honour, which covers numpress,
+         * decrypted and cached channels. Cut fixed spectrum-count
+         * batches instead. The units are arbitrary but still whole
+         * spectra, so the visitor contract does not change. */
+        const NSUInteger batch = 512;
+        NSMutableArray<NSValue *> *out = [NSMutableArray array];
+        for (NSUInteger i = from; i < hi; i += batch) {
+            NSUInteger last = MIN(i + batch, hi) - 1;
+            TTIOSpectralUnit u;
+            u.block = out.count;
+            u.firstSpectrum = i;
+            u.nSpectra = last - i + 1;
+            u.valueStart = off[i];
+            u.valueEnd = off[last] + (unsigned long long)len[last];
+            [out addObject:[NSValue valueWithBytes:&u objCType:@encode(TTIOSpectralUnit)]];
+        }
+        return out;
+    }
 
     return [TTIOSpectralUnitPlan unitsForSpectraFrom:from to:hi
                                              offsets:off lengths:len
-                                    blockValueStarts:bs count:bi.count];
+                                    blockValueStarts:bsD.mutableBytes count:nBlocks];
 }
 
 /* A sibling run holding just this unit's spectra. */

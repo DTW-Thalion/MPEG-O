@@ -16,4 +16,6 @@
 - (NSUInteger)_unitWindowForThreads:(NSUInteger)nthreads
                               units:(NSArray<NSValue *> *)units;
 - (NSDictionary *)_fdzTablesForAllChannels;
+/** Drops blocks/index so the planner falls to the header walk. */
+- (void)_testDropBlockIndex;
 @end

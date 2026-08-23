@@ -436,6 +436,144 @@ static void sibPoolPathIsActuallyTaken(void)
     [prov close];
 }
 
+/* m/z[0] per run index, in run order, collected through iterBlocks. */
+static NSArray<NSNumber *> *sibCollect(TTIOAcquisitionRun *run, NSUInteger n,
+                                       NSUInteger threads, NSUInteger *unitsOut)
+{
+    NSMutableDictionary<NSNumber *, NSNumber *> *got = [NSMutableDictionary dictionary];
+    NSLock *lock = [NSLock new];
+    __block NSUInteger units = 0;
+    [run iterBlocksFrom:0 to:n threads:threads error:NULL
+             usingBlock:^(TTIOAcquisitionRun *view, NSUInteger viewStart,
+                          NSUInteger firstSpectrum, NSUInteger nSpectra, BOOL *stop) {
+        NSMutableDictionary *local = [NSMutableDictionary dictionary];
+        for (NSUInteger k = 0; k < nSpectra; k++) {
+            TTIOMassSpectrum *sp = [view spectrumAtIndex:viewStart + k error:NULL];
+            NSData *buf = [sp.mzArray float64Buffer];
+            const double *v = buf.bytes;
+            local[@(firstSpectrum + k)] = @(v[0]);
+        }
+        [lock lock]; [got addEntriesFromDictionary:local]; units++; [lock unlock];
+    }];
+    if (unitsOut) *unitsOut = units;
+    NSMutableArray<NSNumber *> *out = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) {
+        NSNumber *g = got[@(i)];
+        if (!g) return nil;
+        [out addObject:g];
+    }
+    return out;
+}
+
+/* A run whose channels carry no FDZ1 stream at all: zlib, so the
+ * planner has no block structure to honour and must batch by spectrum
+ * count. 1100 spectra against a 512 batch is 3 units. */
+static NSString *sibWriteZlibCorpus(NSUInteger nSpec, NSUInteger nPts)
+{
+    NSString *path = sibTmp("zlib");
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+    NSError *err = nil;
+    id<TTIOStorageProvider> prov = nil;
+    id<TTIOStorageGroup> study = sibStudy(path, TTIOStorageOpenModeCreate, &prov);
+    if (!study) return nil;
+
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    NSMutableArray *spectra = [NSMutableArray arrayWithCapacity:nSpec];
+    NSMutableData *mzD = [NSMutableData dataWithLength:nPts * sizeof(double)];
+    NSMutableData *inD = [NSMutableData dataWithLength:nPts * sizeof(double)];
+    for (NSUInteger k = 0; k < nSpec; k++) {
+        double *mz = mzD.mutableBytes, *in = inD.mutableBytes;
+        for (NSUInteger j = 0; j < nPts; j++) {
+            mz[j] = (double)(1000 * k + j);
+            in[j] = (double)((k * 7 + j) % 977);
+        }
+        TTIOSignalArray *mzA = [[TTIOSignalArray alloc] initWithBuffer:[mzD copy]
+                                                                length:nPts encoding:enc axis:nil];
+        TTIOSignalArray *inA = [[TTIOSignalArray alloc] initWithBuffer:[inD copy]
+                                                                length:nPts encoding:enc axis:nil];
+        [spectra addObject:[[TTIOMassSpectrum alloc]
+            initWithMzArray:mzA intensityArray:inA msLevel:1
+                   polarity:TTIOPolarityPositive scanWindow:nil indexPosition:k
+            scanTimeSeconds:(double)k precursorMz:0 precursorCharge:0 error:NULL]];
+    }
+    TTIOInstrumentConfig *cfg = [[TTIOInstrumentConfig alloc]
+        initWithManufacturer:@"" model:@"" serialNumber:@"" sourceType:@""
+                analyzerType:@"" detectorType:@""];
+    TTIOAcquisitionRun *run = [[TTIOAcquisitionRun alloc]
+        initWithSpectra:spectra acquisitionMode:TTIOAcquisitionModeMS1DDA
+       instrumentConfig:cfg];
+    run.signalCompression = TTIOCompressionZlib;
+    run.optDisableFloatDelta = YES;
+    id<TTIOStorageGroup> msRuns = [study createGroupNamed:@"ms_runs" error:&err];
+    BOOL ok = msRuns && [run writeToGroup:msRuns name:@"r" error:&err];
+    [prov close];
+    if (!ok) {
+        PASS(NO, "iterBlocks: zlib corpus write (%s)",
+             [[err localizedDescription] UTF8String] ?: "");
+        return nil;
+    }
+    return path;
+}
+
+/* All three planning sources must deliver identical content. */
+static void sibPlanningSourcesAgree(void)
+{
+    /* Tier 1: blocks/index. */
+    id<TTIOStorageProvider> p1 = nil;
+    TTIOAcquisitionRun *r1 = sibOpen(sibCorpusPath, &p1);
+    NSUInteger u1 = 0;
+    NSArray<NSNumber *> *a = r1 ? sibCollect(r1, SIB_NSPEC, 4, &u1) : nil;
+    PASS(a != nil, "iterBlocks: tier 1 (blocks/index) delivered every spectrum");
+
+    /* Tier 2: same file, blocks/index dropped, so the header walk plans. */
+    id<TTIOStorageProvider> p2 = nil;
+    TTIOAcquisitionRun *r2 = sibOpen(sibCorpusPath, &p2);
+    NSUInteger u2 = 0;
+    NSArray<NSNumber *> *b = nil;
+    if (r2) {
+        [r2 _testDropBlockIndex];
+        NSArray<NSValue *> *units = [r2 _unitsFrom:0 to:SIB_NSPEC];
+        PASS(units.count >= 2,
+             "iterBlocks: tier 2 header walk found %lu units, so it planned "
+             "rather than falling through to one whole unit",
+             (unsigned long)units.count);
+        b = sibCollect(r2, SIB_NSPEC, 4, &u2);
+    }
+    PASS(b != nil && a != nil && [a isEqualToArray:b],
+         "iterBlocks: the header walk agrees with blocks/index (%lu vs %lu units)",
+         (unsigned long)u1, (unsigned long)u2);
+    [p1 close]; [p2 close];
+
+    /* Tier 3: a zlib run has no FDZ1 stream, so spectrum-count batches. */
+    const NSUInteger zN = 1100;
+    NSString *zpath = sibWriteZlibCorpus(zN, 50);
+    if (!zpath) return;
+    id<TTIOStorageProvider> p3 = nil;
+    TTIOAcquisitionRun *r3 = sibOpen(zpath, &p3);
+    if (r3) {
+        PASS([r3 _fdzTablesForAllChannels] == nil,
+             "iterBlocks: the zlib run has no FDZ1 tables, so tier 3 plans it");
+        NSArray<NSValue *> *units = [r3 _unitsFrom:0 to:zN];
+        PASS(units.count == 3,
+             "iterBlocks: tier 3 cut %lu spectrum-count units for 1100 spectra",
+             (unsigned long)units.count);
+        NSUInteger u3 = 0;
+        NSArray<NSNumber *> *c = sibCollect(r3, zN, 4, &u3);
+        BOOL right = (c.count == zN);
+        for (NSUInteger i = 0; right && i < zN; i++) {
+            if (fabs(c[i].doubleValue - (double)(1000 * i)) > 1e-9) right = NO;
+        }
+        PASS(right, "iterBlocks: tier 3 delivered every spectrum with its own content");
+    } else {
+        PASS(NO, "iterBlocks: zlib corpus opens");
+    }
+    [p3 close];
+    [[NSFileManager defaultManager] removeItemAtPath:zpath error:NULL];
+}
+
 void testSpectralIterBlocks(void)
 {
     siuPlanBasics();
@@ -451,5 +589,6 @@ void testSpectralIterBlocks(void)
     sibPoolPathIsActuallyTaken();
     sibParallel();
     sibStopHalts();
+    sibPlanningSourcesAgree();
     [[NSFileManager defaultManager] removeItemAtPath:sibCorpusPath error:NULL];
 }
