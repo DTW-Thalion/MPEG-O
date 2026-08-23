@@ -657,10 +657,10 @@ static void testM90_3MaskRegionsSingle(void)
     PASS(gr.readCount == 6, "M90.3 mask: read count preserved");
     TTIOAlignedRead *r0 = [gr readAtIndex:0 error:&err];
     TTIOAlignedRead *r2 = [gr readAtIndex:2 error:&err];
-    BOOL r0AllZero = YES;
-    const uint8_t *r0bytes = (const uint8_t *)
-        [r0.sequence dataUsingEncoding:NSASCIIStringEncoding].bytes;
-    for (NSUInteger j = 0; j < 8; j++) {
+    NSData *r0seq = [r0.sequence dataUsingEncoding:NSASCIIStringEncoding];
+    BOOL r0AllZero = r0seq.length == 8;
+    const uint8_t *r0bytes = (const uint8_t *)r0seq.bytes;
+    for (NSUInteger j = 0; j < r0seq.length; j++) {
         if (r0bytes[j] != 0) { r0AllZero = NO; break; }
     }
     PASS(r0AllZero, "M90.3 mask: read 0 (chr1) sequence zeroed");

@@ -51,6 +51,25 @@ public API is stable from onward.
   file now produce byte-identical output, so the run to run variation
   in .tio size was this bug rather than the threaded writer.
 
+- **Three tests scanned a buffer nothing kept alive.** An audit of the
+  Objective-C tree for the shape above — a raw pointer taken from a
+  method's return value and read after the statement that produced it
+  — found three sites, all in the test suite. Two are in
+  `TestSpectralStreamWriter`, which reads `-float64Buffer` inside the
+  `iterSpectra` blocks; one is in `TestM90GenomicProtection`, which
+  reads the ASCII bytes of a masked read's sequence, where
+  `-dataUsingEncoding:` allocates on every call and the pointer was
+  therefore always dangling. Each now holds the `NSData` in a local for
+  the life of the scan. The masking check also derives its loop bound
+  from the data it scans and requires the expected length, rather than
+  reading a fixed eight bytes from a buffer it never measured.
+
+  The library sources are clean. Every remaining pointer of this shape
+  either reads through a property backed by an instance variable or an
+  element of a collection the caller holds, or is used inside the
+  expression that produced it, which ARC keeps alive until the full
+  expression ends.
+
 ### Changed
 - **FLOAT_DELTA_ZSTD (codec id 17) chooses the byte-plane transpose per
   block instead of always applying it.** Bit 1 of the per-block
