@@ -17,6 +17,7 @@
 #import "Core/TTIOSignalArray.h"
 #import "ValueClasses/TTIOEncodingSpec.h"
 
+#include <zstd.h>
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
@@ -422,4 +423,96 @@ void testFloatDeltaZstd(void)
         PASS(dec != nil && bitExact(dec, goldenValues()),
              "golden stream decodes bit-exactly");
     }
+}
+
+/* Bit 1 of the transform byte keeps a block as little-endian uint64
+ * instead of 8 byte planes. The four codes are built here from an
+ * independent transform, so the decoder is checked against something
+ * other than its own encoder. */
+
+static NSData *fdzZstdLevel1(const uint8_t *buf, NSUInteger len)
+{
+    size_t bound = ZSTD_compressBound(len);
+    NSMutableData *out = [NSMutableData dataWithLength:bound];
+    size_t n = ZSTD_compress(out.mutableBytes, bound, buf, len, 1);
+    if (ZSTD_isError(n)) return nil;
+    [out setLength:n];
+    return out;
+}
+
+/* An FDZ1 stream of one block carrying `transform`. */
+static NSData *fdzStreamWithTransform(uint8_t transform, NSData *values)
+{
+    NSUInteger len = values.length / 8;
+    const uint64_t *u = (const uint64_t *)values.bytes;
+    uint64_t *work = malloc(len * sizeof(uint64_t));
+    uint8_t *body = malloc(len * 8);
+    if (!work || !body) { free(work); free(body); return nil; }
+
+    if (transform & 0x01) {
+        for (NSUInteger i = len; i-- > 1; ) work[i] = u[i] - u[i - 1];
+        if (len > 0) work[0] = u[0];
+    } else {
+        memcpy(work, u, len * sizeof(uint64_t));
+    }
+    if (transform & 0x02) {
+        for (NSUInteger i = 0; i < len; i++) {
+            for (int b = 0; b < 8; b++) body[i * 8 + b] = (uint8_t)(work[i] >> (8 * b));
+        }
+    } else {
+        for (int plane = 0; plane < 8; plane++) {
+            for (NSUInteger i = 0; i < len; i++) {
+                body[plane * len + i] = (uint8_t)(work[i] >> (8 * plane));
+            }
+        }
+    }
+    NSData *frame = fdzZstdLevel1(body, len * 8);
+    free(work);
+    free(body);
+    if (!frame) return nil;
+
+    NSMutableData *out = [NSMutableData data];
+    [out appendData:[TTIOFloatDeltaZstd headerBytesForValues:len blocks:1]];
+    uint8_t t = transform;
+    [out appendBytes:&t length:1];
+    uint32_t bl = (uint32_t)frame.length;
+    uint8_t lb[4] = { (uint8_t)bl, (uint8_t)(bl >> 8),
+                      (uint8_t)(bl >> 16), (uint8_t)(bl >> 24) };
+    [out appendBytes:lb length:4];
+    [out appendData:frame];
+    return out;
+}
+
+void testFloatDeltaZstdPlainTransform(void)
+{
+    const NSUInteger n = 4096;
+    double *v = malloc(n * sizeof(double));
+    for (NSUInteger i = 0; i < n; i++) {
+        v[i] = 300.0 + (double)i * 0.017 + (double)(i % 13) * 1e-7;
+    }
+    NSData *values = doublesData(v, n);
+    free(v);
+
+    for (uint8_t t = 0; t <= 0x03; t++) {
+        NSData *stream = fdzStreamWithTransform(t, values);
+        PASS(stream != nil, "FDZ1 fixture built for transform 0x%02x", t);
+        NSError *err = nil;
+        NSData *back = [TTIOFloatDeltaZstd decodeStream:stream error:&err];
+        PASS(back != nil && bitExact(back, values),
+             "transform 0x%02x decodes bit-exactly", t);
+    }
+
+    NSMutableData *tampered = [fdzStreamWithTransform(0x00, values) mutableCopy];
+    ((uint8_t *)tampered.mutableBytes)[22] = 0x04;
+    NSError *err = nil;
+    PASS([TTIOFloatDeltaZstd decodeStream:tampered error:&err] == nil,
+         "transform 0x04 is rejected");
+    PASS(err != nil, "the rejection carries an error");
+
+    /* Whichever of the four the encoder picks, the values come back. */
+    NSData *enc = [TTIOFloatDeltaZstd encodeFloat64:values];
+    NSError *rtErr = nil;
+    NSData *rt = [TTIOFloatDeltaZstd decodeStream:enc error:&rtErr];
+    PASS(rt != nil && bitExact(rt, values),
+         "m/z-shaped values round-trip through the adaptive encoder");
 }

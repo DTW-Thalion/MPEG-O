@@ -2,9 +2,10 @@
 
 Spec: ``docs/superpowers/specs/2026-08-16-float-delta-codec-design.md``.
 Per block of ``BLOCK_SIZE`` values: view the float64 bit patterns as
-uint64, apply the transform that yields the smaller stream
-(``0x00`` none / ``0x01`` delta mod 2**64), transpose the 8 byte
-planes, and zstd-compress the planes as one RFC 8878 frame.
+uint64, then take whichever of the four transforms yields the smaller
+stream (bit 0 is a delta mod 2**64, bit 1 keeps the values as plain
+little-endian uint64 instead of 8 byte planes), and zstd-compress the
+result as one RFC 8878 frame.
 
 Values round-trip bit-exactly (NaN payloads, signed zeros, Inf).
 Per the spec's Option B decision, encoders MAY differ byte-wise
@@ -21,9 +22,9 @@ Wire format (little-endian):
     14      4     block_size    (u32, values per block)
     18      4     n_blocks      (u32)
     22      var   per block:
-                    1  transform    (0x00 none, 0x01 delta)
+                    1  transform    (bit 0 delta, bit 1 plain)
                     4  body_length  (u32)
-                    body: one zstd frame of the transposed planes
+                    body: one zstd frame of the block
 
 Cross-language equivalents:
     Java: ``global.thalion.ttio.codecs.FloatDeltaZstd``
@@ -40,7 +41,13 @@ VERSION = 0x01
 HEADER_LEN = 22
 BLOCK_SIZE = 1 << 20          # 1 Mi values = 8 MiB raw per block
 TRANSFORM_NONE = 0x00
+#: Bit 0 is a prefix delta on the uint64 bit view; bit 1 puts the values
+#: in the frame as plain little-endian uint64 rather than 8 byte planes.
+#: The transpose pays on intensity arrays and costs on m/z, so both are
+#: chosen per block by exact size.
 TRANSFORM_DELTA = 0x01
+TRANSFORM_PLAIN = 0x02
+TRANSFORM_MASK = 0x03
 
 #: zstd level used by this encoder. Wire-invisible; decoders accept
 #: any level.
@@ -58,6 +65,25 @@ def _untranspose(buf: bytes, n: int) -> np.ndarray:
     return np.ascontiguousarray(b.T).reshape(-1).view(np.uint64)
 
 
+def _plain(u: np.ndarray) -> bytes:
+    """uint64 array -> plain little-endian bytes."""
+    return np.ascontiguousarray(u, dtype="<u8").tobytes()
+
+
+def _unplain(buf: bytes, n: int) -> np.ndarray:
+    return np.frombuffer(buf, dtype="<u8", count=n).astype(np.uint64, copy=False)
+
+
+def _detransform(buf: bytes, n: int, transform: int) -> np.ndarray:
+    """Block body bytes -> the uint64 values they encode."""
+    if transform & ~TRANSFORM_MASK:
+        raise ValueError(f"unknown FDZ1 transform {transform:#04x}")
+    u = _unplain(buf, n) if transform & TRANSFORM_PLAIN else _untranspose(buf, n)
+    if transform & TRANSFORM_DELTA:
+        u = np.cumsum(u, dtype=np.uint64)
+    return u
+
+
 def header_bytes(n_values: int, n_blocks: int, block_size: int = BLOCK_SIZE) -> bytes:
     """The 22-byte FDZ1 stream header."""
     return MAGIC + struct.pack("<BBQII", VERSION, 0, int(n_values), int(block_size), int(n_blocks))
@@ -65,7 +91,7 @@ def header_bytes(n_values: int, n_blocks: int, block_size: int = BLOCK_SIZE) -> 
 
 def encode_block(values: np.ndarray) -> tuple[int, bytes]:
     """Encode one block (at most BLOCK_SIZE float64 values):
-    returns (transform, zstd body) with the none/delta pick."""
+    returns (transform, zstd body) for the smallest of the four."""
     import zstandard
 
     if values.dtype != np.float64:
@@ -77,11 +103,14 @@ def encode_block(values: np.ndarray) -> tuple[int, bytes]:
     d = np.empty_like(u)
     d[0] = u[0]
     np.subtract(u[1:], u[:-1], out=d[1:])
-    body_none = comp.compress(_transpose(u))
-    body_delta = comp.compress(_transpose(d))
-    if len(body_delta) < len(body_none):
-        return TRANSFORM_DELTA, body_delta
-    return TRANSFORM_NONE, body_none
+    bodies = {
+        TRANSFORM_NONE: comp.compress(_transpose(u)),
+        TRANSFORM_DELTA: comp.compress(_transpose(d)),
+        TRANSFORM_PLAIN: comp.compress(_plain(u)),
+        TRANSFORM_PLAIN | TRANSFORM_DELTA: comp.compress(_plain(d)),
+    }
+    best = min(bodies, key=lambda t: (len(bodies[t]), t))
+    return best, bodies[best]
 
 
 def block_bytes(transform: int, body: bytes) -> bytes:
@@ -106,14 +135,10 @@ def decode_block_bytes(transform: int, body: bytes, blk_n: int) -> np.ndarray:
     """Decode one block body to blk_n float64 values."""
     import zstandard
 
-    planes = zstandard.ZstdDecompressor().decompress(body, max_output_size=blk_n * 8)
-    if len(planes) != blk_n * 8:
+    raw = zstandard.ZstdDecompressor().decompress(body, max_output_size=blk_n * 8)
+    if len(raw) != blk_n * 8:
         raise ValueError("FDZ1 block inflated to the wrong size")
-    u = _untranspose(planes, blk_n)
-    if transform == TRANSFORM_DELTA:
-        u = np.cumsum(u, dtype=np.uint64)
-    elif transform != TRANSFORM_NONE:
-        raise ValueError(f"unknown FDZ1 transform {transform:#04x}")
+    u = _detransform(raw, blk_n, transform)
     return np.ascontiguousarray(u).view(np.float64)
 
 
@@ -190,15 +215,10 @@ def decode(stream: bytes) -> np.ndarray:
             raise ValueError("FDZ1 stream truncated in block body")
         off += body_len
         blk_n = min(block_size, n - bi * block_size)
-        planes = dec.decompress(body, max_output_size=blk_n * 8)
-        if len(planes) != blk_n * 8:
+        raw = dec.decompress(body, max_output_size=blk_n * 8)
+        if len(raw) != blk_n * 8:
             raise ValueError("FDZ1 block inflated to the wrong size")
-        u = _untranspose(planes, blk_n)
-        if transform == TRANSFORM_DELTA:
-            u = np.cumsum(u, dtype=np.uint64)
-        elif transform != TRANSFORM_NONE:
-            raise ValueError(f"unknown FDZ1 transform {transform:#04x}")
-        out[bi * block_size:bi * block_size + blk_n] = u
+        out[bi * block_size:bi * block_size + blk_n] = _detransform(raw, blk_n, transform)
     if off != len(stream):
         raise ValueError("trailing bytes after the last FDZ1 block")
     return out.view(np.float64)

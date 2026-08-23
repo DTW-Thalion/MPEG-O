@@ -8,7 +8,9 @@
  *
  * FLOAT_DELTA_ZSTD (codec id 17). Wire format FDZ1 per the spec:
  * 22-byte header + per block { transform(u8), body_length(u32 LE),
- * one zstd frame of the 8 transposed byte planes }.
+ * one zstd frame }. Bit 0 of the transform is a prefix delta on the
+ * uint64 bit view; bit 1 puts the values in the frame as plain
+ * little-endian uint64 rather than 8 byte planes.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -21,7 +23,13 @@ static const uint8_t kVersion = 0x01;
 static const NSUInteger kHeaderLen = 22;
 static const NSUInteger kBlockSize = 1u << 20;
 static const uint8_t kTransformNone = 0x00;
+/* Bit 0: prefix delta on the uint64 bit view. Bit 1: the values go into
+ * the zstd frame as plain little-endian uint64 instead of 8 byte
+ * planes. The transpose pays on intensity arrays and costs on m/z, so
+ * both are chosen per block by exact size. */
 static const uint8_t kTransformDelta = 0x01;
+static const uint8_t kTransformPlain = 0x02;
+static const uint8_t kTransformMask  = 0x03;
 static const int kZstdLevel = 9;
 
 static void putU32LE(NSMutableData *d, uint32_t v)
@@ -72,6 +80,20 @@ static void untranspose(const uint8_t *planes, NSUInteger len, uint64_t *out)
             out[i] |= ((uint64_t)src[i]) << shift;
         }
     }
+}
+
+static void packPlainLE(const uint64_t *u, NSUInteger len, uint8_t *out)
+{
+    for (NSUInteger i = 0; i < len; i++) {
+        uint64_t v = u[i];
+        uint8_t *dst = out + i * 8;
+        for (int b = 0; b < 8; b++) dst[b] = (uint8_t)(v >> (8 * b));
+    }
+}
+
+static void unpackPlainLE(const uint8_t *p, NSUInteger len, uint64_t *out)
+{
+    for (NSUInteger i = 0; i < len; i++) out[i] = getU64LE(p + i * 8);
 }
 
 /* zstd-compress buf; returns nil on failure. */
@@ -149,21 +171,31 @@ static NSData *zstdFrame(const uint8_t *buf, NSUInteger len)
     const uint64_t *u = (const uint64_t *)values.bytes;
     NSUInteger scratchLen = len > 0 ? len : 1;
     uint64_t *delta = malloc(scratchLen * sizeof(uint64_t));
-    uint8_t *planes = malloc(scratchLen * 8);
-    if (!delta || !planes) { free(delta); free(planes); return nil; }
-    transpose(u, len, planes);
-    NSData *bodyNone = zstdFrame(planes, len * 8);
+    uint8_t *scratch = malloc(scratchLen * 8);
+    if (!delta || !scratch) { free(delta); free(scratch); return nil; }
+
     if (len > 0) delta[0] = u[0];
     for (NSUInteger i = 1; i < len; i++) delta[i] = u[i] - u[i - 1];
-    transpose(delta, len, planes);
-    NSData *bodyDelta = zstdFrame(planes, len * 8);
+
+    /* The four candidates, in transform-code order. The plain body of
+     * the undelta'd values is the input bytes themselves. */
+    transpose(u, len, scratch);
+    NSData *bodies[4];
+    bodies[kTransformNone] = zstdFrame(scratch, len * 8);
+    transpose(delta, len, scratch);
+    bodies[kTransformDelta] = zstdFrame(scratch, len * 8);
+    bodies[kTransformPlain] = zstdFrame(values.bytes, len * 8);
+    packPlainLE(delta, len, scratch);
+    bodies[kTransformPlain | kTransformDelta] = zstdFrame(scratch, len * 8);
     free(delta);
-    free(planes);
-    if (!bodyNone || !bodyDelta) return nil;
-    if (bodyDelta.length < bodyNone.length) {
-        return [[TTIOFDZEncodedBlock alloc] initWithTransform:kTransformDelta body:bodyDelta];
+    free(scratch);
+
+    uint8_t best = kTransformNone;
+    for (uint8_t t = 0; t <= kTransformMask; t++) {
+        if (!bodies[t]) return nil;
+        if (bodies[t].length < bodies[best].length) best = t;
     }
-    return [[TTIOFDZEncodedBlock alloc] initWithTransform:kTransformNone body:bodyNone];
+    return [[TTIOFDZEncodedBlock alloc] initWithTransform:best body:bodies[best]];
 }
 
 + (NSData *)blockBytes:(TTIOFDZEncodedBlock *)block
@@ -247,25 +279,30 @@ static NSData *zstdFrame(const uint8_t *buf, NSUInteger len)
         if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument, @"FDZ1 stream truncated in block body");
         return nil;
     }
-    NSMutableData *outData = [NSMutableData dataWithLength:len * sizeof(uint64_t)];
-    uint64_t *out = outData.mutableBytes;
-    uint8_t *planes = malloc(len > 0 ? len * 8 : 1);
-    if (!planes) return nil;
-    size_t inflated = ZSTD_decompress(planes, len * 8, body.bytes, body.length);
-    if (ZSTD_isError(inflated) || inflated != len * 8) {
-        free(planes);
-        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument, @"FDZ1 block inflated to the wrong size");
-        return nil;
-    }
-    untranspose(planes, len, out);
-    free(planes);
     uint8_t transform = [t transformAt:k];
-    if (transform == kTransformDelta) {
-        for (NSUInteger i = 1; i < len; i++) out[i] += out[i - 1];
-    } else if (transform != kTransformNone) {
+    if (transform & ~kTransformMask) {
         if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
             @"unknown FDZ1 transform 0x%02x", transform);
         return nil;
+    }
+    NSMutableData *outData = [NSMutableData dataWithLength:len * sizeof(uint64_t)];
+    uint64_t *out = outData.mutableBytes;
+    uint8_t *raw = malloc(len > 0 ? len * 8 : 1);
+    if (!raw) return nil;
+    size_t inflated = ZSTD_decompress(raw, len * 8, body.bytes, body.length);
+    if (ZSTD_isError(inflated) || inflated != len * 8) {
+        free(raw);
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument, @"FDZ1 block inflated to the wrong size");
+        return nil;
+    }
+    if (transform & kTransformPlain) {
+        unpackPlainLE(raw, len, out);
+    } else {
+        untranspose(raw, len, out);
+    }
+    free(raw);
+    if (transform & kTransformDelta) {
+        for (NSUInteger i = 1; i < len; i++) out[i] += out[i - 1];
     }
     return outData;
 }
@@ -308,6 +345,12 @@ static NSData *zstdFrame(const uint8_t *buf, NSUInteger len)
             return nil;
         }
         uint8_t transform = p[off];
+        if (transform & ~kTransformMask) {
+            free(planes);
+            if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+                @"unknown FDZ1 transform 0x%02x", transform);
+            return nil;
+        }
         uint32_t bodyLen = getU32LE(p + off + 1);
         off += 5;
         if (off + bodyLen > stream.length) {
@@ -326,16 +369,15 @@ static NSData *zstdFrame(const uint8_t *buf, NSUInteger len)
             return nil;
         }
         off += bodyLen;
-        untranspose(planes, len, out + blkOff);
-        if (transform == kTransformDelta) {
+        if (transform & kTransformPlain) {
+            unpackPlainLE(planes, len, out + blkOff);
+        } else {
+            untranspose(planes, len, out + blkOff);
+        }
+        if (transform & kTransformDelta) {
             for (NSUInteger i = 1; i < len; i++) {
                 out[blkOff + i] += out[blkOff + i - 1];
             }
-        } else if (transform != kTransformNone) {
-            free(planes);
-            if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
-                @"unknown FDZ1 transform 0x%02x", transform);
-            return nil;
         }
     }
     free(planes);
