@@ -389,7 +389,11 @@ class SpectralStreamWriter:
             + [CompoundField(f"{c}_codec", CompoundFieldKind.UINT32)
                for c in self._channels]
         )
+        # Every row is known here, so the chunk is sized to them: a
+        # fixed 256-row chunk costs a run with one block 13 KB of
+        # padding, which dominates a small .tio.
+        chunk_rows = min(max(len(self._block_rows), 1), 1024)
         blocks = self._g.create_group("blocks")
         ds = blocks.create_compound_dataset("index", fields, 0,
-                                            extendable=True, chunk_rows=256)
+                                            extendable=True, chunk_rows=chunk_rows)
         ds.append(self._block_rows)

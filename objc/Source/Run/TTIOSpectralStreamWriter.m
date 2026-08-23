@@ -268,12 +268,16 @@ static NSArray *ttioM74Columns(void)
     }
     id<TTIOStorageGroup> blocks = [_rg createGroupNamed:@"blocks" error:error];
     if (!blocks) return NO;
+    /* Every row is known here, so the chunk is sized to them: a
+     * fixed 256-row chunk costs a run with one block 13 KB of padding,
+     * which dominates a small .tio. */
+    NSUInteger chunkRows = MIN(MAX(_blockRows.count, (NSUInteger)1), (NSUInteger)1024);
     id<TTIOStorageDataset> ds =
         [blocks createCompoundDatasetNamed:@"index"
                                     fields:ttioBlockIndexFields(channels)
                                      count:0
                                 extendable:YES
-                                 chunkRows:256
+                                 chunkRows:chunkRows
                                      error:error];
     if (!ds) return NO;
     return [ds appendData:_blockRows error:error];

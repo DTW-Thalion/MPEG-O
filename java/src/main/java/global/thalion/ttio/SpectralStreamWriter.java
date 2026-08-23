@@ -408,8 +408,12 @@ public final class SpectralStreamWriter implements AutoCloseable {
         for (String ch : chans) {
             fields.add(new CompoundField(ch + "_codec", CompoundField.Kind.UINT32));
         }
+        // Every row is known here, so the chunk is sized to them: a
+        // fixed 256-row chunk costs a run with one block 13 KB of
+        // padding, which dominates a small .tio.
+        int chunkRows = Math.min(Math.max(blockRows.size(), 1), 1024);
         StorageGroup blocks = rg.createGroup("blocks");
-        StorageDataset ds = blocks.createCompoundDataset("index", fields, 0, true, 256);
+        StorageDataset ds = blocks.createCompoundDataset("index", fields, 0, true, chunkRows);
         ds.append(blockRows);
     }
 
