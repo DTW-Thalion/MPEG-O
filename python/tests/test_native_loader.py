@@ -7,6 +7,19 @@ import pytest
 from ttio.codecs import _native_loader
 
 
+@pytest.fixture(autouse=True)
+def _drop_loader_cache():
+    """Every test here repoints the loader, at a fake library or at
+    nothing. monkeypatch restores the environment afterwards but not the
+    module cache, which then holds that fake handle, or a cached miss,
+    for the rest of the session: the codec bindings quietly do nothing
+    and later tests read back a default they never set. Drop the cache
+    on the way out so the next load resolves against the restored
+    environment."""
+    yield
+    _native_loader.reset_cache()
+
+
 def _make_fake_lib(tmp_path: Path, name: str) -> Path:
     """Compile a trivial shared lib exporting one symbol, named `name`."""
     src = tmp_path / "fake.c"
