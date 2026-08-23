@@ -22,6 +22,7 @@ import numpy as np
 from . import _hdf5_io as io
 from .codecs import float_delta_zstd as fdz
 from .enums import Compression, Precision, SpectrumKind
+from .providers.base import CompoundField, CompoundFieldKind
 from ._threads import resolve_threads, pool_context
 
 _INDEX_COLUMNS: tuple[tuple[str, Precision, str], ...] = (
@@ -83,6 +84,7 @@ class SpectralStreamWriter:
         self._sig: dict[str, Any] = {}
         self._fdz_buf: dict[str, np.ndarray] = {}
         self._fdz_n: dict[str, int] = {}
+        self._block_rows: list[dict] = []
         self._fdz_blocks: dict[str, int] = {}
         self._m74: bool | None = None
         self._centroided: bool | None = None
@@ -181,6 +183,7 @@ class SpectralStreamWriter:
                     0, np.frombuffer(fdz.header_bytes(self._fdz_n.get(c, 0),
                                                       self._fdz_blocks.get(c, 0)),
                                      dtype=np.uint8))
+        self._write_block_index()
         io.write_int_attr(self._g, "spectrum_count", self._count)
         io.write_int_attr(self._g.open_group("spectrum_index"), "count", self._count)
         if self._provenance:
@@ -346,6 +349,47 @@ class SpectralStreamWriter:
 
     def _append_fdz(self, c: str, encoded, n_values: int) -> None:
         transform, body = encoded
-        self._sig[c].append(np.frombuffer(fdz.block_bytes(transform, body), dtype=np.uint8))
+        block = fdz.block_bytes(transform, body)
+        # The block lands at the current end of the channel dataset. The
+        # recorded extent covers the 5-byte block header as well as the
+        # body, so one range read yields a self-describing block.
+        off = int(self._sig[c].length)
+        ordinal = self._fdz_blocks[c]
+        value_start = self._fdz_n[c]
+        self._sig[c].append(np.frombuffer(block, dtype=np.uint8))
         self._fdz_n[c] += n_values
         self._fdz_blocks[c] += 1
+
+        while len(self._block_rows) <= ordinal:
+            self._block_rows.append({})
+        row = self._block_rows[ordinal]
+        row["value_start"] = value_start
+        row["n_values"] = n_values
+        row[f"{c}_off"] = off
+        row[f"{c}_len"] = len(block)
+        row[f"{c}_codec"] = int(Compression.FLOAT_DELTA_ZSTD)
+
+    def _write_block_index(self) -> None:
+        """``blocks/index`` describes one value range per row, so it is
+        only meaningful when every channel cut its blocks at the same
+        points. They do when each spectrum contributes one value per
+        channel, which is every case the writer produces today; a run
+        that ever fell out of step gets no table rather than a wrong
+        one."""
+        if self._codec != "float_delta_zstd" or not self._block_rows:
+            return
+        for row in self._block_rows:
+            if any(f"{c}_off" not in row for c in self._channels):
+                return
+        fields = (
+            [CompoundField("value_start", CompoundFieldKind.UINT64),
+             CompoundField("n_values", CompoundFieldKind.UINT32)]
+            + [CompoundField(f"{c}_{k}", CompoundFieldKind.UINT64)
+               for c in self._channels for k in ("off", "len")]
+            + [CompoundField(f"{c}_codec", CompoundFieldKind.UINT32)
+               for c in self._channels]
+        )
+        blocks = self._g.create_group("blocks")
+        ds = blocks.create_compound_dataset("index", fields, 0,
+                                            extendable=True, chunk_rows=256)
+        ds.append(self._block_rows)

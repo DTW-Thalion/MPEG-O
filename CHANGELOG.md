@@ -11,6 +11,26 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added
+- **MS runs carry a `blocks/index`, the table genomic runs already
+  had.** One compound row per FLOAT_DELTA_ZSTD block: the value range
+  it covers, and for every signal channel the byte offset, length and
+  codec of that block. The extent includes the block's 5-byte header,
+  so the bytes it names are a self-describing block. Without it a
+  consumer had to walk each channel's FDZ1 stream reading block
+  headers to learn the same offsets; with it, one compound read plans
+  a range read or a parallel decode, which is what the genomic side
+  has been able to do since `blocks_v1`. Written by all three SDKs and
+  read by `TTIOSpectralBlockIndex`.
+
+  The channel set of a spectral run is not fixed, so a reader recovers
+  it from the compound type rather than a constant: every
+  `<name>_off` column names one channel. The group is written only for
+  runs stored with codec 17 and only when every channel cut its blocks
+  at the same value boundaries; a run that fell out of step gets no
+  table rather than a wrong one. It is optional on read, so MS runs
+  written before it exists open unchanged.
+
 ### Changed
 - **FLOAT_DELTA_ZSTD (codec id 17) chooses the byte-plane transpose per
   block instead of always applying it.** Bit 1 of the per-block

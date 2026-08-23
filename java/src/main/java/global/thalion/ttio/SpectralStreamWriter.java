@@ -9,6 +9,7 @@ import global.thalion.ttio.Enums.AcquisitionMode;
 import global.thalion.ttio.Enums.Compression;
 import global.thalion.ttio.Enums.Precision;
 import global.thalion.ttio.codecs.FloatDeltaZstd;
+import global.thalion.ttio.providers.CompoundField;
 import global.thalion.ttio.providers.StorageDataset;
 import global.thalion.ttio.providers.StorageGroup;
 
@@ -94,6 +95,7 @@ public final class SpectralStreamWriter implements AutoCloseable {
     private record InFlightFdz(java.util.concurrent.Future<FloatDeltaZstd.EncodedBlock> encoded, int nValues) {}
     private final Map<String, java.util.ArrayDeque<InFlightFdz>> fdzInflight = new LinkedHashMap<>();
     private final Map<String, Long> fdzValues = new LinkedHashMap<>();
+    private final List<Object[]> blockRows = new ArrayList<>();
     private final Map<String, Integer> fdzBlocks = new LinkedHashMap<>();
     private boolean m74;
     private boolean centroided;
@@ -178,6 +180,7 @@ public final class SpectralStreamWriter implements AutoCloseable {
             drainFdz(c, 0);
             sig.get(c).writeSlice(0, FloatDeltaZstd.headerBytes(fdzValues.get(c), fdzBlocks.get(c)));
         }
+        writeBlockIndex();
         rg.setAttribute("spectrum_count", (long) count);
         idxGroup.setAttribute("count", (long) count);
         if (!chromatograms.isEmpty()) AcquisitionRun.writeChromatograms(rg, chromatograms);
@@ -355,9 +358,59 @@ public final class SpectralStreamWriter implements AutoCloseable {
     }
 
     private void appendFdz(String c, FloatDeltaZstd.EncodedBlock encoded, int nValues) {
-        sig.get(c).append(FloatDeltaZstd.blockBytes(encoded));
-        fdzValues.put(c, fdzValues.get(c) + nValues);
-        fdzBlocks.put(c, fdzBlocks.get(c) + 1);
+        byte[] block = FloatDeltaZstd.blockBytes(encoded);
+        // The block lands at the current end of the channel dataset. The
+        // recorded extent covers the 5-byte block header as well as the
+        // body, so one range read yields a self-describing block.
+        long off = sig.get(c).length();
+        int ordinal = fdzBlocks.get(c);
+        long valueStart = fdzValues.get(c);
+        sig.get(c).append(block);
+        fdzValues.put(c, valueStart + nValues);
+        fdzBlocks.put(c, ordinal + 1);
+
+        List<String> chans = opt.channelNames();
+        int i = chans.indexOf(c);
+        if (i < 0) return;
+        int cols = 2 + 3 * chans.size();
+        while (blockRows.size() <= ordinal) blockRows.add(new Object[cols]);
+        Object[] row = blockRows.get(ordinal);
+        row[0] = valueStart;
+        row[1] = nValues;
+        row[2 + 2 * i] = off;
+        row[3 + 2 * i] = (long) block.length;
+        row[2 + 2 * chans.size() + i] = Compression.FLOAT_DELTA_ZSTD.ordinal();
+    }
+
+    /**
+     * {@code blocks/index} describes one value range per row, so it is
+     * only meaningful when every channel cut its blocks at the same
+     * points. They do when each spectrum contributes one value per
+     * channel, which is every case the writer produces today; a run
+     * that ever fell out of step gets no table rather than a wrong one.
+     */
+    private void writeBlockIndex() {
+        if (!useFloatDelta || blockRows.isEmpty()) return;
+        List<String> chans = opt.channelNames();
+        int cols = 2 + 3 * chans.size();
+        for (Object[] row : blockRows) {
+            for (int k = 0; k < cols; k++) {
+                if (row[k] == null) return;
+            }
+        }
+        List<CompoundField> fields = new ArrayList<>();
+        fields.add(new CompoundField("value_start", CompoundField.Kind.UINT64));
+        fields.add(new CompoundField("n_values", CompoundField.Kind.UINT32));
+        for (String ch : chans) {
+            fields.add(new CompoundField(ch + "_off", CompoundField.Kind.UINT64));
+            fields.add(new CompoundField(ch + "_len", CompoundField.Kind.UINT64));
+        }
+        for (String ch : chans) {
+            fields.add(new CompoundField(ch + "_codec", CompoundField.Kind.UINT32));
+        }
+        StorageGroup blocks = rg.createGroup("blocks");
+        StorageDataset ds = blocks.createCompoundDataset("index", fields, 0, true, 256);
+        ds.append(blockRows);
     }
 
     private static Object zeros(String precision, int n) {

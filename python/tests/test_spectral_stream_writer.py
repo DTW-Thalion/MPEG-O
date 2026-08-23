@@ -6,7 +6,7 @@ import dataclasses
 import numpy as np
 
 from ttio.codecs import float_delta_zstd as fdz
-from ttio.enums import AcquisitionMode, Polarity
+from ttio.enums import AcquisitionMode, Compression, Polarity
 from ttio.spectral_dataset import SpectralDataset, WrittenRun
 from ttio.spectral_stream_writer import SpectralStreamWriter
 
@@ -147,3 +147,58 @@ def test_channel_range_threaded_matches_serial(tmp_path):
         s1 = [float(sp.signal_array("intensity").data.sum()) for sp in r.iter_spectra(threads=1)]
         s4 = [float(sp.signal_array("intensity").data.sum()) for sp in r.iter_spectra(threads=4)]
         assert s1 == s4 and len(s1) == 20_000
+
+
+def test_blocks_index_describes_every_fdz_block(tmp_path):
+    """blocks/index on an MS run: the spectral counterpart of the
+    genomic block table. Every row must name bytes that are the block
+    for the value range it claims."""
+    import struct
+    import h5py
+
+    n, pts = 40000, 64
+    run = _run(n, pts, seed=21)
+    path = tmp_path / "bi.tio"
+    _stream_write(str(path), run, batches=8, threads=1)
+
+    with h5py.File(str(path), "r") as f:
+        g = f["study/ms_runs/r"]
+        assert "blocks/index" in g, "no blocks/index on an FDZ-compressed run"
+        idx = g["blocks/index"][()]
+        names = set(idx.dtype.names)
+        assert {"value_start", "n_values"} <= names
+        for c in ("mz", "intensity"):
+            assert {f"{c}_off", f"{c}_len", f"{c}_codec"} <= names
+
+        total = n * pts
+        expected_rows = (total + fdz.BLOCK_SIZE - 1) // fdz.BLOCK_SIZE
+        assert len(idx) == expected_rows
+
+        cursor = 0
+        for r in idx:
+            assert int(r["value_start"]) == cursor
+            cursor += int(r["n_values"])
+        assert cursor == total
+
+        # Each recorded extent must be exactly one self-describing
+        # block: a 5-byte header whose length field accounts for the
+        # rest, and a transform within the defined bits.
+        for c in ("mz", "intensity"):
+            raw = g[f"signal_channels/{c}_values"][()].tobytes()
+            for r in idx:
+                off, ln = int(r[f"{c}_off"]), int(r[f"{c}_len"])
+                transform, body_len = struct.unpack_from("<BI", raw, off)
+                assert 5 + body_len == ln
+                assert transform & ~0x03 == 0
+                assert int(r[f"{c}_codec"]) == int(Compression.FLOAT_DELTA_ZSTD)
+
+
+def test_no_blocks_index_without_codec_17(tmp_path):
+    """A run written without codec 17 has no blocks to describe."""
+    import h5py
+
+    run = _run(50, 32, seed=5)
+    path = tmp_path / "bi_none.tio"
+    _stream_write(str(path), run, batches=1, threads=1, opt_disable_float_delta=True)
+    with h5py.File(str(path), "r") as f:
+        assert "blocks" not in f["study/ms_runs/r"]

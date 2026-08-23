@@ -10,6 +10,7 @@
 #import "Run/TTIOInstrumentConfig.h"
 #import "Codecs/TTIOFloatDeltaZstd.h"
 #import "Dataset/TTIOCompoundIO.h"
+#import "Providers/TTIOCompoundField.h"
 #import "Dataset/TTIOProvenanceRecord.h"
 #import "HDF5/TTIOHDF5Errors.h"
 #import "HDF5/TTIOHDF5Group.h"
@@ -94,6 +95,9 @@ typedef struct { NSString *name; TTIOPrecision precision; } TTIOIndexColumnSpec;
     NSMutableDictionary<NSString *, NSMutableData *> *_fdzBuf;
     NSMutableDictionary<NSString *, NSNumber *> *_fdzValues;
     NSMutableDictionary<NSString *, NSNumber *> *_fdzBlocks;
+    /** One row per block ordinal, filled in as each channel's block
+     *  lands, written to blocks/index at close. */
+    NSMutableArray<NSMutableDictionary<NSString *, id> *> *_blockRows;
     BOOL _m74;
     BOOL _centroided;
     NSUInteger _count;
@@ -108,6 +112,28 @@ static NSArray *ttioIndexColumns(void)
              @[@"ms_levels", @(TTIOPrecisionInt32)], @[@"polarities", @(TTIOPrecisionInt32)],
              @[@"precursor_mzs", @(TTIOPrecisionFloat64)], @[@"precursor_charges", @(TTIOPrecisionInt32)],
              @[@"base_peak_intensities", @(TTIOPrecisionFloat64)]];
+}
+
+/* The blocks/index row, mirroring the genomic run's: where every
+ * channel's block for one value range lives, so a consumer can plan a
+ * range read or a parallel decode from one compound read instead of
+ * walking each FDZ1 stream's block headers. */
+static NSArray<TTIOCompoundField *> *ttioBlockIndexFields(NSArray<NSString *> *channels)
+{
+    NSMutableArray *f = [NSMutableArray array];
+    [f addObject:[TTIOCompoundField fieldWithName:@"value_start" kind:TTIOCompoundFieldKindUInt64]];
+    [f addObject:[TTIOCompoundField fieldWithName:@"n_values" kind:TTIOCompoundFieldKindUInt32]];
+    for (NSString *c in channels) {
+        [f addObject:[TTIOCompoundField fieldWithName:[c stringByAppendingString:@"_off"]
+                                                 kind:TTIOCompoundFieldKindUInt64]];
+        [f addObject:[TTIOCompoundField fieldWithName:[c stringByAppendingString:@"_len"]
+                                                 kind:TTIOCompoundFieldKindUInt64]];
+    }
+    for (NSString *c in channels) {
+        [f addObject:[TTIOCompoundField fieldWithName:[c stringByAppendingString:@"_codec"]
+                                                 kind:TTIOCompoundFieldKindUInt32]];
+    }
+    return f;
 }
 
 static NSArray *ttioM74Columns(void)
@@ -138,6 +164,7 @@ static NSArray *ttioM74Columns(void)
         _fdzCond = [NSCondition new];
         _fdzValues = [NSMutableDictionary dictionary];
         _fdzBlocks = [NSMutableDictionary dictionary];
+        _blockRows = [NSMutableArray array];
         _pending = [NSMutableArray array];
         _chromatograms = @[];
     }
@@ -203,10 +230,53 @@ static NSArray *ttioM74Columns(void)
 
 - (BOOL)_appendFdz:(NSString *)c encoded:(NSData *)encoded nValues:(NSUInteger)nValues error:(NSError **)error
 {
+    /* The block lands at the current end of the channel dataset. The
+     * recorded extent covers the 5-byte block header as well as the
+     * body, so one range read yields a self-describing block. */
+    uint64_t off = (uint64_t)[_sig[c] length];
+    NSUInteger ordinal = [_fdzBlocks[c] unsignedIntegerValue];
+    uint64_t valueStart = [_fdzValues[c] unsignedLongLongValue];
     if (![_sig[c] appendData:encoded error:error]) return NO;
-    _fdzValues[c] = @([_fdzValues[c] unsignedLongLongValue] + nValues);
-    _fdzBlocks[c] = @([_fdzBlocks[c] unsignedIntegerValue] + 1);
+    _fdzValues[c] = @(valueStart + nValues);
+    _fdzBlocks[c] = @(ordinal + 1);
+
+    while (_blockRows.count <= ordinal) {
+        [_blockRows addObject:[NSMutableDictionary dictionary]];
+    }
+    NSMutableDictionary *row = _blockRows[ordinal];
+    row[@"value_start"] = @(valueStart);
+    row[@"n_values"] = @((uint32_t)nValues);
+    row[[c stringByAppendingString:@"_off"]] = @(off);
+    row[[c stringByAppendingString:@"_len"]] = @((uint64_t)encoded.length);
+    row[[c stringByAppendingString:@"_codec"]] = @((uint32_t)TTIOCompressionFloatDeltaZstd);
     return YES;
+}
+
+/* blocks/index describes one value range per row, so it is only
+ * meaningful when every channel cut its blocks at the same points.
+ * They do when each spectrum contributes one value per channel, which
+ * is every case the writer produces today; a run that ever fell out of
+ * step gets no table rather than a wrong one. */
+- (BOOL)_writeBlockIndex:(NSError **)error
+{
+    if (!_useFloatDelta || _blockRows.count == 0) return YES;
+    NSArray<NSString *> *channels = _opt.channelNames;
+    for (NSMutableDictionary *row in _blockRows) {
+        for (NSString *c in channels) {
+            if (!row[[c stringByAppendingString:@"_off"]]) return YES;
+        }
+    }
+    id<TTIOStorageGroup> blocks = [_rg createGroupNamed:@"blocks" error:error];
+    if (!blocks) return NO;
+    id<TTIOStorageDataset> ds =
+        [blocks createCompoundDatasetNamed:@"index"
+                                    fields:ttioBlockIndexFields(channels)
+                                     count:0
+                                extendable:YES
+                                 chunkRows:256
+                                     error:error];
+    if (!ds) return NO;
+    return [ds appendData:_blockRows error:error];
 }
 
 - (BOOL)flush:(NSError **)error
@@ -233,6 +303,7 @@ static NSArray *ttioM74Columns(void)
                                                              blocks:(uint32_t)[_fdzBlocks[c] unsignedIntegerValue]];
             if (![_sig[c] writeSlice:hdr atOffset:0 error:error]) return NO;
         }
+        if (![self _writeBlockIndex:error]) return NO;
     }
     if (![_rg setAttributeValue:@((int64_t)_count) forName:@"spectrum_count" error:error]) return NO;
     if (![_idxGroup setAttributeValue:@((int64_t)_count) forName:@"count" error:error]) return NO;

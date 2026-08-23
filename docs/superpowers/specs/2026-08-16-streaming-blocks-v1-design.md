@@ -153,13 +153,51 @@ streaming writer creates every per-spectrum dataset extendable
   channel, which is at byte offset 0 of that channel's dataset; block
   bodies were appended as each 2^20-value block filled;
 - writes `@spectrum_count`, `@total_points`, and the `offsets`
-  redundancy fields exactly as `write_minimal` does today.
+  redundancy fields exactly as `write_minimal` does today;
+- writes `blocks/index` (§3.1).
 
 A file produced by the streaming writer is byte-for-byte a file
-`write_minimal` could have produced except for HDF5 chunk allocation;
-every existing MS reader opens it unchanged. The existing
-`StreamWriter` (whole-file regenerative flush) becomes a thin wrapper
-over the new writer and keeps its API.
+`write_minimal` could have produced except for HDF5 chunk allocation
+and `blocks/index`; every existing MS reader opens it unchanged. The
+existing `StreamWriter` (whole-file regenerative flush) becomes a thin
+wrapper over the new writer and keeps its API.
+
+### 3.1 The spectral block index
+
+An MS run carries the same `blocks/index` a genomic run does (§2.2),
+describing the FDZ1 blocks of its signal channels. One compound row
+per block ordinal, in this column order:
+
+```
+value_start   u64   index of the block's first value
+n_values      u32   values in the block; the last block may be short
+<channel>_off u64   byte offset of the block in <channel>_values
+<channel>_len u64   bytes of the block, its 5-byte header included
+<channel>_codec u32 codec that produced it (17)
+```
+
+The `_off` / `_len` pairs come first in channel order, then the
+`_codec` columns, matching the genomic layout. The channel set is not
+fixed for a spectral run: the columns follow the run's own
+`@channel_names` order, so two files of the same modality can order
+them differently (the mzML importer declares intensity first). A
+reader must therefore resolve columns by name, recovering the channel
+set from the compound type — every `<name>_off` column names one
+channel — and never by position.
+
+A recorded extent covers the block header as well as the body, so the
+bytes it names are a self-describing block: transform, body length,
+body. Without the table a consumer has to walk each channel's stream
+reading 5-byte headers to learn the same offsets; with it, one
+compound read plans a range read or a parallel decode.
+
+The group is written only for runs whose channels use codec 17, and
+only when every channel cut its blocks at the same value boundaries —
+true whenever each spectrum contributes one value per channel. A run
+that fell out of step gets no table rather than a wrong one. Readers
+must treat the group as optional: MS runs written before it exists do
+not have it, and the block offsets remain recoverable from the streams
+themselves.
 
 ## 4. Provider capability: extendable datasets
 
