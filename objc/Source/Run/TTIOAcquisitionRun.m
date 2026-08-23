@@ -1427,6 +1427,42 @@ static void _buildStdChannelEncoding(void)
                                      instrumentConfig:_instrumentConfig];
 }
 
+/* Units in flight is a memory setting before it is a concurrency one:
+ * each stays resident for as long as the caller is inside it. The
+ * resolver is the writer's, so TTIO_MEMORY_BUDGET means the same thing
+ * on both sides.
+ *
+ * Sized from the WIDEST unit in the range, not the mean. Sizing from
+ * the mean makes the budget non-binding exactly when it matters. */
+- (NSUInteger)_unitWindowForThreads:(NSUInteger)nthreads
+                              units:(NSArray<NSValue *> *)units
+{
+    if (units.count == 0) return 1;
+
+    unsigned long long widest = 0;
+    for (NSValue *v in units) {
+        TTIOSpectralUnit u; [v getValue:&u];
+        unsigned long long vals = u.valueEnd - u.valueStart;
+        if (vals > widest) widest = vals;
+    }
+    if (widest == 0) return 1;
+
+    /* A unit in flight costs its decoded values across every channel. */
+    NSUInteger nch = MAX((NSUInteger)1, _channelNames.count);
+    unsigned long long unitBytes = widest * 8ull * (unsigned long long)nch;
+
+    unsigned long long budget = [TTIOThreads resolveMemoryBudget:nil
+                                                         threads:nthreads
+                                                      blockBytes:unitBytes];
+    unsigned long long admits = budget / unitBytes;
+    if (admits < 1) admits = 1;
+
+    NSUInteger window = (NSUInteger)MIN((unsigned long long)nthreads, admits);
+    /* More workers than units buys nothing: one unit, one thread. */
+    if (window > units.count) window = units.count;
+    return window < 1 ? 1 : window;
+}
+
 - (BOOL)iterBlocksFrom:(NSUInteger)from
                     to:(NSUInteger)to
                threads:(NSUInteger)threads

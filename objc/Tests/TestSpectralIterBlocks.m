@@ -21,6 +21,7 @@
 #import "ValueClasses/TTIOEnums.h"
 #import "Providers/TTIOProviderRegistry.h"
 #import <unistd.h>
+#import "TTIOAcquisitionRun+Testing.h"
 
 /* 6 spectra of 100 values; blocks start every 250 values, so no block
  * edge lands on a spectrum edge:
@@ -344,6 +345,37 @@ static void sibSerial(void)
     sibContentMatches(1, 7, SIB_NSPEC - 11);   /* starts and ends mid-block */
 }
 
+/* Memory governs the window, not the thread count. */
+static void sibWindowIsMemoryGoverned(void)
+{
+    id<TTIOStorageProvider> prov = nil;
+    TTIOAcquisitionRun *run = sibOpen(sibCorpusPath, &prov);
+    if (!run) { PASS(NO, "iterBlocks: corpus opens for the window test"); return; }
+
+    NSArray<NSValue *> *units = [run _unitsFrom:0 to:SIB_NSPEC];
+    PASS(units.count >= 2, "iterBlocks: window test has %lu units",
+         (unsigned long)units.count);
+
+    setenv("TTIO_MEMORY_BUDGET", "1", 1);
+    NSUInteger tight = [run _unitWindowForThreads:30 units:units];
+    unsetenv("TTIO_MEMORY_BUDGET");
+    PASS(tight == 1,
+         "iterBlocks: a 1-byte budget admits 1 unit even at 30 threads (%lu)",
+         (unsigned long)tight);
+
+    NSUInteger open = [run _unitWindowForThreads:30 units:units];
+    PASS(open <= units.count,
+         "iterBlocks: window never exceeds the unit count (%lu <= %lu)",
+         (unsigned long)open, (unsigned long)units.count);
+    PASS(open >= 1, "iterBlocks: window is at least 1 (%lu)", (unsigned long)open);
+
+    NSUInteger one = [run _unitWindowForThreads:1 units:units];
+    PASS(one == 1, "iterBlocks: 1 thread gives a window of 1 (%lu)",
+         (unsigned long)one);
+
+    [prov close];
+}
+
 void testSpectralIterBlocks(void)
 {
     siuPlanBasics();
@@ -355,5 +387,6 @@ void testSpectralIterBlocks(void)
     sibCorpusPath = sibWriteCorpus();
     if (!sibCorpusPath) return;
     sibSerial();
+    sibWindowIsMemoryGoverned();
     [[NSFileManager defaultManager] removeItemAtPath:sibCorpusPath error:NULL];
 }
