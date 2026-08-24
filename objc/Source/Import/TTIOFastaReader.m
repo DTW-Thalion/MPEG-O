@@ -16,6 +16,7 @@
 #import "TTIOFastaReader.h"
 #import "Genomics/TTIOReferenceImport.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Import/TTIOGenomicStreamSource.h"
 #import "ValueClasses/TTIOEnums.h"
 
 #import <zlib.h>
@@ -26,6 +27,10 @@ NSString *const TTIOFastaReaderErrorDomain = @"TTIOFastaReaderErrorDomain";
 
 // Mirrors Java FastaReader.PROGRESS_INTERVAL_READS (1000).
 const NSUInteger TTIOFastaReaderProgressIntervalReads = 1000;
+
+// Mirror TTIOFastqReader's batch defaults.
+const NSUInteger TTIOFastaReaderDefaultBatchReads = 100000;
+const unsigned long long TTIOFastaReaderDefaultBatchBytes = 64ull << 20;
 
 
 // Forward declaration — exported helper defined below (also reused by
@@ -99,52 +104,66 @@ static NSString *parse_header(NSData *line)
 }
 
 /** Iterate FASTA records, invoking ``block`` for each
- *  ``(name, sequence_bytes)`` pair. Returns NO with ``error`` set
- *  on a malformed input. */
+ *  ``(name, sequence_bytes)`` pair. Returns NO with ``error`` set on
+ *  a malformed input, or NO with ``error`` untouched when ``block``
+ *  returned NO to stop. Each record is parsed inside its own
+ *  autorelease pool so memory tracks the record, not the file; the
+ *  parse error is carried across the pool in a strong local (an
+ *  out-param write inside the pool would be released with it). */
 static BOOL iterate_records(gzFile fh,
                             NSError **error,
-                            void (^block)(NSString *name, NSData *seq))
+                            BOOL (^block)(NSString *name, NSData *seq))
 {
     NSMutableData *line = [NSMutableData dataWithCapacity:128];
     NSString *currentName = nil;
     NSMutableData *currentSeq = [NSMutableData dataWithCapacity:1024];
+    NSError *parseErr = nil;
+    BOOL stopped = NO, done = NO;
 
-    while (1) {
-        BOOL more = read_line(fh, line);
-        if (!more && line.length == 0) break;
-        const uint8_t *bytes = line.bytes;
-        if (line.length > 0 && bytes[0] == '>') {
-            if (currentName != nil) {
-                block(currentName, [currentSeq copy]);
-                [currentSeq setLength:0];
-            }
-            NSString *name = parse_header(line);
-            if (name == nil) {
-                if (error) {
-                    *error = [NSError errorWithDomain:TTIOFastaReaderErrorDomain
-                                                 code:TTIOFastaReaderErrorParseFailed
-                                             userInfo:@{ NSLocalizedDescriptionKey :
-                                                         @"FASTA header missing a name token (line starts with '>')" }];
+    while (!done && !stopped && parseErr == nil) {
+        @autoreleasepool {
+            BOOL more = read_line(fh, line);
+            if (!more && line.length == 0) {
+                done = YES;
+            } else {
+                const uint8_t *bytes = line.bytes;
+                if (line.length > 0 && bytes[0] == '>') {
+                    if (currentName != nil) {
+                        if (!block(currentName, [currentSeq copy])) stopped = YES;
+                        [currentSeq setLength:0];
+                    }
+                    if (!stopped) {
+                        NSString *name = parse_header(line);
+                        if (name == nil) {
+                            parseErr = [NSError errorWithDomain:TTIOFastaReaderErrorDomain
+                                                           code:TTIOFastaReaderErrorParseFailed
+                                                       userInfo:@{ NSLocalizedDescriptionKey :
+                                                                   @"FASTA header missing a name token (line starts with '>')" }];
+                        } else {
+                            currentName = name;
+                        }
+                    }
+                } else if (line.length > 0) {
+                    if (currentName == nil) {
+                        parseErr = [NSError errorWithDomain:TTIOFastaReaderErrorDomain
+                                                       code:TTIOFastaReaderErrorParseFailed
+                                                   userInfo:@{ NSLocalizedDescriptionKey :
+                                                               @"FASTA sequence bytes encountered before any header line" }];
+                    } else {
+                        [currentSeq appendData:line];
+                    }
                 }
-                return NO;
+                if (!more) done = YES;
             }
-            currentName = name;
-        } else if (line.length > 0) {
-            if (currentName == nil) {
-                if (error) {
-                    *error = [NSError errorWithDomain:TTIOFastaReaderErrorDomain
-                                                 code:TTIOFastaReaderErrorParseFailed
-                                             userInfo:@{ NSLocalizedDescriptionKey :
-                                                         @"FASTA sequence bytes encountered before any header line" }];
-                }
-                return NO;
-            }
-            [currentSeq appendData:line];
         }
-        if (!more) break;
     }
+    if (parseErr != nil) {
+        if (error) *error = parseErr;
+        return NO;
+    }
+    if (stopped) return NO;
     if (currentName != nil) {
-        block(currentName, [currentSeq copy]);
+        if (!block(currentName, [currentSeq copy])) return NO;
     }
     return YES;
 }
@@ -203,9 +222,10 @@ static NSString *derive_uri(NSString *path)
 
     NSMutableArray<NSString *> *names = [NSMutableArray array];
     NSMutableArray<NSData *> *seqs = [NSMutableArray array];
-    BOOL ok = iterate_records(fh, error, ^(NSString *name, NSData *seq) {
+    BOOL ok = iterate_records(fh, error, ^BOOL(NSString *name, NSData *seq) {
         [names addObject:name];
         [seqs addObject:seq];
+        return YES;
     });
     gzclose(fh);
     if (!ok) return nil;
@@ -278,7 +298,7 @@ static NSString *derive_uri(NSString *path)
     NSMutableArray<NSNumber *> *lengthsArr = [NSMutableArray array];
     __block uint64_t running = 0;
 
-    BOOL ok = iterate_records(fh, error, ^(NSString *name, NSData *seq) {
+    BOOL ok = iterate_records(fh, error, ^BOOL(NSString *name, NSData *seq) {
         [readNames addObject:name];
         [offsetsArr addObject:@(running)];
         [lengthsArr addObject:@((uint32_t)seq.length)];
@@ -296,6 +316,7 @@ static NSString *derive_uri(NSString *path)
         if ((readNames.count % TTIOFastaReaderProgressIntervalReads) == 0) {
             progress((int64_t)readNames.count, (int64_t)-1);
         }
+        return YES;
     });
     gzclose(fh);
     if (!ok) return nil;
@@ -317,6 +338,152 @@ static NSString *derive_uri(NSString *path)
         readNames, seqBuf, qualBuf, offsetsArr, lengthsArr,
         sampleName, platform, referenceUri, mode
     );
+}
+
++ (BOOL)iterBatchesFromPath:(NSString *)path
+                 sampleName:(NSString *)sampleName
+                   platform:(NSString *)platform
+               referenceUri:(NSString *)referenceUri
+            acquisitionMode:(TTIOAcquisitionMode)mode
+                 batchReads:(NSUInteger)batchReads
+                   progress:(TTIOProgressBlock)progress
+                      error:(NSError **)error
+                 usingBlock:(BOOL (^)(TTIOWrittenGenomicRun *batch, NSError **error))block
+{
+    return [self iterBatchesFromPath:path sampleName:sampleName platform:platform
+                        referenceUri:referenceUri acquisitionMode:mode
+                          batchReads:batchReads batchBytes:0
+                            progress:progress error:error usingBlock:block];
+}
+
++ (BOOL)iterBatchesFromPath:(NSString *)path
+                 sampleName:(NSString *)sampleName
+                   platform:(NSString *)platform
+               referenceUri:(NSString *)referenceUri
+            acquisitionMode:(TTIOAcquisitionMode)mode
+                 batchReads:(NSUInteger)batchReads
+                 batchBytes:(unsigned long long)batchBytes
+                   progress:(TTIOProgressBlock)progress
+                      error:(NSError **)error
+                 usingBlock:(BOOL (^)(TTIOWrittenGenomicRun *batch, NSError **error))block
+{
+    if (batchBytes == 0) batchBytes = TTIOFastaReaderDefaultBatchBytes;
+    if (progress == nil) progress = TTIOProgressDiscard();
+    if (batchReads < 1) batchReads = 1;
+    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+        if (error) {
+            *error = [NSError errorWithDomain:TTIOFastaReaderErrorDomain
+                                         code:TTIOFastaReaderErrorMissingFile
+                                     userInfo:@{ NSLocalizedDescriptionKey :
+                                                 [NSString stringWithFormat:@"FASTA file not found: %@", path] }];
+        }
+        return NO;
+    }
+    gzFile fh = open_maybe_gzip(path);
+    if (fh == NULL) {
+        if (error) {
+            *error = [NSError errorWithDomain:TTIOFastaReaderErrorDomain
+                                         code:TTIOFastaReaderErrorMissingFile
+                                     userInfo:@{ NSLocalizedDescriptionKey :
+                                                 [NSString stringWithFormat:@"could not open %@", path] }];
+        }
+        return NO;
+    }
+
+    NSMutableArray<NSString *> *names = [NSMutableArray array];
+    NSMutableArray<NSData *> *seqs = [NSMutableArray array];
+    __block unsigned long long pendingBytes = 0;
+    __block unsigned long long total = 0;
+    __block NSError *innerErr = nil;
+
+    BOOL (^emit)(void) = ^BOOL(void) {
+        NSMutableArray<NSNumber *> *offsetsArr = [NSMutableArray arrayWithCapacity:names.count];
+        NSMutableArray<NSNumber *> *lengthsArr = [NSMutableArray arrayWithCapacity:names.count];
+        NSMutableData *seqBuf = [NSMutableData data];
+        NSMutableData *qualBuf = [NSMutableData data];
+        uint64_t running = 0;
+        for (NSUInteger i = 0; i < names.count; i++) {
+            NSData *sq = seqs[i];
+            [offsetsArr addObject:@(running)];
+            [lengthsArr addObject:@((uint32_t)sq.length)];
+            [seqBuf appendData:sq];
+            NSUInteger len = sq.length;
+            if (len > 0) {
+                uint8_t *fill = malloc(len);
+                memset(fill, kUnmappedQualByte, len);
+                [qualBuf appendBytes:fill length:len];
+                free(fill);
+            }
+            running += sq.length;
+        }
+        TTIOWrittenGenomicRun *batch = TTIOFastaReaderBuildUnalignedRun(
+            [names copy], [seqBuf copy], [qualBuf copy], offsetsArr, lengthsArr,
+            sampleName, platform, referenceUri, mode);
+        [names removeAllObjects]; [seqs removeAllObjects];
+        pendingBytes = 0;
+        NSError *e = nil;
+        if (!block(batch, &e)) { innerErr = e; return NO; }
+        return YES;
+    };
+
+    BOOL ok = iterate_records(fh, error, ^BOOL(NSString *name, NSData *seq) {
+        [names addObject:name];
+        [seqs addObject:seq];
+        pendingBytes += (unsigned long long)seq.length * 2ull;
+        total++;
+        if ((total % TTIOFastaReaderProgressIntervalReads) == 0) {
+            progress((int64_t)total, (int64_t)-1);
+        }
+        if (names.count >= batchReads || pendingBytes >= batchBytes) return emit();
+        return YES;
+    });
+    gzclose(fh);
+    if (ok && names.count > 0 && !emit()) ok = NO;
+    if (!ok) {
+        if (innerErr && error && *error == nil) *error = innerErr;
+        return NO;
+    }
+    if (total == 0) {
+        if (error) {
+            *error = [NSError errorWithDomain:TTIOFastaReaderErrorDomain
+                                         code:TTIOFastaReaderErrorEmptyInput
+                                     userInfo:@{ NSLocalizedDescriptionKey :
+                                                 [NSString stringWithFormat:@"no FASTA records found in %@", path] }];
+        }
+        return NO;
+    }
+    progress((int64_t)total, (int64_t)total);
+    return YES;
+}
+
++ (TTIOGenomicStreamSource *)streamFromPath:(NSString *)path
+                                       name:(NSString *)name
+                                 sampleName:(NSString *)sampleName
+                                 batchReads:(NSUInteger)batchReads
+                                   progress:(TTIOProgressBlock)progress
+{
+    return [self streamFromPath:path name:name sampleName:sampleName
+                     batchReads:batchReads batchBytes:0 progress:progress];
+}
+
++ (TTIOGenomicStreamSource *)streamFromPath:(NSString *)path
+                                       name:(NSString *)name
+                                 sampleName:(NSString *)sampleName
+                                 batchReads:(NSUInteger)batchReads
+                                 batchBytes:(unsigned long long)batchBytes
+                                   progress:(TTIOProgressBlock)progress
+{
+    TTIOGenomicBatchProducer producer =
+        ^BOOL(BOOL (^emit)(TTIOWrittenGenomicRun *, NSError **), NSError **error) {
+            return [self iterBatchesFromPath:path sampleName:sampleName ?: @""
+                                    platform:@"" referenceUri:@""
+                             acquisitionMode:TTIOAcquisitionModeGenomicWGS
+                                  batchReads:batchReads batchBytes:batchBytes
+                                    progress:progress error:error usingBlock:emit];
+        };
+    return [[TTIOGenomicStreamSource alloc] initWithName:name ?: @"genomic_0001" batches:producer
+                                          referenceFasta:nil embedReference:NO
+                                              blockReads:nil blockBytes:nil optLegacyWholeChannel:NO];
 }
 
 @end

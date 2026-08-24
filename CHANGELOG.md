@@ -12,6 +12,21 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Added
+- **The FASTA importer streams.** The unaligned path gains the batch
+  surface the FASTQ and BAM readers already have: Python
+  `FastaReader.iter_batches` / `stream_source`, Java `iterBatches` /
+  `stream`, Objective-C `+iterBatchesFromPath:…usingBlock:` /
+  `+streamFromPath:…`. Batches cut at whichever of the read-count /
+  byte limits is hit first (100 000 reads / 64 MiB by default), carry
+  the SAM-unmapped sentinels of the eager read, and concatenate to
+  exactly its run — including CRLF line ends, blank lines, multi-line
+  records and a final line without a newline, which the new tests pin
+  against the eager walk in all 3 SDKs.
+  `python -m ttio.tools.fasta_import_cli unaligned` now writes
+  through a `GenomicStreamWriter` and takes `--block-reads`,
+  `--block-bytes` and `--legacy-whole-channel`, so a FASTA of any
+  size imports with bounded memory.
+
 - **`-[TTIOAcquisitionRun unitColumnForChannel:valueStart:]`, the unit's
   decoded values without building a spectrum.** Only a view handed to an
   `-iterBlocksFrom:to:threads:error:usingBlock:` visitor has columns;

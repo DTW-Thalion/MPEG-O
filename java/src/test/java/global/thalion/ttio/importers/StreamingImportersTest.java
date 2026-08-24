@@ -80,6 +80,75 @@ class StreamingImportersTest {
         assertEquals(33, r.detectedPhredOffset());
     }
 
+    private static Path fasta(Path tmp, int n) throws Exception {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            sb.append(">r").append(i).append(" extra desc\n")
+              .append("ACGT".repeat(5 + (i % 3))).append("\n");
+        }
+        Path p = tmp.resolve("panel.fa");
+        Files.writeString(p, sb.toString(), StandardCharsets.ISO_8859_1);
+        return p;
+    }
+
+    @Test
+    void fastaBatchesConcatenateToTheWholeRun(@TempDir Path tmp) throws Exception {
+        Path fa = fasta(tmp, 11);
+        WrittenGenomicRun whole = new FastaReader(fa).readUnaligned("s");
+        FastaReader r = new FastaReader(fa);
+        List<WrittenGenomicRun> parts = new ArrayList<>();
+        r.iterBatches("s", "", "", global.thalion.ttio.Enums.AcquisitionMode.GENOMIC_WGS, 4).forEachRemaining(parts::add);
+        assertEquals(3, parts.size());
+        WrittenGenomicRun back = GenomicBlocks.concatRuns(parts);
+        assertEquals(whole.readNames(), back.readNames());
+        assertArrayEquals(whole.sequences(), back.sequences());
+        assertArrayEquals(whole.qualities(), back.qualities());
+        assertArrayEquals(whole.lengths(), back.lengths());
+        for (byte q : parts.get(0).qualities()) assertEquals((byte) 0xFF, q);
+    }
+
+    @Test
+    void fastaBatchesMatchTheWholeRunOnAwkwardLineForms(@TempDir Path tmp) throws Exception {
+        // CRLF line ends, a blank line, a multi-line record, and no
+        // trailing newline on the last line: the batch cursor must
+        // parse these exactly as readUnaligned's record walk does.
+        String text = ">a one\r\nACGT\r\nTTAA\r\n\r\n>b two\nGG\n>c three\nCCC";
+        Path fa = tmp.resolve("awkward.fa");
+        Files.writeString(fa, text, StandardCharsets.ISO_8859_1);
+        WrittenGenomicRun whole = new FastaReader(fa).readUnaligned("s");
+        List<WrittenGenomicRun> parts = new ArrayList<>();
+        new FastaReader(fa).iterBatches("s", "", "",
+            global.thalion.ttio.Enums.AcquisitionMode.GENOMIC_WGS, 1).forEachRemaining(parts::add);
+        assertEquals(3, parts.size());
+        WrittenGenomicRun back = GenomicBlocks.concatRuns(parts);
+        assertEquals(whole.readNames(), back.readNames());
+        assertArrayEquals(whole.sequences(), back.sequences());
+        assertArrayEquals(whole.lengths(), back.lengths());
+        assertEquals("ACGTTTAA", new String(whole.sequences(), 0, 8, StandardCharsets.ISO_8859_1));
+    }
+
+    @Test
+    void fastaStreamWritesBlocks(@TempDir Path tmp) throws Exception {
+        Path fa = fasta(tmp, 10);
+        Path out = tmp.resolve("f.tio");
+        GenomicStreamSource src = new FastaReader(fa).stream("genomic_0001", "s", 4)
+            .withPolicy(4, null, false);
+        try (StorageProvider p = ProviderRegistry.open(out.toString(), StorageProvider.Mode.CREATE, "hdf5")) {
+            StorageGroup study = p.rootGroup().createGroup("study");
+            assertEquals(10, src.writeInto(study, null));
+        }
+        try (SpectralDataset ds = SpectralDataset.open(out.toString())) {
+            GenomicRun g = ds.genomicRuns().get("genomic_0001");
+            assertEquals("blocks_v1", g.layout());
+            assertEquals(10, g.readCount());
+            assertTrue(g.blockCount() >= 3);
+            global.thalion.ttio.genomics.AlignedRead first =
+                (global.thalion.ttio.genomics.AlignedRead) g.get(0);
+            assertEquals("r0", first.readName());
+            assertEquals("ACGT".repeat(5), first.sequence());
+        }
+    }
+
     @Test
     void mzmlStreamMatchesWholeRead(@TempDir Path tmp) throws Exception {
         AcquisitionRun whole = MzMLReader.read(MZML);
