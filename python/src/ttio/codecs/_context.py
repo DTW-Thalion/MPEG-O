@@ -50,6 +50,10 @@ class CodecContext:
     reference_md5: "bytes | None" = None              # ref_diff encode; 16 raw bytes
     reference_uri: "str | None" = None                # ref_diff encode
     reads_per_slice: "int | None" = None              # ref_diff encode; slice granularity
+    # ref_diff encode; slice byte budget (M97): a slice closes before
+    # the read that would push it past this many bases. None/0 = the
+    # fixed reads_per_slice rule.
+    slice_bytes: "int | None" = None
 
     @staticmethod
     def empty() -> "CodecContext":

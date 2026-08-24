@@ -210,6 +210,7 @@ class _RefDiffV2Codec:
             reads_per_slice=(
                 ctx.reads_per_slice if ctx.reads_per_slice is not None else 10_000
             ),
+            slice_bytes=(ctx.slice_bytes if ctx.slice_bytes is not None else 0),
         )
         return EncodedChannel.of_group({"refdiff_v2": blob}, {})
 

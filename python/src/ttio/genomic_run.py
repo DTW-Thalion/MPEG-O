@@ -102,6 +102,13 @@ class GenomicRun:
     group: "StorageGroup"
     channel_names: list[str]  # populated for introspection / future tooling; not read by __getitem__
 
+    # M97 — the ``@read_role`` run attribute (``hifi``, ``ont_ul``,
+    # ``hic_r1``, ``hic_r2``, ``parental_maternal``,
+    # ``parental_paternal``, ``illumina_wgs``, or any other stored
+    # string); None when the attribute is absent. ObjC: readRole;
+    # Java: getReadRole().
+    read_role: str | None = None
+
     _signal_cache: dict = field(default_factory=dict, repr=False, compare=False)
     # Cached handle to the ``signal_channels`` child group. Opened once on
     # first per-record signal access and reused thereafter (PT2, P1.4):
@@ -634,6 +641,8 @@ class GenomicRun:
         reference_uri = io.read_string_attr(sgroup, "reference_uri") or ""
         platform = io.read_string_attr(sgroup, "platform") or ""
         sample_name = io.read_string_attr(sgroup, "sample_name") or ""
+        # @read_role is absent on pre-M97 files; None, not "".
+        read_role = io.read_string_attr(sgroup, "read_role") or None
 
         return cls(
             name=name,
@@ -642,6 +651,7 @@ class GenomicRun:
             reference_uri=reference_uri,
             platform=platform,
             sample_name=sample_name,
+            read_role=read_role,
             index=index,
             group=sgroup,
             channel_names=channel_names,

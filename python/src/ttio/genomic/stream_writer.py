@@ -24,6 +24,7 @@ from typing import Any
 import numpy as np
 
 from .. import _hdf5_io as io
+from ..codecs import quality
 from ..enums import Compression, Precision
 from ..providers.base import CompoundField, CompoundFieldKind
 from ..written_genomic_run import WrittenGenomicRun
@@ -105,18 +106,35 @@ class GenomicStreamWriter:
                  opt_legacy_whole_channel: bool = False,
                  provenance_records=None,
                  threads: int | None = None,
-                 memory_budget_bytes: int | None = None):
+                 memory_budget_bytes: int | None = None,
+                 read_role: str | None = None,
+                 ref_diff_slice_bytes: int = 0):
         self._study = study_group
         self._provenance = list(provenance_records or [])
         self._name = run_name
+        # M97: reject the mistuned lossy table before anything is
+        # written; write_minimal re-checks per run.
+        overrides = dict(signal_codec_overrides or {})
+        if (
+            overrides.get("qualities") == Compression.QUALITY_BINNED
+            and not quality.binned_allowed_for_platform(platform)
+        ):
+            raise ValueError(
+                "signal_codec_overrides['qualities']: QUALITY_BINNED "
+                "applies the fixed Illumina-8 bin table, which does "
+                "not fit the quality distribution of platform "
+                f"{platform!r} (M97)."
+            )
         self._meta: dict[str, Any] = dict(
             acquisition_mode=int(acquisition_mode), reference_uri=reference_uri,
             platform=platform, sample_name=sample_name,
             reference_chrom_seqs=reference_chrom_seqs,
             embed_reference=bool(embed_reference),
             opt_disable_qualities_v5=bool(opt_disable_qualities_v5),
-            signal_codec_overrides=dict(signal_codec_overrides or {}),
+            signal_codec_overrides=overrides,
             signal_compression=signal_compression,
+            read_role=read_role,
+            ref_diff_slice_bytes=int(ref_diff_slice_bytes or 0),
         )
         if block_reads < 1 or block_bytes < 1:
             raise ValueError("block_reads and block_bytes must be >= 1")
@@ -401,6 +419,8 @@ class GenomicStreamWriter:
         io.write_int_attr(rg, "spectrum_class", 5)
         io.write_fixed_string_attr(rg, "reference_uri", m["reference_uri"])
         io.write_fixed_string_attr(rg, "platform", m["platform"])
+        if m.get("read_role"):
+            io.write_fixed_string_attr(rg, "read_role", m["read_role"])
         io.write_fixed_string_attr(rg, "sample_name", m["sample_name"])
         io.write_int_attr(rg, "read_count", 0)
         io.write_int_attr(rg, "base_count", 0)
@@ -489,6 +509,8 @@ def _apply_meta(run: WrittenGenomicRun, meta: dict, chrom_map,
         signal_codec_overrides=dict(meta["signal_codec_overrides"]),
         signal_compression=meta["signal_compression"],
         chrom_name_to_id=chrom_map,
+        read_role=meta.get("read_role"),
+        ref_diff_slice_bytes=int(meta.get("ref_diff_slice_bytes") or 0),
     )
 
 

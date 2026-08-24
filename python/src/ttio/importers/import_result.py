@@ -275,6 +275,11 @@ class GenomicStreamSource:
     block_bytes: int | None = None
     opt_legacy_whole_channel: bool = False
     threads: int | None = None                # None -> TTIO_THREADS
+    # M97 — @read_role run attribute; falls back to the first batch's
+    # read_role when None.
+    read_role: str | None = None
+    # M97 — REF_DIFF_V2 slice byte budget; 0 = the fixed-count rule.
+    ref_diff_slice_bytes: int = 0
 
     def write_into(self, study_group, *, progress=None) -> int:
         from ..genomic.stream_writer import GenomicStreamWriter
@@ -301,6 +306,9 @@ class GenomicStreamSource:
                     signal_compression=batch.signal_compression,
                     opt_legacy_whole_channel=self.opt_legacy_whole_channel,
                     provenance_records=batch.provenance_records,
+                    read_role=self.read_role or batch.read_role,
+                    ref_diff_slice_bytes=(self.ref_diff_slice_bytes
+                                          or batch.ref_diff_slice_bytes),
                     # Same rule as the producer side, so the two
                     # halves of the pipeline budget are sized off one
                     # count.

@@ -157,3 +157,17 @@ class WrittenGenomicRun:
     # mechanism that preserves ``mate_chromosome`` SAM sentinels
     # (``=``, ``""``) byte-for-byte across transport.
     bulk_v2_blobs: BulkV2Blobs | None = None
+
+    # M97 — assembly read role, persisted as the ``@read_role`` UTF-8
+    # run attribute when non-None. Recognised values: ``hifi``,
+    # ``ont_ul``, ``hic_r1``, ``hic_r2``, ``parental_maternal``,
+    # ``parental_paternal``, ``illumina_wgs``; other strings are
+    # stored unchecked. Java/ObjC: readRole.
+    read_role: str | None = None
+
+    # M97 — REF_DIFF_V2 slice byte budget: a slice closes before the
+    # read that would push it past this many bases (the 10,000-read
+    # cap still applies). 0 keeps the fixed-count rule. Writer policy
+    # only — wire format and decoder unchanged. Java/ObjC:
+    # refDiffSliceBytes.
+    ref_diff_slice_bytes: int = 0

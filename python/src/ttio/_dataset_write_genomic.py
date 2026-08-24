@@ -286,6 +286,7 @@ def _write_sequences_ref_diff_v2(sc, run: WrittenGenomicRun) -> None:
                 reference_md5=md5,
                 reference_uri=run.reference_uri,
                 reads_per_slice=10_000,
+                slice_bytes=int(run.ref_diff_slice_bytes or 0),
             ),
         )
         seq_group = sc.create_group("sequences")
@@ -547,6 +548,21 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun,
                 f"not supported on the '{ch_name}' channel "
                 f"(allowed: {sorted(c.name for c in allowed)})"
             )
+        # M97: QUALITY_BINNED is a fixed Illumina-8 bin table; reject
+        # it on long-read platforms rather than write a mistuned lossy
+        # file.
+        from .codecs import quality as _quality
+        if (
+            ch_name == "qualities"
+            and codec_enum == _Compression.QUALITY_BINNED
+            and not _quality.binned_allowed_for_platform(run.platform)
+        ):
+            raise ValueError(
+                "signal_codec_overrides['qualities']: QUALITY_BINNED "
+                "applies the fixed Illumina-8 bin table, which does "
+                "not fit the quality distribution of platform "
+                f"{run.platform!r} (M97)."
+            )
 
     rg = parent.create_group(name)
 
@@ -556,6 +572,8 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun,
     io.write_int_attr(rg, "spectrum_class", 5)
     io.write_fixed_string_attr(rg, "reference_uri", run.reference_uri)
     io.write_fixed_string_attr(rg, "platform", run.platform)
+    if run.read_role:
+        io.write_fixed_string_attr(rg, "read_role", run.read_role)
     io.write_fixed_string_attr(rg, "sample_name", run.sample_name)
     io.write_int_attr(rg, "read_count", int(run.offsets.shape[0]))
 
