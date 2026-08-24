@@ -25,6 +25,12 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) NSString *referenceUri;
 @property (nonatomic, copy, nullable) NSString *platform;
 @property (nonatomic, copy, nullable) NSString *sampleName;
+/** Persisted as the <code>@read_role</code> run attribute when
+ *  non-nil; see <code>TTIOWrittenGenomicRun.readRole</code>. */
+@property (nonatomic, copy, nullable) NSString *readRole;
+/** REF_DIFF_V2 slice byte budget; 0 = the fixed 10,000-read rule.
+ *  See <code>TTIOWrittenGenomicRun.refDiffSliceBytes</code>. */
+@property (nonatomic) unsigned long long refDiffSliceBytes;
 @property (nonatomic, copy, nullable) NSDictionary<NSString *, NSData *> *referenceChromSeqs;
 @property (nonatomic) BOOL embedReference;
 /** Reads per block; default 1 000 000. */

@@ -276,6 +276,7 @@ static pthread_once_t gOnce = PTHREAD_ONCE_INIT;
                           referenceMd5:ctx.referenceMd5
                           referenceUri:ctx.referenceUri
                          readsPerSlice:(ctx.readsPerSlice ? ctx.readsPerSlice.unsignedIntegerValue : 10000)
+                            sliceBytes:(ctx.sliceBytes ? ctx.sliceBytes.unsignedLongLongValue : 0)
                                  error:e];
     if (!blob) return nil;
     return [[TTIOEncodedGroupLayout alloc] initWithChildren:@{@"refdiff_v2": blob}

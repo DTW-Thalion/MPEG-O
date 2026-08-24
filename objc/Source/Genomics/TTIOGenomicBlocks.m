@@ -97,6 +97,8 @@ static id<TTIOStorageGroup> ttioTryGroup(id<TTIOStorageGroup> parent, NSString *
     s.referenceChromSeqs = run.referenceChromSeqs;
     s.externalReferencePath = run.externalReferencePath;
     s.optLegacyWholeChannel = run.optLegacyWholeChannel;
+    s.readRole = run.readRole;
+    s.refDiffSliceBytes = run.refDiffSliceBytes;
     return s;
 }
 
@@ -155,6 +157,8 @@ static id<TTIOStorageGroup> ttioTryGroup(id<TTIOStorageGroup> parent, NSString *
     c.referenceChromSeqs = first.referenceChromSeqs;
     c.externalReferencePath = first.externalReferencePath;
     c.optLegacyWholeChannel = first.optLegacyWholeChannel;
+    c.readRole = first.readRole;
+    c.refDiffSliceBytes = first.refDiffSliceBytes;
     return c;
 }
 

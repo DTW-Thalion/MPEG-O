@@ -252,3 +252,18 @@ NSData * _Nullable TTIOQualityDecode(NSData *encoded,
     return ttio_q_decode((const uint8_t *)encoded.bytes,
                          (size_t)encoded.length, error);
 }
+
+BOOL TTIOQualityBinnedAllowedForPlatform(NSString * _Nullable platform)
+{
+    if (platform.length == 0) return YES;
+    NSString *p = [platform lowercaseString];
+    for (NSString *needle in @[@"hifi", @"pacbio", @"nanopore"]) {
+        if ([p rangeOfString:needle].location != NSNotFound) return NO;
+    }
+    /* "ont" only as a whole token — IONTORRENT contains it. */
+    NSCharacterSet *sep = [[NSCharacterSet lowercaseLetterCharacterSet] invertedSet];
+    for (NSString *tok in [p componentsSeparatedByCharactersInSet:sep]) {
+        if ([tok isEqualToString:@"ont"]) return NO;
+    }
+    return YES;
+}

@@ -22,6 +22,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nullable, strong) NSData *referenceMd5;
 @property (nullable, strong) NSString *referenceUri;
 @property (nullable, strong) NSNumber *readsPerSlice;
+/** REF_DIFF_V2 byte budget: a slice closes before the read that
+ *  would push it past this many bases (readsPerSlice still caps the
+ *  read count). nil or 0 = the fixed reads-per-slice rule. */
+@property (nullable, strong) NSNumber *sliceBytes;
 
 // fqzcomp V5 (sequence context). Decode: lazy block returning the
 // run's decoded sequences bytes, invoked only for version-5 streams.

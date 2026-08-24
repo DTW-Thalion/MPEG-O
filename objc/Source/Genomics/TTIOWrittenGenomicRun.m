@@ -149,6 +149,8 @@
     c.externalReferencePath = _externalReferencePath;
     c.bulkV2Blobs = _bulkV2Blobs;
     c.optLegacyWholeChannel = _optLegacyWholeChannel;
+    c.readRole = _readRole;
+    c.refDiffSliceBytes = _refDiffSliceBytes;
     return c;
 }
 

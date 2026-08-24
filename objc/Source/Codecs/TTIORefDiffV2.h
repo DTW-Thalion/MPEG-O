@@ -61,6 +61,39 @@ extern NSString *const TTIORefDiffV2ErrorDomain;
                                 error:(NSError **)error;
 
 /**
+ * Encode with a byte budget on the slice partition (M97).
+ *
+ * Identical to `+encodeSequences:...readsPerSlice:error:` except that
+ * with `sliceBytes` > 0 a slice closes before the read that would
+ * push it past `sliceBytes` bases; `readsPerSlice` still caps the
+ * read count and every slice keeps at least one read. Writer policy
+ * only — the wire format and decoder are unchanged, and
+ * `sliceBytes` = 0 reproduces the fixed-count output byte for byte.
+ *
+ * @param sequences      Concatenated read bases (uint8 ACGTN).
+ * @param offsets        Per-read offsets into `sequences` (n+1 uint64 LE).
+ * @param positions      Per-read reference positions (int64 LE).
+ * @param cigarStrings   Per-read CIGAR strings (used to skip soft-clips).
+ * @param reference      Reference-FASTA bytes for diffing.
+ * @param referenceMd5   16-byte MD5 of the reference (stored in the blob).
+ * @param referenceUri   Reference URI string (stored in the blob).
+ * @param readsPerSlice  Reads per slice (CRAM-style sub-block partition).
+ * @param sliceBytes     Slice byte budget; 0 = the fixed-count rule.
+ * @param error          Out-error on invalid input or native failure.
+ * @return Encoded refdiff-v2 blob bytes, or `nil` with `*error` set.
+ */
++ (nullable NSData *)encodeSequences:(NSData *)sequences
+                              offsets:(NSData *)offsets
+                            positions:(NSData *)positions
+                         cigarStrings:(NSArray<NSString *> *)cigarStrings
+                            reference:(NSData *)reference
+                         referenceMd5:(NSData *)referenceMd5
+                         referenceUri:(NSString *)referenceUri
+                       readsPerSlice:(NSUInteger)readsPerSlice
+                          sliceBytes:(unsigned long long)sliceBytes
+                                error:(NSError **)error;
+
+/**
  * Decode a refdiff-v2 blob back into the sequence + offset channels.
  *
  * Inverse of `+encodeSequences:...`. Requires the unencoded
