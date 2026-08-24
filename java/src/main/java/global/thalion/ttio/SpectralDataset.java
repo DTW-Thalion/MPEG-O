@@ -5,6 +5,8 @@
  */
 package global.thalion.ttio;
 
+import global.thalion.ttio.assembly.AssemblyGraph;
+import global.thalion.ttio.assembly.WrittenAssemblyGraph;
 import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
 import global.thalion.ttio.hdf5.Hdf5File;
@@ -53,6 +55,10 @@ public class SpectralDataset implements
     private final String isaInvestigationId;
     private final Map<String, AcquisitionRun> msRuns;
     private final Map<String, GenomicRun> genomicRuns;
+    // M98: assembly graphs at /study/assembly_graphs/<name>/,
+    // populated post-construction by the open + create paths (the
+    // ctor chain predates the field; the encryptedAlgorithm precedent).
+    private Map<String, AssemblyGraph> assemblyGraphs = Map.of();
     private final Map<String, global.thalion.ttio.genomics.ReferenceImport> references;
     private final MSImage image;  // null when /study/image_cube absent
     private final RamanImage ramanImage;  // null when /study/raman_image_cube absent
@@ -198,6 +204,13 @@ public class SpectralDataset implements
     /** zero or more named genomic runs. Empty for pre-M82
      *  files; populated when {@code /study/genomic_runs/} is present. */
     public Map<String, GenomicRun> genomicRuns() { return genomicRuns; }
+
+    /** Assembly graphs stored under {@code /study/assembly_graphs/},
+     *  keyed by name; empty for files without the
+     *  {@code opt_assembly_graph} feature (M98). */
+    public Map<String, AssemblyGraph> assemblyGraphs() {
+        return assemblyGraphs;
+    }
 
     /**
      * Returns embedded references discovered under
@@ -417,6 +430,7 @@ public class SpectralDataset implements
             String isaId = null;
             Map<String, AcquisitionRun> runs = new LinkedHashMap<>();
             Map<String, GenomicRun> genomicRuns = new LinkedHashMap<>();
+            Map<String, AssemblyGraph> assemblyGraphsMap = new LinkedHashMap<>();  // M98
             Map<String, global.thalion.ttio.genomics.ReferenceImport> references =
                     new LinkedHashMap<>();
             List<Identification> idents = List.of();
@@ -515,12 +529,17 @@ public class SpectralDataset implements
                     // {@code /study/references/<uri>/} is read above.
                     subjects = SpectralDatasetMetadataIO.readSubjects(study);
                     samples = SpectralDatasetMetadataIO.readSamples(study);
+                    // M98: provider-agnostic assembly_graphs read.
+                    assemblyGraphsMap.putAll(AssemblyGraph.readAll(
+                        Hdf5Provider.adapterForGroup(study)));
                 }
             }
 
-            return new SpectralDataset(provider, file, flags, title, isaId, runs,
+            SpectralDataset ds = new SpectralDataset(provider, file, flags, title, isaId, runs,
                     genomicRuns, references, image, ramanImage, irImage,
                     idents, quants, prov, subjects, samples, encryptedAlg);
+            ds.assemblyGraphs = assemblyGraphsMap;
+            return ds;
         }
     }
 
@@ -549,6 +568,7 @@ public class SpectralDataset implements
             String title = null, isaId = null;
             Map<String, AcquisitionRun> runs = new LinkedHashMap<>();
             Map<String, GenomicRun> genomicRuns = new LinkedHashMap<>();
+            Map<String, AssemblyGraph> assemblyGraphsMap = new LinkedHashMap<>();  // M98
             Map<String, global.thalion.ttio.genomics.ReferenceImport> references =
                     new LinkedHashMap<>();
             List<Identification> idents = List.of();
@@ -622,11 +642,15 @@ public class SpectralDataset implements
                     // Stage 6: per-row subject + sample groups.
                     subjects = SpectralDatasetMetadataIO.readSubjectsFromProvider(study);
                     samples = SpectralDatasetMetadataIO.readSamplesFromProvider(study);
+                    // M98: provider-agnostic assembly_graphs read.
+                    assemblyGraphsMap.putAll(AssemblyGraph.readAll(study));
                 }
             }
-            return new SpectralDataset(provider, null, flags, title, isaId, runs,
+            SpectralDataset ds = new SpectralDataset(provider, null, flags, title, isaId, runs,
                     genomicRuns, references, null, null, null,
                     idents, quants, prov, subjects, samples, encryptedAlg);
+            ds.assemblyGraphs = assemblyGraphsMap;
+            return ds;
         }
     }
 
@@ -642,7 +666,7 @@ public class SpectralDataset implements
             List<Sample> samples,
             FeatureFlags featureFlags) {
         return createViaProviderMixed(url, title, isaInvestigationId,
-                runs, genomicRuns, genomicRunNames,
+                runs, genomicRuns, genomicRunNames, Map.of(),
                 identifications, quantifications, provenanceRecords,
                 subjects, samples, featureFlags, () -> {});
     }
@@ -656,6 +680,7 @@ public class SpectralDataset implements
             List<AcquisitionRun> runs,
             List<WrittenGenomicRun> genomicRuns,
             List<String> genomicRunNames,
+            Map<String, WrittenAssemblyGraph> assemblyGraphs,
             List<Identification> identifications,
             List<Quantification> quantifications,
             List<ProvenanceRecord> provenanceRecords,
@@ -740,6 +765,18 @@ public class SpectralDataset implements
                     bumpSection.run();  // genomic_runs done
                 }
 
+                // M98: assembly_graphs subtree (study is already a
+                // StorageGroup here). Names are written in sorted
+                // order, matching the HDF5 fast path.
+                Map<String, AssemblyGraph> assemblyMap = new LinkedHashMap<>();
+                if (assemblyGraphs != null && !assemblyGraphs.isEmpty()) {
+                    for (String agName : new TreeMap<>(assemblyGraphs).keySet()) {
+                        AssemblyGraph.write(assemblyGraphs.get(agName),
+                            agName, study);
+                    }
+                    assemblyMap = AssemblyGraph.readAll(study);
+                }
+
                 // Stage 6: per-row subject + sample groups (provider-
                 // agnostic). Mirrors the HDF5 fast path; validation
                 // already ran upstream in createMixed.
@@ -756,6 +793,7 @@ public class SpectralDataset implements
                         provenanceRecords != null ? provenanceRecords : List.of(),
                         subjects, samples,
                         "");
+                out.assemblyGraphs = assemblyMap;
                 provider.commitTransaction();
                 return out;
             }
@@ -1038,6 +1076,39 @@ public class SpectralDataset implements
                 null, null, null);
     }
 
+    /** M98 assembly-graphs-aware create. When {@code assemblyGraphs}
+     *  is non-empty, {@link FeatureFlags#OPT_ASSEMBLY_GRAPH} is added
+     *  (idempotent) and each graph is written under
+     *  {@code /study/assembly_graphs/<name>/} in sorted-name order.
+     *  Genomic runs use the legacy {@code genomic_NNNN} auto-naming
+     *  like the other typed-list overloads. */
+    public static SpectralDataset create(String pathOrUrl, String title,
+                                          String isaInvestigationId,
+                                          List<AcquisitionRun> runs,
+                                          List<WrittenGenomicRun> genomicRuns,
+                                          Map<String, WrittenAssemblyGraph> assemblyGraphs,
+                                          List<Identification> identifications,
+                                          List<Quantification> quantifications,
+                                          List<ProvenanceRecord> provenanceRecords,
+                                          FeatureFlags featureFlags) {
+        java.util.List<String> autoNames = new java.util.ArrayList<>();
+        if (genomicRuns != null) {
+            for (int i = 0; i < genomicRuns.size(); i++) {
+                autoNames.add("genomic_" + String.format("%04d", i + 1));
+            }
+        }
+        return createMixed(pathOrUrl, title, isaInvestigationId,
+                runs != null ? runs : List.of(),
+                genomicRuns != null ? genomicRuns : List.of(),
+                autoNames,
+                assemblyGraphs != null ? assemblyGraphs : Map.of(),
+                identifications, quantifications, provenanceRecords,
+                List.of(), List.of(),
+                featureFlags,
+                ProgressSink.discard(),
+                null, null, null);
+    }
+
     /** JT2: one-shot, image-aware create used by the importer/exporter
      *  registry. This is the single overload that carries the full
      *  normalized draft an importer produces: MS {@code runs} +
@@ -1138,7 +1209,8 @@ public class SpectralDataset implements
 
     /** Stage D ProgressSink-aware overload of {@link #createMixed} that
      *  fires {@code progress.onProgress(sectionIdx, sectionCount)} once
-     *  per §5.4-ordered section as it is materialised. */
+     *  per §5.4-ordered section as it is materialised. Kept with the
+     *  pre-M98 signature; forwards with no assembly graphs. */
     private static SpectralDataset createMixed(
             String pathOrUrl, String title, String isaInvestigationId,
             List<AcquisitionRun> runs,
@@ -1152,11 +1224,38 @@ public class SpectralDataset implements
             FeatureFlags featureFlags,
             ProgressSink progress,
             MSImage image, RamanImage ramanImage, IRImage irImage) {
+        return createMixed(pathOrUrl, title, isaInvestigationId,
+                runs, genomicRuns, genomicRunNames, Map.of(),
+                identifications, quantifications, provenanceRecords,
+                subjects, samples, featureFlags, progress,
+                image, ramanImage, irImage);
+    }
+
+    /** M98 assembly-graphs-aware backend all createMixed overloads
+     *  funnel into. When {@code assemblyGraphs} is non-empty,
+     *  {@link FeatureFlags#OPT_ASSEMBLY_GRAPH} is added and the
+     *  graphs are written under {@code /study/assembly_graphs/} in
+     *  sorted-name order after the genomic subtree. */
+    private static SpectralDataset createMixed(
+            String pathOrUrl, String title, String isaInvestigationId,
+            List<AcquisitionRun> runs,
+            List<WrittenGenomicRun> genomicRuns,
+            java.util.Collection<String> genomicRunNames,
+            Map<String, WrittenAssemblyGraph> assemblyGraphs,
+            List<Identification> identifications,
+            List<Quantification> quantifications,
+            List<ProvenanceRecord> provenanceRecords,
+            List<Subject> subjects,
+            List<Sample> samples,
+            FeatureFlags featureFlags,
+            ProgressSink progress,
+            MSImage image, RamanImage ramanImage, IRImage irImage) {
         if (progress == null) progress = ProgressSink.discard();
         // v1.0 single format-version stamp. Readers gate optional
         // features by the feature-flag list (opt_*), not by version
         // equality.
         boolean hasGenomic = genomicRuns != null && !genomicRuns.isEmpty();
+        boolean hasGraphs = assemblyGraphs != null && !assemblyGraphs.isEmpty();
         String targetVersion = "1.0";
         if (hasGenomic) {
             java.util.Set<String> withFlags =
@@ -1167,6 +1266,16 @@ public class SpectralDataset implements
             featureFlags = new FeatureFlags(targetVersion, withFlags);
         } else if (!targetVersion.equals(featureFlags.formatVersion())) {
             featureFlags = new FeatureFlags(targetVersion, featureFlags.features());
+        }
+        // M98: opt_assembly_graph advertises assembly-graph content
+        // the same way, added only when a graph is present so ms-only
+        // files stay byte-identical.
+        if (hasGraphs
+                && !featureFlags.features().contains(FeatureFlags.OPT_ASSEMBLY_GRAPH)) {
+            java.util.Set<String> withFlags =
+                new java.util.LinkedHashSet<>(featureFlags.features());
+            withFlags.add(FeatureFlags.OPT_ASSEMBLY_GRAPH);
+            featureFlags = new FeatureFlags(targetVersion, withFlags);
         }
 
         java.util.List<String> gNamesList = genomicRunNames != null
@@ -1223,6 +1332,7 @@ public class SpectralDataset implements
             }
             return createViaProviderMixed(pathOrUrl, title, isaInvestigationId,
                     runs, genomicRuns, gNamesList,
+                    assemblyGraphs != null ? assemblyGraphs : Map.of(),
                     identifications, quantifications,
                     provenanceRecords, subjectsList, samplesList, featureFlags,
                     bumpSection);
@@ -1300,6 +1410,20 @@ public class SpectralDataset implements
                     bumpSection.run();  // genomic_runs done
                 }
 
+                // M98: assembly_graphs subtree (only when non-empty),
+                // written through the StorageGroup adapter so the
+                // layout is identical to the provider path. Names go
+                // in sorted order.
+                Map<String, AssemblyGraph> assemblyMap = new LinkedHashMap<>();
+                if (hasGraphs) {
+                    var studyAdapter = Hdf5Provider.adapterForGroup(study);
+                    for (String agName : new TreeMap<>(assemblyGraphs).keySet()) {
+                        AssemblyGraph.write(assemblyGraphs.get(agName),
+                            agName, studyAdapter);
+                    }
+                    assemblyMap = AssemblyGraph.readAll(studyAdapter);
+                }
+
                 if (identifications != null && !identifications.isEmpty()) {
                     SpectralDatasetMetadataIO.writeIdentifications(study, identifications);
                     bumpSection.run();  // identifications done
@@ -1323,13 +1447,15 @@ public class SpectralDataset implements
                 SpectralDatasetMetadataIO.writeSamples(study, samplesList);
                 if (!samplesList.isEmpty()) bumpSection.run();  // samples done
 
-                return new SpectralDataset(provider, file, featureFlags, title, isaInvestigationId,
+                SpectralDataset ds = new SpectralDataset(provider, file, featureFlags, title, isaInvestigationId,
                         runMap, genomicMap, Map.of(), null, null, null,
                         identifications != null ? identifications : List.of(),
                         quantifications != null ? quantifications : List.of(),
                         provenanceRecords != null ? provenanceRecords : List.of(),
                         subjectsList, samplesList,
                         "");
+                ds.assemblyGraphs = assemblyMap;
+                return ds;
             }
         }
     }
