@@ -23,6 +23,7 @@ public record CodecContext(
         byte[] referenceMd5,
         String referenceUri,
         Integer readsPerSlice,
+        Long sliceBytes,
         byte[] sequences,
         Supplier<byte[]> sequencesProvider,
         Integer qualStrategyHint) {
@@ -49,6 +50,7 @@ public record CodecContext(
         private byte[] referenceMd5;
         private String referenceUri;
         private Integer readsPerSlice;
+        private Long sliceBytes;
         private byte[] sequences;
         private Supplier<byte[]> sequencesProvider;
         private Integer qualStrategyHint;
@@ -70,6 +72,8 @@ public record CodecContext(
         public Builder referenceMd5(byte[] v) { this.referenceMd5 = v; return this; }
         public Builder referenceUri(String v) { this.referenceUri = v; return this; }
         public Builder readsPerSlice(Integer v) { this.readsPerSlice = v; return this; }
+        /** M97: REF_DIFF_V2 slice byte budget; null/0 = the fixed-count rule. */
+        public Builder sliceBytes(Long v) { this.sliceBytes = v; return this; }
         public Builder sequences(byte[] v) { this.sequences = v; return this; }
         public Builder sequencesProvider(Supplier<byte[]> v) { this.sequencesProvider = v; return this; }
         public Builder qualStrategyHint(Integer v) { this.qualStrategyHint = v; return this; }
@@ -78,8 +82,8 @@ public record CodecContext(
             return new CodecContext(readLengths, revcompFlags, elementSize, readCount,
                 positions, cigarsProvider, totalBases, chromosomes, ownChromIds,
                 ownPositions, nRecords, referenceResolver, offsets, reference,
-                referenceMd5, referenceUri, readsPerSlice, sequences,
-                sequencesProvider, qualStrategyHint);
+                referenceMd5, referenceUri, readsPerSlice, sliceBytes,
+                sequences, sequencesProvider, qualStrategyHint);
         }
     }
 }

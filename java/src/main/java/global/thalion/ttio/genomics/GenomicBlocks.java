@@ -77,7 +77,8 @@ public final class GenomicBlocks {
             new ArrayList<>(run.chromosomes().subList(start, stop)),
             run.signalCompression(), run.signalCodecOverrides(), List.of(),
             run.embedReference(), run.referenceChromSeqs(), run.externalReferencePath(),
-            null, run.optDisableQualitiesV5(), run.optLegacyWholeChannel());
+            null, run.optDisableQualitiesV5(), run.optLegacyWholeChannel(),
+            run.readRole(), run.refDiffSliceBytes());
     }
 
     /** The inverse of {@link #sliceRun} for consecutive parts. */
@@ -122,7 +123,8 @@ public final class GenomicBlocks {
             cigars, names, mateChroms, matePos, tlens, chroms,
             first.signalCompression(), first.signalCodecOverrides(), List.of(),
             first.embedReference(), first.referenceChromSeqs(), first.externalReferencePath(),
-            null, first.optDisableQualitiesV5(), first.optLegacyWholeChannel());
+            null, first.optDisableQualitiesV5(), first.optLegacyWholeChannel(),
+            first.readRole(), first.refDiffSliceBytes());
     }
 
     /** Encode one block's channels through the whole-channel writer. The

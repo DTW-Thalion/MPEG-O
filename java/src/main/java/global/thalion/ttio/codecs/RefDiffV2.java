@@ -108,6 +108,33 @@ public final class RefDiffV2 {
             byte[]   referenceMd5,
             String   referenceUri,
             int      readsPerSlice) {
+        return encode(sequences, offsets, positions, cigarStrings, reference,
+                      referenceMd5, referenceUri, readsPerSlice, 0L);
+    }
+
+    /**
+     * Encode with a byte budget on the slice partition (M97).
+     *
+     * <p>Identical to the fixed-count overload except that with
+     * {@code sliceBytes} > 0 a slice closes before the read that would
+     * push it past {@code sliceBytes} bases; {@code readsPerSlice}
+     * still caps the read count and every slice keeps at least one
+     * read. Writer policy only — the wire format and decoder are
+     * unchanged, and 0 reproduces the fixed-count output byte for
+     * byte.</p>
+     *
+     * @param sliceBytes slice byte budget; 0 = the fixed-count rule
+     */
+    public static byte[] encode(
+            byte[]   sequences,
+            long[]   offsets,
+            long[]   positions,
+            String[] cigarStrings,
+            byte[]   reference,
+            byte[]   referenceMd5,
+            String   referenceUri,
+            int      readsPerSlice,
+            long     sliceBytes) {
         if (referenceMd5 == null || referenceMd5.length != 16)
             throw new IllegalArgumentException("referenceMd5 must be 16 bytes");
         int n = positions.length;
@@ -118,7 +145,7 @@ public final class RefDiffV2 {
         return TtioRansNative.encodeRefDiffV2(sequences, offsets, positions,
                                                cigarStrings, reference,
                                                referenceMd5, referenceUri,
-                                               readsPerSlice);
+                                               readsPerSlice, sliceBytes);
     }
 
     /**

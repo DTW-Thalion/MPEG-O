@@ -933,7 +933,7 @@ Java_global_thalion_ttio_codecs_TtioRansNative_decodeMateInfoV2Native(
  *   private static native byte[] encodeRefDiffV2Native(
  *     byte[] sequences, long[] offsets, long[] positions,
  *     String[] cigarStrings, byte[] reference, byte[] referenceMd5,
- *     String referenceUri, int readsPerSlice);
+ *     String referenceUri, int readsPerSlice, long sliceBytes);
  *   private static native Object[] decodeRefDiffV2Native(
  *     byte[] encoded, long[] positions, String[] cigarStrings,
  *     byte[] reference, int nReads, long totalBases);
@@ -950,7 +950,8 @@ Java_global_thalion_ttio_codecs_TtioRansNative_encodeRefDiffV2Native(
     jbyteArray  reference_arr,
     jbyteArray  reference_md5_arr,
     jstring     reference_uri_str,
-    jint        reads_per_slice)
+    jint        reads_per_slice,
+    jlong       slice_bytes)
 {
     (void)cls;
     jsize n = (*env)->GetArrayLength(env, positions_arr);
@@ -994,10 +995,11 @@ Java_global_thalion_ttio_codecs_TtioRansNative_encodeRefDiffV2Native(
         .reads_per_slice = (uint64_t)reads_per_slice,
         .reference_md5 = (const uint8_t *)md5,
         .reference_uri = uri,
+        .slice_bytes = (uint64_t)slice_bytes,
     };
 
-    size_t cap = ttio_ref_diff_v2_max_encoded_size((uint64_t)n,
-        n > 0 ? (uint64_t)off[n] : 0);
+    size_t cap = ttio_ref_diff_v2_max_encoded_size2((uint64_t)n,
+        n > 0 ? (uint64_t)off[n] : 0, (uint64_t)slice_bytes);
     uint8_t *buf = (uint8_t *)malloc(cap > 0 ? cap : 1);
     size_t out_len = cap;
     int rc = ttio_ref_diff_v2_encode(&in, buf, &out_len);

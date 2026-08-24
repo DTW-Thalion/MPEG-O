@@ -60,6 +60,8 @@ public class GenomicRun
     private global.thalion.ttio.codecs.ReferenceResolver injectedResolver;
     private global.thalion.ttio.codecs.ReferenceResolver viewResolver;
     private boolean viewResolverBuilt;
+    // M97: the @read_role run attribute; null when absent.
+    private String readRole;
     // Phase 1 (post-M91): per-run provenance, cached at open time so
     // provenanceChain() is a pure accessor. Eager because the on-disk
     // form is a small JSON attribute on the run group; lazy decode
@@ -177,6 +179,14 @@ public class GenomicRun
     public String platform()                   { return platform; }
     public String sampleName()                 { return sampleName; }
 
+    /** The {@code @read_role} run attribute (M97): {@code hifi},
+     *  {@code ont_ul}, {@code hic_r1}, {@code hic_r2},
+     *  {@code parental_maternal}, {@code parental_paternal}, or
+     *  {@code illumina_wgs} (other strings are stored unchecked);
+     *  null when the attribute is absent. Python: {@code read_role};
+     *  ObjC: {@code readRole}. */
+    public String getReadRole()                { return readRole; }
+
     /** The per-read index. Under {@code blocks_v1} it is loaded from
      *  {@code genomic_index/} on first call. */
     public GenomicIndex index() {
@@ -246,6 +256,9 @@ public class GenomicRun
         GenomicRun run = new GenomicRun(name, mode, modality, refUri, platform,
                                         sampleName, idx, runGroup, prov, layout, table);
         run.injectedResolver = resolver;
+        // @read_role is absent on pre-M97 files; null, not "".
+        String role = stringAttr(runGroup, "read_role", null);
+        run.readRole = (role == null || role.isEmpty()) ? null : role;
         return run;
     }
 

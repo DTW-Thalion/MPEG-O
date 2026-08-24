@@ -78,7 +78,14 @@ public final class GenomicStreamWriter implements AutoCloseable {
                           boolean optDisableQualitiesV5,
                           Map<String, Compression> signalCodecOverrides,
                           Compression signalCompression, boolean optLegacyWholeChannel,
-                          List<ProvenanceRecord> provenanceRecords) {
+                          List<ProvenanceRecord> provenanceRecords,
+                          /** M97 — persisted as the {@code @read_role} run
+                           *  attribute when non-null; see
+                           *  {@link WrittenGenomicRun#readRole()}. */
+                          String readRole,
+                          /** M97 — REF_DIFF_V2 slice byte budget; 0 = the
+                           *  fixed 10,000-read rule. */
+                          long refDiffSliceBytes) {
         public Options {
             if (blockReads < 1 || blockBytes < 1) {
                 throw new IllegalArgumentException("blockReads and blockBytes must be >= 1");
@@ -88,37 +95,73 @@ public final class GenomicStreamWriter implements AutoCloseable {
             if (signalCompression == null) signalCompression = Compression.ZLIB;
         }
 
+        /** Pre-M97 signature (13 components); no read role, the fixed
+         *  REF_DIFF_V2 slice rule. */
+        public Options(AcquisitionMode acquisitionMode, String referenceUri, String platform,
+                       String sampleName, Map<String, byte[]> referenceChromSeqs,
+                       boolean embedReference, int blockReads, long blockBytes,
+                       boolean optDisableQualitiesV5,
+                       Map<String, Compression> signalCodecOverrides,
+                       Compression signalCompression, boolean optLegacyWholeChannel,
+                       List<ProvenanceRecord> provenanceRecords) {
+            this(acquisitionMode, referenceUri, platform, sampleName,
+                referenceChromSeqs, embedReference, blockReads, blockBytes,
+                optDisableQualitiesV5, signalCodecOverrides, signalCompression,
+                optLegacyWholeChannel, provenanceRecords, null, 0L);
+        }
+
         /** The run-level metadata of {@code run}, default block policy. */
         public static Options fromRun(WrittenGenomicRun run) {
             return new Options(run.acquisitionMode(), run.referenceUri(), run.platform(),
                 run.sampleName(), run.referenceChromSeqs(), run.embedReference(),
                 DEFAULT_BLOCK_READS, DEFAULT_BLOCK_BYTES, run.optDisableQualitiesV5(),
                 run.signalCodecOverrides(), run.signalCompression(),
-                run.optLegacyWholeChannel(), run.provenanceRecords());
+                run.optLegacyWholeChannel(), run.provenanceRecords(),
+                run.readRole(), run.refDiffSliceBytes());
         }
 
         public Options withBlockPolicy(int reads, long bytes) {
             return new Options(acquisitionMode, referenceUri, platform, sampleName,
                 referenceChromSeqs, embedReference, reads, bytes, optDisableQualitiesV5,
-                signalCodecOverrides, signalCompression, optLegacyWholeChannel, provenanceRecords);
+                signalCodecOverrides, signalCompression, optLegacyWholeChannel, provenanceRecords,
+                readRole, refDiffSliceBytes);
         }
 
         public Options withLegacy(boolean legacy) {
             return new Options(acquisitionMode, referenceUri, platform, sampleName,
                 referenceChromSeqs, embedReference, blockReads, blockBytes, optDisableQualitiesV5,
-                signalCodecOverrides, signalCompression, legacy, provenanceRecords);
+                signalCodecOverrides, signalCompression, legacy, provenanceRecords,
+                readRole, refDiffSliceBytes);
         }
 
         public Options withReference(Map<String, byte[]> reference, boolean embed) {
             return new Options(acquisitionMode, referenceUri, platform, sampleName,
                 reference, embed, blockReads, blockBytes, optDisableQualitiesV5,
-                signalCodecOverrides, signalCompression, optLegacyWholeChannel, provenanceRecords);
+                signalCodecOverrides, signalCompression, optLegacyWholeChannel, provenanceRecords,
+                readRole, refDiffSliceBytes);
         }
 
         public Options withProvenance(List<ProvenanceRecord> records) {
             return new Options(acquisitionMode, referenceUri, platform, sampleName,
                 referenceChromSeqs, embedReference, blockReads, blockBytes, optDisableQualitiesV5,
-                signalCodecOverrides, signalCompression, optLegacyWholeChannel, records);
+                signalCodecOverrides, signalCompression, optLegacyWholeChannel, records,
+                readRole, refDiffSliceBytes);
+        }
+
+        /** Same options with the given {@code @read_role} value (M97). */
+        public Options withReadRole(String role) {
+            return new Options(acquisitionMode, referenceUri, platform, sampleName,
+                referenceChromSeqs, embedReference, blockReads, blockBytes, optDisableQualitiesV5,
+                signalCodecOverrides, signalCompression, optLegacyWholeChannel, provenanceRecords,
+                role, refDiffSliceBytes);
+        }
+
+        /** Same options with the given REF_DIFF_V2 slice byte budget (M97). */
+        public Options withRefDiffSliceBytes(long sliceBytes) {
+            return new Options(acquisitionMode, referenceUri, platform, sampleName,
+                referenceChromSeqs, embedReference, blockReads, blockBytes, optDisableQualitiesV5,
+                signalCodecOverrides, signalCompression, optLegacyWholeChannel, provenanceRecords,
+                readRole, sliceBytes);
         }
     }
 
@@ -206,6 +249,18 @@ public final class GenomicStreamWriter implements AutoCloseable {
                                int threads, long memoryBudgetBytes) {
         this.study = studyGroup;
         this.name = runName;
+        // M97: QUALITY_BINNED is a fixed Illumina-8 bin table; reject
+        // it on long-read platforms before anything is written.
+        if (options.signalCodecOverrides().get("qualities")
+                == Compression.QUALITY_BINNED
+                && !global.thalion.ttio.codecs.Quality
+                    .binnedAllowedForPlatform(options.platform())) {
+            throw new IllegalArgumentException(
+                "signalCodecOverrides['qualities']: QUALITY_BINNED "
+                + "applies the fixed Illumina-8 bin table, which does "
+                + "not fit the quality distribution of platform '"
+                + options.platform() + "' (M97).");
+        }
         this.opt = options;
         this.threads = Math.max(1, threads);
         this.scope = global.thalion.ttio.Threads.pool(this.threads);
@@ -464,6 +519,8 @@ public final class GenomicStreamWriter implements AutoCloseable {
         run.setAttribute("spectrum_class", 5L);
         run.setAttribute("reference_uri", opt.referenceUri());
         run.setAttribute("platform", opt.platform());
+        if (opt.readRole() != null && !opt.readRole().isEmpty())
+            run.setAttribute("read_role", opt.readRole());
         run.setAttribute("sample_name", opt.sampleName());
         run.setAttribute("read_count", 0L);
         run.setAttribute("base_count", 0L);
@@ -547,7 +604,8 @@ public final class GenomicStreamWriter implements AutoCloseable {
             run.matePositions(), run.templateLengths(), run.chromosomes(),
             opt.signalCompression(), opt.signalCodecOverrides(), List.of(),
             opt.embedReference(), opt.referenceChromSeqs(), null, null,
-            opt.optDisableQualitiesV5(), false);
+            opt.optDisableQualitiesV5(), false,
+            opt.readRole(), opt.refDiffSliceBytes());
     }
 
     private WrittenGenomicRun singleReadRun(AlignedRead r) {
@@ -563,6 +621,7 @@ public final class GenomicStreamWriter implements AutoCloseable {
             List.of(r.chromosome() == null ? "*" : r.chromosome()),
             opt.signalCompression(), opt.signalCodecOverrides(), List.of(),
             opt.embedReference(), opt.referenceChromSeqs(), null, null,
-            opt.optDisableQualitiesV5(), false);
+            opt.optDisableQualitiesV5(), false,
+            opt.readRole(), opt.refDiffSliceBytes());
     }
 }

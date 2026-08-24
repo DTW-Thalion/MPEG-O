@@ -213,6 +213,19 @@ public final class SpectralDatasetGenomicWriter {
                     + codec + " not supported on the '" + chName
                     + "' channel (allowed: " + allowed + ")");
             }
+            // M97: QUALITY_BINNED is a fixed Illumina-8 bin table;
+            // reject it on long-read platforms rather than write a
+            // mistuned lossy file.
+            if ("qualities".equals(chName)
+                    && codec == Enums.Compression.QUALITY_BINNED
+                    && !global.thalion.ttio.codecs.Quality
+                        .binnedAllowedForPlatform(run.platform())) {
+                throw new IllegalArgumentException(
+                    "signalCodecOverrides['qualities']: QUALITY_BINNED "
+                    + "applies the fixed Illumina-8 bin table, which "
+                    + "does not fit the quality distribution of "
+                    + "platform '" + run.platform() + "' (M97).");
+            }
         }
         try (var rg = parent.createGroup(name)) {
             // Run-level attributes.
@@ -222,6 +235,8 @@ public final class SpectralDatasetGenomicWriter {
             rg.setAttribute("spectrum_class", 5L);
             rg.setAttribute("reference_uri", run.referenceUri());
             rg.setAttribute("platform", run.platform());
+            if (run.readRole() != null && !run.readRole().isEmpty())
+                rg.setAttribute("read_role", run.readRole());
             rg.setAttribute("sample_name", run.sampleName());
             rg.setAttribute("read_count", (long) run.readCount());
 
@@ -930,6 +945,8 @@ public final class SpectralDatasetGenomicWriter {
                 .referenceMd5(md5)
                 .referenceUri(run.referenceUri())
                 .readsPerSlice(10_000)
+                .sliceBytes(run.refDiffSliceBytes() > 0
+                    ? run.refDiffSliceBytes() : null)
                 .cigarsProvider(() -> cigarArr)
                 .build();
             var layout = (global.thalion.ttio.codecs.registry.EncodedChannel.GroupLayout)
