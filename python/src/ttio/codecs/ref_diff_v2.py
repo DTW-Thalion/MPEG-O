@@ -42,6 +42,7 @@ class _Input(ctypes.Structure):
         ("reads_per_slice",  ctypes.c_uint64),
         ("reference_md5",    ctypes.POINTER(ctypes.c_uint8)),
         ("reference_uri",    ctypes.c_char_p),
+        ("slice_bytes",      ctypes.c_uint64),
     ]
 
 
@@ -50,6 +51,10 @@ if HAVE_NATIVE_LIB:
 
     _lib.ttio_ref_diff_v2_max_encoded_size.argtypes = [ctypes.c_uint64, ctypes.c_uint64]
     _lib.ttio_ref_diff_v2_max_encoded_size.restype = ctypes.c_size_t
+
+    _lib.ttio_ref_diff_v2_max_encoded_size2.argtypes = [
+        ctypes.c_uint64, ctypes.c_uint64, ctypes.c_uint64]
+    _lib.ttio_ref_diff_v2_max_encoded_size2.restype = ctypes.c_size_t
 
     _lib.ttio_ref_diff_v2_encode.argtypes = [
         ctypes.POINTER(_Input),
@@ -81,8 +86,16 @@ def encode(
     reference_md5: bytes,         # 16 bytes
     reference_uri: str,
     reads_per_slice: int = 10_000,
+    slice_bytes: int = 0,
 ) -> bytes:
-    """Encode a slice of reads to the refdiff_v2 blob."""
+    """Encode a slice of reads to the refdiff_v2 blob.
+
+    With ``slice_bytes`` > 0 a slice closes before the read that would
+    push it past that many bases (``reads_per_slice`` still caps the
+    read count). Writer policy only — the wire format and decoder are
+    unchanged, and 0 reproduces the fixed-count output byte for byte
+    (M97).
+    """
     if not HAVE_NATIVE_LIB:
         raise RuntimeError(
             "ref_diff_v2.encode requires libttio_rans (set TTIO_RANS_LIB_PATH)")
@@ -115,9 +128,11 @@ def encode(
         reads_per_slice=reads_per_slice,
         reference_md5=md5_arr.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
         reference_uri=reference_uri.encode("utf-8"),
+        slice_bytes=slice_bytes,
     )
 
-    cap = _lib.ttio_ref_diff_v2_max_encoded_size(n, int(off[n]) if n > 0 else 0)
+    total_bases = int(off[n]) if n > 0 else 0
+    cap = _lib.ttio_ref_diff_v2_max_encoded_size2(n, total_bases, slice_bytes)
     out = (ctypes.c_uint8 * cap)()
     out_len = ctypes.c_size_t(cap)
     rc = _lib.ttio_ref_diff_v2_encode(ctypes.byref(inp), out, ctypes.byref(out_len))

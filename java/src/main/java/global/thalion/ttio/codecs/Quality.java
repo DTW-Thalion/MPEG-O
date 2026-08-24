@@ -296,4 +296,29 @@ public final class Quality {
              | ((long) Byte.toUnsignedInt(buf[off + 2]) << 8)
              | ((long) Byte.toUnsignedInt(buf[off + 3]));
     }
+
+    /**
+     * Whether QUALITY_BINNED may be applied to a run of {@code platform}.
+     *
+     * <p>False when the platform names a long-read instrument — a
+     * case-insensitive substring match on {@code hifi}, {@code pacbio},
+     * or {@code nanopore}, plus {@code ont} as a whole token
+     * (IONTORRENT contains it as a substring) — whose quality
+     * distributions the fixed Illumina-8 bin table mistunes (M97).
+     * True otherwise, including null and empty. Callers reject the
+     * codec, they do not fall back silently.</p>
+     *
+     * <p>Python: {@code quality.binned_allowed_for_platform}; ObjC:
+     * {@code TTIOQualityBinnedAllowedForPlatform}.</p>
+     */
+    public static boolean binnedAllowedForPlatform(String platform) {
+        if (platform == null || platform.isEmpty()) return true;
+        String p = platform.toLowerCase(java.util.Locale.ROOT);
+        if (p.contains("hifi") || p.contains("pacbio") || p.contains("nanopore"))
+            return false;
+        for (String tok : p.split("[^a-z]+")) {
+            if (tok.equals("ont")) return false;
+        }
+        return true;
+    }
 }

@@ -725,6 +725,9 @@ static NSUInteger TTIOReadAheadBlocks(void)
     NSString *refUri    = [runGroup attributeValueForName:@"reference_uri"    error:error];
     NSString *platform  = [runGroup attributeValueForName:@"platform"         error:error];
     NSString *sampleN   = [runGroup attributeValueForName:@"sample_name"      error:error];
+    // @read_role is absent on pre-M97 files; never surface that as an
+    // open error.
+    NSString *readRole  = [runGroup attributeValueForName:@"read_role"        error:NULL];
 
     TTIOGenomicRun *run = [[TTIOGenomicRun alloc]
         initWithName:name
@@ -738,6 +741,8 @@ static NSUInteger TTIOReadAheadBlocks(void)
     run->_layout = layout;
     run->_blockTable = table;
     run->_injectedResolver = resolver;
+    run->_readRole = [readRole isKindOfClass:[NSString class]]
+        ? [readRole copy] : nil;
     return run;
 }
 

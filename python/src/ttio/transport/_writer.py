@@ -1705,6 +1705,9 @@ def _genomic_run_metadata_json(run) -> str:
         "platform": getattr(run, "platform", "") or "",
         "sample_name": getattr(run, "sample_name", "") or "",
         "modality": getattr(run, "modality", "") or "",
+        # M97: always present, "" when the run has no read role, so the
+        # JSON stays byte-identical across the 3 SDK writers.
+        "read_role": getattr(run, "read_role", "") or "",
     }, sort_keys=True)
 
 

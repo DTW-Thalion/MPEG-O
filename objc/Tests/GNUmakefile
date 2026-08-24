@@ -93,6 +93,7 @@ TTIOTests_OBJC_FILES = \
 	TestMateInfoV2Dispatch.m \
 	TestRefDiffV2.m \
 	TestRefDiffV2Dispatch.m \
+	TestM97LongReadProfile.m \
 	TestNameTokenizerV2.m \
 	TestNameTokenizedV2Dispatch.m \
 	TestOffsetsCumsum.m \

@@ -12,6 +12,30 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Added
+- **M97 long-read profile.** Genomic runs gain the `@read_role` UTF-8
+  attribute (`hifi`, `ont_ul`, `hic_r1`, `hic_r2`, `parental_maternal`,
+  `parental_paternal`, `illumina_wgs`; other strings stored unchecked),
+  set via `WrittenGenomicRun.read_role` / `readRole` and the stream
+  writers, read back via `GenomicRun.read_role` / `getReadRole()` /
+  `-readRole` (absent → `None`/`null`/`nil`); the FASTQ/FASTA import
+  CLIs take `--read-role`. REF_DIFF_V2 accepts a `slice_bytes` byte
+  budget (`WrittenGenomicRun.ref_diff_slice_bytes` /
+  `refDiffSliceBytes`): a slice closes before the read that would push
+  it past that many bases, so a 10,000-read ONT-UL run no longer
+  produces a gigabyte-scale decode unit. Writer policy only — the wire
+  format and decoder are unchanged, 0 keeps the fixed-count rule, and
+  a cross-language fixture pins the non-uniform boundaries byte-exact
+  in all 3 SDKs. A `QUALITY_BINNED` qualities override is now rejected
+  when `@platform` names a HiFi/PacBio/ONT/Nanopore instrument — the
+  fixed Illumina-8 bin table does not fit those quality distributions
+  (`quality.binned_allowed_for_platform` and equivalents). The `.tis`
+  genomic run-metadata JSON carries a `read_role` key (plain and
+  encrypted transport; always present, `""` means no role, receivers
+  leave the container attribute absent on `""`), so the attribute
+  survives transport round-trips. HiFi- and ONT-UL-shaped fixtures
+  run the 3x3 transport matrix, which asserts the attribute in every
+  cell.
+
 - **The FASTA importer streams.** The unaligned path gains the batch
   surface the FASTQ and BAM readers already have: Python
   `FastaReader.iter_batches` / `stream_source`, Java `iterBatches` /

@@ -65,7 +65,9 @@ def _write_genomic_run_default(study, g_group, name: str, run: WrittenGenomicRun
             opt_disable_qualities_v5=run.opt_disable_qualities_v5,
             signal_codec_overrides=run.signal_codec_overrides,
             signal_compression=run.signal_compression,
-            provenance_records=run.provenance_records) as w:
+            provenance_records=run.provenance_records,
+            read_role=run.read_role,
+            ref_diff_slice_bytes=run.ref_diff_slice_bytes) as w:
         w.append_batch(run)
 from . import _dataset_write_metadata as _mw
 # Back-compat re-export: tests/test_references_accessor.py imports this

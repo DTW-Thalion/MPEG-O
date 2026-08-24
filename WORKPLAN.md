@@ -1253,6 +1253,10 @@ is cheaper.
 | 81 | `prefer_native` is opt-in for V2 writes (parameter or `TTIO_M94Z_USE_NATIVE` env var); V1 is the default. | Existing call sites are unaffected; new builds opt in explicitly. |
 | 82 | ObjC writer chain takes `id<TTIOStorageGroup>` (Python/Java M44 parity, Task 31). NMR runs and Image-subclass datasets stay HDF5-only. | The HDF5-direct features (H5DSset_scale, native 3D cubes) have no protocol equivalents — same scope as Python and Java. |
 | 83 | Provider compression-unsupported behaviour is "accept argument and silently ignore" per `<TTIOStorageProvider>` protocol. | Memory / SQLite / Zarr accept `TTIOCompressionZlib` from upstream callers without erroring; HDF5 honors it. |
+| 84 | `@read_role` (M97) is a free UTF-8 run attribute with the recognised vocabulary `hifi`, `ont_ul`, `hic_r1`, `hic_r2`, `parental_maternal`, `parental_paternal`, `illumina_wgs`; writers store other strings unchecked, readers surface absence as `None`/`null`/`nil`. | Same rationale as §60: new roles must not need a coordinated 3-language enum release. |
+| 85 | REF_DIFF_V2 `slice_bytes` (M97) is writer policy only: a slice closes before the read that would push it past the budget, `reads_per_slice` still caps the count, every slice keeps at least one read, and 0 reproduces the fixed-count output byte for byte. | Phase 0 proof 2026-08-24: the decoder walks the slice index with no boundary assumption; byte-budget blobs decode byte-exact with the unmodified decoder. |
+| 86 | A QUALITY_BINNED `qualities` override is rejected (M97) when `@platform` matches `hifi` / `pacbio` / `nanopore` as case-insensitive substrings or `ont` as a whole token. | The fixed Illumina-8 bin table mistunes long-read quality distributions; the token rule keeps IONTORRENT allowed. |
+| 87 | `ttio_ref_diff_v2_max_encoded_size2` bounds the budgeted slice count by `4 * total_bases / slice_bytes + 2`, capped at `n_reads`. | A slice under half the budget is always followed by one at least that big, so of any two consecutive slices one holds at least `slice_bytes / 2` bases. |
 
 ---
 
@@ -1262,7 +1266,7 @@ is cheaper.
 |---|---|
 | HDF5 filter registration | Register rANS/base_pack/quality/name_tokenizer as official HDF5 filter IDs with The HDF Group. |
 | Population-level deduplication | Cross-sample content-defined chunking and dedup at the genomic region level. |
-| Long-read support | PacBio HiFi / Oxford Nanopore: longer sequences, higher error rates, different codec tuning. |
+| Long-read support | PacBio HiFi / Oxford Nanopore: longer sequences, higher error rates, different codec tuning. **Profile piece pulled forward to M97** (2026-08-24): `@read_role`, the QUALITY_BINNED platform guard, and the REF_DIFF_V2 `slice_bytes` budget; codec tuning itself stays deferred (the M94.Z auto-tuner already picks V4 on HiFi and V5 on ONT per block). |
 | VCF/gVCF importer | Import variant call files as VariantAnnotation records. |
 | htsget-style REST API | HTTP range-request protocol for serving genomic regions from .tio files. |
 | Methylation / epigenomics | Extended base alphabet (5mC, 5hmC) and modified-base probability arrays. |

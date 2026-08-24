@@ -267,12 +267,126 @@ static int test_ul_unmapped_reads_round_trip(void) {
     return 0;
 }
 
+/* M97: the byte-budget slice policy is a writer choice. Non-uniform
+ * boundaries land in the index, the unmodified decoder honours them,
+ * and slice_bytes == 0 keeps the reads_per_slice blob byte-identical. */
+static int test_m97_slice_bytes_policy(void) {
+    enum { N = 40, REF_LEN = 4096 };
+    uint8_t reference[REF_LEN];
+    for (int i = 0; i < REF_LEN; i++) reference[i] = "ACGTACGT"[i % 8];
+
+    /* Read lengths alternate 20 and 100 bases so a byte budget cuts at
+     * read counts a uniform policy cannot produce. */
+    static uint8_t sequences[N * 100];
+    static uint64_t offsets[N + 1];
+    static int64_t positions[N];
+    static const char *cigars[N];
+    offsets[0] = 0;
+    for (int r = 0; r < N; r++) {
+        uint64_t len = (r % 2 == 0) ? 20 : 100;
+        positions[r] = (int64_t)(r * 60 + 1);
+        cigars[r] = (r % 2 == 0) ? "20M" : "100M";
+        for (uint64_t i = 0; i < len; i++)
+            sequences[offsets[r] + i] = reference[positions[r] - 1 + (int64_t)i];
+        sequences[offsets[r] + 3] = (sequences[offsets[r] + 3] == 'A') ? 'C' : 'A';
+        offsets[r + 1] = offsets[r] + len;
+    }
+    uint64_t total = offsets[N];
+
+    ttio_ref_diff_v2_input in = {
+        .sequences = sequences, .offsets = offsets, .positions = positions,
+        .cigar_strings = cigars, .n_reads = N,
+        .reference = reference, .reference_length = REF_LEN,
+        .reads_per_slice = 10000,
+        .reference_md5 = (const uint8_t *)"0123456789abcdef",
+        .reference_uri = "m97",
+    };
+
+    /* Baseline: default policy, one slice. */
+    size_t cap = ttio_ref_diff_v2_max_encoded_size2(N, total, 0);
+    uint8_t *base = malloc(cap);
+    size_t base_len = cap;
+    if (ttio_ref_diff_v2_encode(&in, base, &base_len) != 0) {
+        fprintf(stderr, "m97 baseline encode failed\n"); free(base); return 1;
+    }
+
+    /* slice_bytes big enough for everything must be byte-identical to
+     * the default single-slice blob. */
+    in.slice_bytes = total;
+    cap = ttio_ref_diff_v2_max_encoded_size2(N, total, total);
+    uint8_t *same = malloc(cap);
+    size_t same_len = cap;
+    if (ttio_ref_diff_v2_encode(&in, same, &same_len) != 0
+        || same_len != base_len || memcmp(base, same, base_len) != 0) {
+        fprintf(stderr, "m97 full-budget blob differs from default\n");
+        free(base); free(same); return 1;
+    }
+    free(same);
+
+    /* A 200-base budget: the boundaries must come out non-uniform
+     * (20+100+20 = 140 packs, adding the next 100 would exceed 200). */
+    in.slice_bytes = 200;
+    cap = ttio_ref_diff_v2_max_encoded_size2(N, total, 200);
+    uint8_t *bb = malloc(cap);
+    size_t bb_len = cap;
+    int rc = ttio_ref_diff_v2_encode(&in, bb, &bb_len);
+    if (rc != 0) {
+        fprintf(stderr, "m97 byte-budget encode failed rc=%d cap=%zu\n",
+                rc, cap);
+        free(base); free(bb); return 1;
+    }
+    uint32_t n_slices; memcpy(&n_slices, bb + 8, 4);
+    if (n_slices < 2) {
+        fprintf(stderr, "m97 budget produced %u slice(s), expected several\n",
+                (unsigned)n_slices);
+        free(base); free(bb); return 1;
+    }
+    size_t hdr = 38 + 3; /* uri "m97" */
+    uint32_t counts_seen = 0, distinct = 0, prev = 0xFFFFFFFFu;
+    for (uint32_t s = 0; s < n_slices; s++) {
+        uint32_t n_in; memcpy(&n_in, bb + hdr + s * 32 + 28, 4);
+        uint64_t span = offsets[counts_seen + n_in] - offsets[counts_seen];
+        if (n_in > 1 && span > 200) {
+            fprintf(stderr, "m97 slice %u holds %llu bases over budget\n",
+                    (unsigned)s, (unsigned long long)span);
+            free(base); free(bb); return 1;
+        }
+        if (n_in != prev) { distinct++; prev = n_in; }
+        counts_seen += n_in;
+    }
+    if (counts_seen != N) {
+        fprintf(stderr, "m97 slices cover %u reads, expected %d\n",
+                (unsigned)counts_seen, N);
+        free(base); free(bb); return 1;
+    }
+    if (distinct < 2) {
+        fprintf(stderr, "m97 boundaries came out uniform, budget not engaged\n");
+        free(base); free(bb); return 1;
+    }
+
+    /* The unmodified decoder honours the budgeted index. */
+    uint8_t *out_seq = malloc(total);
+    uint64_t *out_off = malloc((N + 1) * 8);
+    if (ttio_ref_diff_v2_decode(bb, bb_len, positions, cigars, N,
+                                reference, REF_LEN, out_seq, out_off) != 0
+        || memcmp(out_seq, sequences, total) != 0
+        || memcmp(out_off, offsets, (N + 1) * 8) != 0) {
+        fprintf(stderr, "m97 byte-budget blob failed to decode byte-exact\n");
+        free(base); free(bb); free(out_seq); free(out_off); return 1;
+    }
+    printf("M97 slice_bytes policy: PASS (%u non-uniform slices)\n",
+           (unsigned)n_slices);
+    free(base); free(bb); free(out_seq); free(out_off);
+    return 0;
+}
+
 int main(void) {
     if (test_i6_cigar_parser_smoke() != 0) return 1;
     if (test_i3_single_read_round_trip() != 0) return 1;
     if (test_i3_multi_read_round_trip() != 0) return 1;
     if (test_i5_n_escape_round_trip() != 0) return 1;
     if (test_ul_unmapped_reads_round_trip() != 0) return 1;
+    if (test_m97_slice_bytes_policy() != 0) return 1;
     printf("test_ref_diff_v2_invariants: ALL PASS\n");
     return 0;
 }

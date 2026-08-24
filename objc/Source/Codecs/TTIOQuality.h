@@ -99,6 +99,21 @@ NSData *TTIOQualityEncode(NSData *data);
 NSData * _Nullable TTIOQualityDecode(NSData *encoded,
                                      NSError * _Nullable * _Nullable error);
 
+/**
+ * Whether QUALITY_BINNED may be applied to a run of @p platform.
+ *
+ * NO when the platform names a long-read instrument — a
+ * case-insensitive substring match on "hifi", "pacbio", "ont", or
+ * "nanopore" — whose quality distributions the fixed Illumina-8 bin
+ * table mistunes (M97). YES otherwise, including nil and empty.
+ * Callers reject the codec, they do not fall back silently.
+ *
+ * @param platform The run's `@platform` attribute value, or nil.
+ *
+ * @return YES when the codec is permitted for the platform.
+ */
+BOOL TTIOQualityBinnedAllowedForPlatform(NSString * _Nullable platform);
+
 NS_ASSUME_NONNULL_END
 
 #endif /* TTIO_QUALITY_H */

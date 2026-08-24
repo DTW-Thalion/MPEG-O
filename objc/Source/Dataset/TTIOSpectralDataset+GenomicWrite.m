@@ -903,6 +903,24 @@ static void _TTIO_V17_ValidateMateInfoV2Overrides(TTIOWrittenGenomicRun *run)
     }
 }
 
+/** M97: QUALITY_BINNED is a fixed Illumina-8 bin table; reject it as
+ *  a qualities override on long-read platforms rather than write a
+ *  mistuned lossy file. */
+static void _TTIO_M97_ValidateQualityBinnedPlatform(TTIOWrittenGenomicRun *run)
+{
+    NSNumber *qov = run.signalCodecOverrides[@"qualities"];
+    if (qov != nil
+        && qov.integerValue == TTIOCompressionQualityBinned
+        && !TTIOQualityBinnedAllowedForPlatform(run.platform)) {
+        [NSException raise:NSInvalidArgumentException
+                    format:@"signalCodecOverrides['qualities']: "
+                           @"QUALITY_BINNED applies the fixed Illumina-8 "
+                           @"bin table, which does not fit the quality "
+                           @"distribution of platform '%@' (M97).",
+                           run.platform];
+    }
+}
+
 // ── inline_v2 writer helpers ──────────────────────────────
 //
 // Build the chrom_id table (encounter-order on own chromosomes, extended
@@ -1543,6 +1561,8 @@ static NSData *_TTIO_V18_EncodeRefDiffV2ViaRegistry(TTIOWrittenGenomicRun *run,
     ctx.referenceUri = run.referenceUri ?: @"";
     // ctx.readsPerSlice left nil -> codec uses its 10000 default,
     // matching the prior direct call's readsPerSlice:10000.
+    if (run.refDiffSliceBytes > 0)
+        ctx.sliceBytes = @(run.refDiffSliceBytes);
     TTIOEncodedChannel *enc =
         [c encode:[[TTIODecodedBytes alloc] initWithData:run.sequencesData]
            context:ctx
@@ -1855,6 +1875,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
 {
     _TTIO_M86_ValidateOverrides(run.signalCodecOverrides);
     _TTIO_V17_ValidateMateInfoV2Overrides(run);
+    _TTIO_M97_ValidateQualityBinnedPlatform(run);
 }
 
 + (NSData *)referenceMD5ForRun:(TTIOWrittenGenomicRun *)run
@@ -1953,6 +1974,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     _TTIO_M86_ValidateOverrides(run.signalCodecOverrides);
     // reject per-field mate_info_* overrides when inline_v2 active.
     _TTIO_V17_ValidateMateInfoV2Overrides(run);
+    _TTIO_M97_ValidateQualityBinnedPlatform(run);
 
     id<TTIOStorageGroup> rg = [parent createGroupNamed:name error:error];
     if (!rg) return NO;
@@ -1968,6 +1990,9 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                          forName:@"reference_uri" error:error]) return NO;
     if (![rg setAttributeValue:run.platform ?: @""
                          forName:@"platform" error:error]) return NO;
+    if (run.readRole.length > 0
+        && ![rg setAttributeValue:run.readRole
+                          forName:@"read_role" error:error]) return NO;
     if (![rg setAttributeValue:run.sampleName ?: @""
                          forName:@"sample_name" error:error]) return NO;
     if (![rg setAttributeValue:@((int64_t)run.readCount)
@@ -2427,6 +2452,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     _TTIO_M86_ValidateOverrides(run.signalCodecOverrides);
     // reject per-field mate_info_* overrides when inline_v2 active.
     _TTIO_V17_ValidateMateInfoV2Overrides(run);
+    _TTIO_M97_ValidateQualityBinnedPlatform(run);
 
     TTIOHDF5Group *rg = [parent createGroupNamed:name error:error];
     if (!rg) return NO;
@@ -2441,6 +2467,9 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                            value:run.referenceUri error:error]) return NO;
     if (![rg setStringAttribute:@"platform"
                            value:run.platform error:error]) return NO;
+    if (run.readRole.length > 0
+        && ![rg setStringAttribute:@"read_role"
+                             value:run.readRole error:error]) return NO;
     if (![rg setStringAttribute:@"sample_name"
                            value:run.sampleName error:error]) return NO;
     if (![rg setIntegerAttribute:@"read_count"

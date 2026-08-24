@@ -111,8 +111,108 @@ static void testInvalidMd5Length(void) {
     PASS(error != nil, "error set on rejection");
 }
 
+/* M97: the slice_bytes byte budget produces non-uniform slice
+ * boundaries the fixed-count writer cannot, and the unmodified
+ * decoder round-trips them. Mirrors
+ * native/tests/test_ref_diff_v2_invariants.c test_m97_slice_bytes_policy. */
+static void testM97SliceBytesBudget(void) {
+    NSUInteger n = 40;
+    /* Alternating 20- and 100-base reads so a byte budget cuts
+     * mid-pattern and slice read-counts differ. */
+    NSMutableData *reference = [NSMutableData dataWithLength:4096];
+    uint8_t *refBytes = [reference mutableBytes];
+    for (NSUInteger i = 0; i < [reference length]; i++)
+        refBytes[i] = "ACGT"[i % 4];
+
+    NSMutableData *sequences = [NSMutableData data];
+    NSMutableData *offsets   = [NSMutableData dataWithLength:(n + 1) * sizeof(uint64_t)];
+    NSMutableData *positions = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+    NSMutableArray *cigars   = [NSMutableArray arrayWithCapacity:n];
+    uint64_t *offBytes = [offsets mutableBytes];
+    int64_t  *posBytes = [positions mutableBytes];
+    uint64_t total = 0;
+    for (NSUInteger r = 0; r < n; r++) {
+        NSUInteger len = (r % 2 == 0) ? 20 : 100;
+        NSUInteger refPos = r * 60;
+        offBytes[r] = total;
+        posBytes[r] = (int64_t)(refPos + 1); /* 1-based */
+        NSMutableData *read = [NSMutableData dataWithBytes:refBytes + refPos
+                                                    length:len];
+        uint8_t *rb = read.mutableBytes;                 /* 1 substitution */
+        rb[3] = (rb[3] == 'A') ? 'C' : 'A';
+        [sequences appendData:read];
+        [cigars addObject:(len == 20 ? @"20M" : @"100M")];
+        total += len;
+    }
+    offBytes[n] = total;
+    NSMutableData *md5 = [NSMutableData dataWithLength:16];
+
+    NSError *error = nil;
+    NSData *base = [TTIORefDiffV2 encodeSequences:sequences
+                                           offsets:offsets
+                                         positions:positions
+                                      cigarStrings:cigars
+                                         reference:reference
+                                      referenceMd5:md5
+                                      referenceUri:@"m97"
+                                    readsPerSlice:10000
+                                             error:&error];
+    PASS(base != nil, "default encode succeeded");
+
+    /* A budget covering every base reproduces the default byte for byte. */
+    NSData *full = [TTIORefDiffV2 encodeSequences:sequences
+                                           offsets:offsets
+                                         positions:positions
+                                      cigarStrings:cigars
+                                         reference:reference
+                                      referenceMd5:md5
+                                      referenceUri:@"m97"
+                                    readsPerSlice:10000
+                                       sliceBytes:total
+                                            error:&error];
+    PASS(full != nil && [full isEqualToData:base],
+         "full-budget encode byte-identical to default");
+
+    /* A 200-base budget engages the walk: > 1 slice in the outer
+     * header (u32 LE at offset 8), boundaries the fixed-count writer
+     * cannot produce. */
+    NSData *budgeted = [TTIORefDiffV2 encodeSequences:sequences
+                                               offsets:offsets
+                                             positions:positions
+                                          cigarStrings:cigars
+                                             reference:reference
+                                          referenceMd5:md5
+                                          referenceUri:@"m97"
+                                        readsPerSlice:10000
+                                           sliceBytes:200
+                                                error:&error];
+    PASS(budgeted != nil, "byte-budget encode succeeded");
+    if (!budgeted) return;
+    const uint8_t *bb = (const uint8_t *)[budgeted bytes];
+    uint32_t nSlices = (uint32_t)bb[8] | ((uint32_t)bb[9] << 8)
+                     | ((uint32_t)bb[10] << 16) | ((uint32_t)bb[11] << 24);
+    PASS(nSlices > 1, "byte budget produced multiple slices");
+    PASS(![budgeted isEqualToData:base], "byte-budget blob differs from default");
+
+    NSData *outSeq = nil, *outOff = nil;
+    BOOL ok = [TTIORefDiffV2 decodeData:budgeted
+                              positions:positions
+                           cigarStrings:cigars
+                              reference:reference
+                                nReads:n
+                            totalBases:(NSUInteger)total
+                          outSequences:&outSeq
+                            outOffsets:&outOff
+                                  error:&error];
+    PASS(ok, "unmodified decoder accepts non-uniform slices");
+    if (!ok) return;
+    PASS([outSeq isEqualToData:sequences],
+         "byte-budget sequences round-trip exact");
+}
+
 void testRefDiffV2(void);
 void testRefDiffV2(void) {
     testRoundTripPerfectMatch();
     testInvalidMd5Length();
+    testM97SliceBytesBudget();
 }

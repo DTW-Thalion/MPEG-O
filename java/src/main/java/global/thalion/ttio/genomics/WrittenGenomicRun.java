@@ -127,10 +127,63 @@ public record WrittenGenomicRun(
     /** Write this run in the v1.8 whole-channel layout instead of
      *  {@code blocks_v1} (format-spec 10.12). Python:
      *  {@code opt_legacy_whole_channel}. */
-    boolean optLegacyWholeChannel
+    boolean optLegacyWholeChannel,
+    /** M97 — assembly read role, persisted as the {@code @read_role}
+     *  UTF-8 run attribute when non-null. Recognised values:
+     *  {@code hifi}, {@code ont_ul}, {@code hic_r1}, {@code hic_r2},
+     *  {@code parental_maternal}, {@code parental_paternal},
+     *  {@code illumina_wgs}; other strings are stored unchecked.
+     *  Python: {@code read_role}; ObjC: {@code readRole}. */
+    String readRole,
+    /** M97 — REF_DIFF_V2 slice byte budget: a slice closes before the
+     *  read that would push it past this many bases (the 10,000-read
+     *  cap still applies). 0 keeps the fixed-count rule. Writer policy
+     *  only — the wire format and decoder are unchanged. Python:
+     *  {@code ref_diff_slice_bytes}; ObjC: {@code refDiffSliceBytes}. */
+    long refDiffSliceBytes
 ) {
-    /** Previous canonical signature (26 components); the run is written
-     *  as {@code blocks_v1}. */
+    /** Previous canonical signature (26 components); no read role, the
+     *  fixed REF_DIFF_V2 slice rule. */
+    public WrittenGenomicRun(
+        AcquisitionMode acquisitionMode,
+        String referenceUri,
+        String platform,
+        String sampleName,
+        long[] positions,
+        byte[] mappingQualities,
+        int[]  flags,
+        byte[] sequences,
+        byte[] qualities,
+        long[] offsets,
+        int[]  lengths,
+        List<String> cigars,
+        List<String> readNames,
+        List<String> mateChromosomes,
+        long[] matePositions,
+        int[]  templateLengths,
+        List<String> chromosomes,
+        Compression signalCompression,
+        Map<String, Compression> signalCodecOverrides,
+        List<ProvenanceRecord> provenanceRecords,
+        boolean embedReference,
+        Map<String, byte[]> referenceChromSeqs,
+        Path externalReferencePath,
+        BulkV2Blobs bulkV2Blobs,
+        boolean optDisableQualitiesV5,
+        boolean optLegacyWholeChannel
+    ) {
+        this(acquisitionMode, referenceUri, platform, sampleName,
+             positions, mappingQualities, flags, sequences, qualities,
+             offsets, lengths, cigars, readNames, mateChromosomes,
+             matePositions, templateLengths, chromosomes,
+             signalCompression, signalCodecOverrides, provenanceRecords,
+             embedReference, referenceChromSeqs, externalReferencePath,
+             bulkV2Blobs, optDisableQualitiesV5, optLegacyWholeChannel,
+             null, 0L);
+    }
+
+    /** Pre-M97 signature (25 components before the layout flag); the
+     *  run is written as {@code blocks_v1}. */
     public WrittenGenomicRun(
         AcquisitionMode acquisitionMode,
         String referenceUri,
@@ -386,7 +439,8 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
             embed, chromSeqs, externalPath, bulkV2Blobs,
-            optDisableQualitiesV5, optLegacyWholeChannel);
+            optDisableQualitiesV5, optLegacyWholeChannel,
+            readRole, refDiffSliceBytes);
     }
 
     /** Phase 2c-T builder: returns a new instance with the given
@@ -400,7 +454,8 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
             embedReference, referenceChromSeqs, externalReferencePath,
-            blobs, optDisableQualitiesV5, optLegacyWholeChannel);
+            blobs, optDisableQualitiesV5, optLegacyWholeChannel,
+            readRole, refDiffSliceBytes);
     }
 
     /** Same run written in the v1.8 whole-channel layout when
@@ -413,7 +468,8 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
             embedReference, referenceChromSeqs, externalReferencePath,
-            bulkV2Blobs, optDisableQualitiesV5, legacy);
+            bulkV2Blobs, optDisableQualitiesV5, legacy,
+            readRole, refDiffSliceBytes);
     }
 
     /** Same run with the given per-channel codec overrides. */
@@ -425,7 +481,8 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, overrides, provenanceRecords,
             embedReference, referenceChromSeqs, externalReferencePath,
-            bulkV2Blobs, optDisableQualitiesV5, optLegacyWholeChannel);
+            bulkV2Blobs, optDisableQualitiesV5, optLegacyWholeChannel,
+            readRole, refDiffSliceBytes);
     }
 
     /** Same run with the given provenance records. */
@@ -437,7 +494,34 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, records,
             embedReference, referenceChromSeqs, externalReferencePath,
-            bulkV2Blobs, optDisableQualitiesV5, optLegacyWholeChannel);
+            bulkV2Blobs, optDisableQualitiesV5, optLegacyWholeChannel,
+            readRole, refDiffSliceBytes);
+    }
+
+    /** Same run with the given {@code @read_role} value (M97). */
+    public WrittenGenomicRun withReadRole(String role) {
+        return new WrittenGenomicRun(
+            acquisitionMode, referenceUri, platform, sampleName,
+            positions, mappingQualities, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChromosomes,
+            matePositions, templateLengths, chromosomes,
+            signalCompression, signalCodecOverrides, provenanceRecords,
+            embedReference, referenceChromSeqs, externalReferencePath,
+            bulkV2Blobs, optDisableQualitiesV5, optLegacyWholeChannel,
+            role, refDiffSliceBytes);
+    }
+
+    /** Same run with the given REF_DIFF_V2 slice byte budget (M97). */
+    public WrittenGenomicRun withRefDiffSliceBytes(long sliceBytes) {
+        return new WrittenGenomicRun(
+            acquisitionMode, referenceUri, platform, sampleName,
+            positions, mappingQualities, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChromosomes,
+            matePositions, templateLengths, chromosomes,
+            signalCompression, signalCodecOverrides, provenanceRecords,
+            embedReference, referenceChromSeqs, externalReferencePath,
+            bulkV2Blobs, optDisableQualitiesV5, optLegacyWholeChannel,
+            readRole, sliceBytes);
     }
 
     /** Number of reads (derived from {@link #offsets} length). */

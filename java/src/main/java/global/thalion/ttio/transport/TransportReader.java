@@ -1541,6 +1541,7 @@ public final class TransportReader implements AutoCloseable {
 
             // Decode instrument_json metadata.
             String referenceUri = "", platform = "", sampleName = "", modality = "";
+            String readRole = "";
             try {
                 Object parsed = MiniJson.parse(meta.instrumentJson);
                 if (parsed instanceof Map<?, ?> mraw) {
@@ -1550,6 +1551,8 @@ public final class TransportReader implements AutoCloseable {
                     Object pl = m.get("platform"); if (pl != null) platform = pl.toString();
                     Object sn = m.get("sample_name"); if (sn != null) sampleName = sn.toString();
                     Object md = m.get("modality"); if (md != null) modality = md.toString();
+                    // M97: "" on the wire means no role.
+                    Object rr = m.get("read_role"); if (rr != null) readRole = rr.toString();
                 }
             } catch (Exception ignore) {
                 // Unparseable instrument_json - leave defaults.
@@ -1565,7 +1568,7 @@ public final class TransportReader implements AutoCloseable {
             } catch (Exception e) {
                 acqMode = Enums.AcquisitionMode.GENOMIC_WGS;
             }
-            return new WrittenGenomicRun(
+            WrittenGenomicRun decoded = new WrittenGenomicRun(
                 acqMode, referenceUri, platform, sampleName,
                 positionsArr, mqArr, flagsArr,
                 sequences.toByteArray(), qualities.toByteArray(),
@@ -1573,6 +1576,8 @@ public final class TransportReader implements AutoCloseable {
                 cigarsOut, readNamesOut, mateChromsOut, mateP, tlens,
                 new ArrayList<>(chromosomes),
                 Enums.Compression.ZLIB);
+            return readRole.isEmpty() ? decoded
+                                      : decoded.withReadRole(readRole);
         }
     }
 

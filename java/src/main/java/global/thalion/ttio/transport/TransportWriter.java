@@ -1350,6 +1350,10 @@ public final class TransportWriter implements AutoCloseable {
         sb.append('{');
         appendJsonField(sb, "modality",      nz(run.modality()),     false);
         appendJsonField(sb, "platform",      nz(run.platform()),     true);
+        // M97: always present, "" when the run has no read role, in
+        // sorted-key position so the JSON stays byte-identical with
+        // the Python and ObjC writers.
+        appendJsonField(sb, "read_role",     nz(run.getReadRole()),  true);
         appendJsonField(sb, "reference_uri", nz(run.referenceUri()), true);
         appendJsonField(sb, "sample_name",   nz(run.sampleName()),   true);
         sb.append('}');

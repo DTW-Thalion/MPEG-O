@@ -98,6 +98,24 @@ NS_ASSUME_NONNULL_BEGIN
  *  <code>optDisableQualitiesV5</code>. Defaults to NO. */
 @property (nonatomic) BOOL optDisableQualitiesV5;
 
+/** Role of the reads in an assembly context, persisted as the
+ *  <code>@read_role</code> UTF-8 run attribute when non-nil.
+ *  Recognised values: <code>hifi</code>, <code>ont_ul</code>,
+ *  <code>hic_r1</code>, <code>hic_r2</code>,
+ *  <code>parental_maternal</code>, <code>parental_paternal</code>,
+ *  <code>illumina_wgs</code>; other strings are stored unchecked.
+ *  Python: <code>read_role</code>; Java: <code>readRole</code>.
+ *  Defaults to nil (attribute absent). */
+@property (nonatomic, copy, nullable) NSString *readRole;
+
+/** REF_DIFF_V2 slice byte budget: a slice closes before the read
+ *  that would push it past this many bases (the 10,000-read cap
+ *  still applies). 0 (the default) keeps the fixed-count rule.
+ *  Writer policy only — the wire format and decoder are unchanged.
+ *  Python: <code>ref_diff_slice_bytes</code>; Java:
+ *  <code>refDiffSliceBytes</code>. */
+@property (nonatomic) unsigned long long refDiffSliceBytes;
+
 /**
  * Per-channel codec opt-in. Maps channel name
  * (<code>NSString *</code>) to a boxed

@@ -1771,6 +1771,7 @@ typedef struct {
         NSString *referenceUri = @"";
         NSString *platform = @"";
         NSString *sampleName = @"";
+        NSString *readRole = @"";
         if (instrumentJSON.length > 0) {
             NSData *jdata = [instrumentJSON dataUsingEncoding:NSUTF8StringEncoding];
             id parsed = [NSJSONSerialization JSONObjectWithData:jdata options:0 error:NULL];
@@ -1782,6 +1783,9 @@ typedef struct {
                     ? jd[@"platform"]     : @"";
                 sampleName   = [jd[@"sample_name"] isKindOfClass:[NSString class]]
                     ? jd[@"sample_name"]   : @"";
+                /* M97: "" on the wire means no role. */
+                readRole     = [jd[@"read_role"] isKindOfClass:[NSString class]]
+                    ? jd[@"read_role"]    : @"";
             }
         }
 
@@ -1873,6 +1877,7 @@ typedef struct {
                     templateLengths:tlenData
                         chromosomes:[gd[@"chromosomes"] copy]
                   signalCompression:TTIOCompressionNone];
+        if (readRole.length > 0) wgr.readRole = readRole;
         // Phase 2c-T: attach verbatim blobs collected for this dataset_id.
         TTIOBulkV2Blobs *slot = bulkBlobs[didKey];
         if (slot) wgr.bulkV2Blobs = slot;

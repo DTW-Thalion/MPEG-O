@@ -308,10 +308,31 @@ public final class TtioRansNative {
             byte[]   referenceMd5,
             String   referenceUri,
             int      readsPerSlice) {
+        return encodeRefDiffV2(sequences, offsets, positions, cigarStrings,
+                               reference, referenceMd5, referenceUri,
+                               readsPerSlice, 0L);
+    }
+
+    /**
+     * Encode with a byte budget on the slice partition (M97): with
+     * {@code sliceBytes} > 0 a slice closes before the read that would
+     * push it past that many bases; 0 keeps the fixed-count rule.
+     * Writer policy only — the wire format and decoder are unchanged.
+     */
+    public static byte[] encodeRefDiffV2(
+            byte[]   sequences,
+            long[]   offsets,
+            long[]   positions,
+            String[] cigarStrings,
+            byte[]   reference,
+            byte[]   referenceMd5,
+            String   referenceUri,
+            int      readsPerSlice,
+            long     sliceBytes) {
         if (!LOADED) throw new IllegalStateException("libttio_rans_jni not loaded");
         return encodeRefDiffV2Native(sequences, offsets, positions,
                                       cigarStrings, reference, referenceMd5,
-                                      referenceUri, readsPerSlice);
+                                      referenceUri, readsPerSlice, sliceBytes);
     }
 
     /**
@@ -333,7 +354,7 @@ public final class TtioRansNative {
     private static native byte[] encodeRefDiffV2Native(
         byte[] sequences, long[] offsets, long[] positions,
         String[] cigarStrings, byte[] reference, byte[] referenceMd5,
-        String referenceUri, int readsPerSlice);
+        String referenceUri, int readsPerSlice, long sliceBytes);
 
     private static native Object[] decodeRefDiffV2Native(
         byte[] encoded, long[] positions, String[] cigarStrings,

@@ -458,9 +458,23 @@ typedef struct {
     uint64_t        reads_per_slice;  /* default 10000 */
     const uint8_t  *reference_md5;   /* 16 bytes */
     const char     *reference_uri;   /* UTF-8 nul-terminated */
+    uint64_t        slice_bytes;      /* 0 = the reads_per_slice rule.
+                                       * > 0: a slice closes before the
+                                       * read that would push it past
+                                       * this many bases (each slice
+                                       * keeps >= 1 read; reads_per_slice
+                                       * still caps the read count).
+                                       * Writer policy only — wire format
+                                       * and decoder are unchanged. */
 } ttio_ref_diff_v2_input;
 
 size_t ttio_ref_diff_v2_max_encoded_size(uint64_t n_reads, uint64_t total_bases);
+
+/* Capacity bound honouring a byte-budget slice policy (slice_bytes > 0
+ * can produce more slices than the reads_per_slice rule would).
+ * slice_bytes == 0 matches ttio_ref_diff_v2_max_encoded_size. */
+size_t ttio_ref_diff_v2_max_encoded_size2(uint64_t n_reads, uint64_t total_bases,
+                                          uint64_t slice_bytes);
 
 int ttio_ref_diff_v2_encode(
     const ttio_ref_diff_v2_input *in,

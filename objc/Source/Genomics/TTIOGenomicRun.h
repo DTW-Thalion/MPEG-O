@@ -57,6 +57,15 @@
 /** Sequencing platform (e.g. <code>@"ILLUMINA"</code>). */
 @property (readonly, copy) NSString *platform;
 
+/** Assembly read role from the <code>@read_role</code> run attribute
+ *  (M97): <code>hifi</code>, <code>ont_ul</code>, <code>hic_r1</code>,
+ *  <code>hic_r2</code>, <code>parental_maternal</code>,
+ *  <code>parental_paternal</code>, or <code>illumina_wgs</code>
+ *  (other strings are stored unchecked). nil when the attribute is
+ *  absent. Python: <code>read_role</code>; Java:
+ *  <code>getReadRole()</code>. */
+@property (readonly, copy, nullable) NSString *readRole;
+
 /** Sample identifier. */
 @property (readonly, copy) NSString *sampleName;
 

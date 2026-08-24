@@ -105,6 +105,7 @@ extern void testMateInfoV2(void);
 extern void testMateInfoV2Dispatch(void);
 extern void testRefDiffV2(void);
 extern void testRefDiffV2Dispatch(void);
+extern void testM97LongReadProfile(void);
 extern void testNameTokenizerV2(void);
 extern void testNameTokenizedV2Dispatch(void);
 extern void testOffsetsCumsum(void);
@@ -577,6 +578,10 @@ int main(int argc, const char *argv[])
         START_SET("v1.8 #11 Task 14: ref_diff v2 ObjC writer/reader dispatch")
             testRefDiffV2Dispatch();
         END_SET("v1.8 #11 Task 14: ref_diff v2 ObjC writer/reader dispatch")
+
+        START_SET("M97: read_role + QUALITY_BINNED guard + slice_bytes")
+            testM97LongReadProfile();
+        END_SET("M97: read_role + QUALITY_BINNED guard + slice_bytes")
 
         START_SET("name_tok v2 codec round-trip + invalid-input")
             testNameTokenizerV2();

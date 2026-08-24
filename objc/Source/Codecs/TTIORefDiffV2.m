@@ -42,6 +42,28 @@ static NSString *_rdv2ErrorMessage(int rc) {
                          referenceUri:(NSString *)referenceUri
                        readsPerSlice:(NSUInteger)readsPerSlice
                                 error:(NSError **)error {
+    return [self encodeSequences:sequences
+                         offsets:offsets
+                       positions:positions
+                    cigarStrings:cigarStrings
+                       reference:reference
+                    referenceMd5:referenceMd5
+                    referenceUri:referenceUri
+                   readsPerSlice:readsPerSlice
+                      sliceBytes:0
+                           error:error];
+}
+
++ (nullable NSData *)encodeSequences:(NSData *)sequences
+                              offsets:(NSData *)offsets
+                            positions:(NSData *)positions
+                         cigarStrings:(NSArray<NSString *> *)cigarStrings
+                            reference:(NSData *)reference
+                         referenceMd5:(NSData *)referenceMd5
+                         referenceUri:(NSString *)referenceUri
+                       readsPerSlice:(NSUInteger)readsPerSlice
+                          sliceBytes:(unsigned long long)sliceBytes
+                                error:(NSError **)error {
 #if !TTIO_HAS_NATIVE_RANS
     if (error) {
         *error = [NSError errorWithDomain:TTIORefDiffV2ErrorDomain
@@ -116,9 +138,11 @@ static NSString *_rdv2ErrorMessage(int rc) {
         .reads_per_slice  = (uint64_t)readsPerSlice,
         .reference_md5    = (const uint8_t *)[referenceMd5 bytes],
         .reference_uri    = (const char *)[uriTerminated bytes],
+        .slice_bytes      = (uint64_t)sliceBytes,
     };
 
-    size_t cap = ttio_ref_diff_v2_max_encoded_size((uint64_t)n, total_bases);
+    size_t cap = ttio_ref_diff_v2_max_encoded_size2((uint64_t)n, total_bases,
+                                                    (uint64_t)sliceBytes);
     NSMutableData *out = [NSMutableData dataWithLength:cap];
     size_t out_len = cap;
 

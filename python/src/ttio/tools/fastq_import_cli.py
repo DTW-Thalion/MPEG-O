@@ -34,6 +34,10 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--name", default="genomic_0001")
     p.add_argument("--sample", default="")
     p.add_argument("--platform", default="")
+    p.add_argument("--read-role", default=None,
+                   help="@read_role run attribute (hifi, ont_ul, hic_r1, "
+                        "hic_r2, parental_maternal, parental_paternal, "
+                        "illumina_wgs)")
     p.add_argument("--phred", type=int, choices=(33, 64), default=None,
                    help="force Phred offset (default: auto-detect)")
     p.add_argument("--block-reads", type=int, default=None,
@@ -77,6 +81,7 @@ def main(argv: list[str] | None = None) -> int:
         src.block_reads = args.block_reads
         src.block_bytes = args.block_bytes
         src.opt_legacy_whole_channel = args.legacy_whole_channel
+        src.read_role = args.read_role
         SpectralDataset.write_minimal(
             args.out,
             title="",

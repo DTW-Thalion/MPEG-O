@@ -17,6 +17,7 @@
 #import "HDF5/TTIOHDF5Group.h"
 #import "Dataset/TTIOCompoundIO.h"
 #import "Codecs/TTIOFqzcompNx16Z.h"
+#import "Codecs/TTIOQuality.h"
 #import <pthread.h>
 #include <string.h>
 
@@ -64,6 +65,8 @@ static const NSUInteger kIndexArrayChunk = 65536;
     o.referenceUri = run.referenceUri;
     o.platform = run.platform;
     o.sampleName = run.sampleName;
+    o.readRole = run.readRole;
+    o.refDiffSliceBytes = run.refDiffSliceBytes;
     o.referenceChromSeqs = run.referenceChromSeqs;
     o.embedReference = run.embedReference;
     o.optDisableQualitiesV5 = run.optDisableQualitiesV5;
@@ -81,6 +84,8 @@ static const NSUInteger kIndexArrayChunk = 65536;
     o.referenceUri = _referenceUri;
     o.platform = _platform;
     o.sampleName = _sampleName;
+    o.readRole = _readRole;
+    o.refDiffSliceBytes = _refDiffSliceBytes;
     o.referenceChromSeqs = _referenceChromSeqs;
     o.embedReference = _embedReference;
     o.blockReads = _blockReads;
@@ -186,6 +191,17 @@ static void ttioBuildIndexFields(void)
         _study = study;
         _name = [runName copy];
         _opt = options ? [options copy] : [TTIOGenomicStreamWriterOptions defaultOptions];
+        NSNumber *qov = _opt.signalCodecOverrides[@"qualities"];
+        if (qov != nil
+            && qov.integerValue == TTIOCompressionQualityBinned
+            && !TTIOQualityBinnedAllowedForPlatform(_opt.platform)) {
+            [NSException raise:NSInvalidArgumentException
+                        format:@"signalCodecOverrides['qualities']: "
+                               @"QUALITY_BINNED applies the fixed "
+                               @"Illumina-8 bin table, which does not fit "
+                               @"the quality distribution of platform "
+                               @"'%@' (M97).", _opt.platform];
+        }
         if (_opt.blockReads < 1) _opt.blockReads = 1;
         if (_opt.blockBytes < 1) _opt.blockBytes = 1;
         _pending = [NSMutableArray array];
@@ -280,6 +296,8 @@ static unsigned long long ppEstimateBlockBytes(TTIOWrittenGenomicRun *b)
     r.referenceChromSeqs = _opt.referenceChromSeqs;
     r.provenanceRecords = @[];
     r.optLegacyWholeChannel = NO;
+    r.readRole = _opt.readRole;
+    r.refDiffSliceBytes = _opt.refDiffSliceBytes;
     return r;
 }
 
@@ -319,6 +337,8 @@ static unsigned long long ppEstimateBlockBytes(TTIOWrittenGenomicRun *b)
     run.optDisableQualitiesV5 = _opt.optDisableQualitiesV5;
     run.embedReference = _opt.embedReference;
     run.referenceChromSeqs = _opt.referenceChromSeqs;
+    run.readRole = _opt.readRole;
+    run.refDiffSliceBytes = _opt.refDiffSliceBytes;
     return run;
 }
 
@@ -635,6 +655,8 @@ static unsigned long long ppEstimateBlockBytes(TTIOWrittenGenomicRun *b)
     if (![run setAttributeValue:@((int64_t)5) forName:@"spectrum_class" error:error]) return NO;
     if (![run setAttributeValue:_opt.referenceUri ?: @"" forName:@"reference_uri" error:error]) return NO;
     if (![run setAttributeValue:_opt.platform ?: @"" forName:@"platform" error:error]) return NO;
+    if (_opt.readRole.length > 0
+        && ![run setAttributeValue:_opt.readRole forName:@"read_role" error:error]) return NO;
     if (![run setAttributeValue:_opt.sampleName ?: @"" forName:@"sample_name" error:error]) return NO;
     if (![run setAttributeValue:@((int64_t)0) forName:@"read_count" error:error]) return NO;
     if (![run setAttributeValue:@((int64_t)0) forName:@"base_count" error:error]) return NO;

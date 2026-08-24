@@ -198,9 +198,24 @@ ZLIB, the default; `"none"` → NONE), `signal_codec_overrides`
 for the REF_DIFF_V2 path), `external_reference_path`,
 `opt_disable_qualities_v5` (keep the qualities codec on the V4
 strategy set), `opt_legacy_whole_channel` (write the legacy
-whole-channel layout instead of `blocks_v1`, §3), and `bulk_v2_blobs`
+whole-channel layout instead of `blocks_v1`, §3), `bulk_v2_blobs`
 (a `BulkV2Blobs` carrying verbatim v2 codec blobs from the transport
-bulk-mode receiver, which bypass the codec encode step).
+bulk-mode receiver, which bypass the codec encode step),
+`read_role` (M97: persisted as the `@read_role` run attribute when
+set — recognised values `hifi`, `ont_ul`, `hic_r1`, `hic_r2`,
+`parental_maternal`, `parental_paternal`, `illumina_wgs`; other
+strings are stored unchecked), and `ref_diff_slice_bytes` (M97: the
+REF_DIFF_V2 slice byte budget, `docs/codecs/ref_diff_v2.md` §3;
+0 keeps the fixed 10,000-read rule).
+
+Since M97 a `QUALITY_BINNED` override on the `qualities` channel is
+rejected when `platform` names a long-read instrument (case-
+insensitive `hifi`, `pacbio`, `nanopore`, or the whole token `ont`)
+— the fixed Illumina-8 bin table does not fit those quality
+distributions. The predicate is
+`ttio.codecs.quality.binned_allowed_for_platform` /
+`Quality.binnedAllowedForPlatform` /
+`TTIOQualityBinnedAllowedForPlatform`.
 
 ### 2.5 `GenomicStreamWriter` — the streaming write path
 
@@ -223,7 +238,9 @@ whole-channel layout.
 A genomic run is written under `/study/genomic_runs/<name>/`. The run
 group carries attributes `acquisition_mode` (int), `modality`
 (`"genomic_sequencing"`), `spectrum_class` (`5`), `reference_uri`,
-`platform`, `sample_name`, `read_count`, and `base_count`. The
+`platform`, `sample_name`, `read_count`, and `base_count`, plus
+`read_role` (M97) when the writer was given one — absent otherwise,
+and readers surface absence as `None`/`null`/`nil`. The
 `genomic_runs` parent group carries a `_run_names` attribute
 (comma-joined run names) used to enumerate runs at open time.
 

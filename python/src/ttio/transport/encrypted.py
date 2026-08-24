@@ -303,6 +303,9 @@ def write_encrypted_dataset(
                                                        "reference_uri") or "",
                 "sample_name": io.read_string_attr(g_run_group,
                                                      "sample_name") or "",
+                # M97: "" when the run has no @read_role attribute.
+                "read_role": io.read_string_attr(g_run_group,
+                                                   "read_role") or "",
             }, sort_keys=True)
             # Read the plaintext genomic_index columns (these are NOT
             # encrypted by M90.1 — only signal channels are).
@@ -767,6 +770,10 @@ def read_encrypted_to_file(
                                              g_metadata.get("reference_uri", ""))
                 io.write_fixed_string_attr(g_run_group, "sample_name",
                                              g_metadata.get("sample_name", ""))
+                # M97: absent on the container when "" on the wire.
+                if g_metadata.get("read_role"):
+                    io.write_fixed_string_attr(g_run_group, "read_role",
+                                                 g_metadata["read_role"])
 
                 g_sig = g_run_group.create_group("signal_channels")
                 io.write_fixed_string_attr(g_sig, "channel_names",

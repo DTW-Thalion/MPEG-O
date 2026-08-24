@@ -50,6 +50,10 @@ def _parser() -> argparse.ArgumentParser:
                      help="genomic-run name under /study/genomic_runs/")
     una.add_argument("--sample", default="", help="sample name")
     una.add_argument("--platform", default="", help="platform tag")
+    una.add_argument("--read-role", default=None,
+                     help="@read_role run attribute (hifi, ont_ul, hic_r1, "
+                          "hic_r2, parental_maternal, parental_paternal, "
+                          "illumina_wgs)")
     una.add_argument("--block-reads", type=int, default=None,
                      help="reads per blocks_v1 block (default 1000000)")
     una.add_argument("--block-bytes", type=int, default=None,
@@ -115,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
             src.block_reads = args.block_reads
             src.block_bytes = args.block_bytes
             src.opt_legacy_whole_channel = args.legacy_whole_channel
+            src.read_role = args.read_role
             SpectralDataset.write_minimal(
                 args.out,
                 title="",

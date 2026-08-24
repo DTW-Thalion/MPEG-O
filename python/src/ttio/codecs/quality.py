@@ -51,6 +51,7 @@ produces the bin centre for that value's bin.
 """
 from __future__ import annotations
 
+import re
 import struct
 
 # ── Wire-format constants ──────────────────────────────────────────
@@ -271,3 +272,25 @@ def decode(encoded: bytes) -> bytes:
     else:
         out[1::2] = lo
     return bytes(out)
+
+
+def binned_allowed_for_platform(platform: str | None) -> bool:
+    """Whether QUALITY_BINNED may be applied to a run of ``platform``.
+
+    False when the platform names a long-read instrument — a
+    case-insensitive substring match on ``hifi``, ``pacbio``, or
+    ``nanopore``, plus ``ont`` as a whole token (IONTORRENT contains
+    it as a substring) — whose quality distributions the fixed
+    Illumina-8 bin table mistunes (M97). True otherwise, including
+    ``None`` and empty. Callers reject the codec, they do not fall
+    back silently.
+
+    ObjC: ``TTIOQualityBinnedAllowedForPlatform``; Java:
+    ``Quality.binnedAllowedForPlatform``.
+    """
+    if not platform:
+        return True
+    p = platform.lower()
+    if any(needle in p for needle in ("hifi", "pacbio", "nanopore")):
+        return False
+    return "ont" not in re.split(r"[^a-z]+", p)

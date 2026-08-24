@@ -185,10 +185,12 @@ public final class CodecRegistry {
             }
             int readsPerSlice = ctx.readsPerSlice() != null
                 ? ctx.readsPerSlice() : 10_000;
+            long sliceBytes = ctx.sliceBytes() != null ? ctx.sliceBytes() : 0L;
             byte[] blob = RefDiffV2.encode(
                 bytes(v), ctx.offsets(), ctx.positions(),
                 ctx.cigarsProvider().get(), ctx.reference(),
-                ctx.referenceMd5(), ctx.referenceUri(), readsPerSlice);
+                ctx.referenceMd5(), ctx.referenceUri(), readsPerSlice,
+                sliceBytes);
             return new EncodedChannel.GroupLayout(
                 new java.util.LinkedHashMap<>(
                     java.util.Map.of("refdiff_v2", blob)),
