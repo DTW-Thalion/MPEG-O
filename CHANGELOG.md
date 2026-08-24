@@ -12,6 +12,28 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Added
+- **M98 AssemblyGraph.** One new container primitive: a GFA 1.x
+  assembly graph at `/study/assembly_graphs/<name>/` (format-spec
+  §11a), parsed into `segments`/`links`/`paths`/`extras` tables plus
+  a `line_index` that replays the original line order, so re-emission
+  is byte-exact against the source file — proven on hifiasm output
+  and a synthetic covering every 1.x line type. `GfaReader` /
+  `GfaWriter` in all 3 SDKs (Apache-2.0 import/export set); segment
+  sequences store through the existing codec stack (BASE_PACK for
+  ACGTN alphabets, RANS_ORDER1 otherwise, `@compression` on the
+  dataset). `write_minimal` / `create` / `writeMinimalToPath:` take
+  an `assembly_graphs` mapping and stamp the `opt_assembly_graph`
+  feature flag only when a graph is present; datasets expose an
+  `assembly_graphs` accessor on open. The `GfaDump` CLIs
+  (`python -m ttio.importers.gfa_dump`, `TtioGfaDump`, Java
+  `GfaDump`) emit one canonical JSON shape and carry `--write-tio` /
+  `--emit-gfa` conformance modes; the 3×3 writer × emitter container
+  matrix is byte-exact in every cell. Per-AU encryption covers the
+  sequences channel with one AES-GCM operation per segment record
+  and decrypts in place in all 3 languages; `v2:`/`v3:` signatures
+  cover it the way they cover genomic-run channels
+  (`sign_assembly_graph` / `signAssemblyGraph`).
+
 - **M97 long-read profile.** Genomic runs gain the `@read_role` UTF-8
   attribute (`hifi`, `ont_ul`, `hic_r1`, `hic_r2`, `parental_maternal`,
   `parental_paternal`, `illumina_wgs`; other strings stored unchecked),

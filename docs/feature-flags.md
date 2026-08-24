@@ -177,6 +177,12 @@ spectra it rides the `base_v1` parallel-array layout keyed on
 (PAC / SQZ / DIF / DUP) is an ingest-time concern with no on-disk
 consequence.
 
+## M98 — assembly graphs
+
+| Flag                 | Required? | Since | Semantics                                                                                          |
+|----------------------|-----------|-------|----------------------------------------------------------------------------------------------------|
+| `opt_assembly_graph` | optional  | M98   | The file holds one or more GFA 1.x assembly graphs under `/study/assembly_graphs/<name>/` (format-spec §11a). Writers add the flag only when at least one graph is present, so graph-less files stay byte-identical to pre-M98 output; readers that ignore the flag parse the rest of the file normally — the graphs are a separate group hierarchy. |
+
 ## v0.7 storage + crypto surface (non-flag)
 
 Some v0.7 additions are API-level and don't carry a feature flag —
