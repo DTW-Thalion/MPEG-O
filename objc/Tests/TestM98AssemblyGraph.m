@@ -25,6 +25,8 @@
 #import "Providers/TTIOMemoryProvider.h"
 #import "Providers/TTIOProviderRegistry.h"
 #import "Providers/TTIOStorageProtocols.h"
+#import "Protection/TTIOPerAUFile.h"
+#import "Protection/TTIOSignatureManager.h"
 #include <unistd.h>
 
 /** The synthetic full-surface GFA the Phase 0 proof used: every GFA
@@ -300,6 +302,151 @@ static void m98SequencesCodec(void)
          "M98 codec: BASE_PACK channel round-trips byte-exact");
 }
 
+// ── per-AU encryption + signatures (stage E) ──────────────────────
+
+static NSData *m98Key(uint8_t seed)
+{
+    NSMutableData *k = [NSMutableData dataWithLength:32];
+    uint8_t *b = k.mutableBytes;
+    for (int i = 0; i < 32; i++) b[i] = (uint8_t)(seed + i);
+    return k;
+}
+
+static NSString *m98WriteGraphFile(NSString *tag, NSData *src)
+{
+    NSError *err = nil;
+    TTIOWrittenAssemblyGraph *g = [TTIOGfaReader graphFromData:src
+                                                         error:&err];
+    NSString *path = m98TmpPath(tag);
+    m98Rm(path);
+    if (![TTIOSpectralDataset writeMinimalToPath:path
+                                           title:@"M98"
+                             isaInvestigationId:@"ISA-M98"
+                                         msRuns:@{}
+                                     genomicRuns:nil
+                                  assemblyGraphs:@{@"graph_0001": g}
+                                 identifications:nil
+                                 quantifications:nil
+                               provenanceRecords:nil
+                                           error:&err]) {
+        return nil;
+    }
+    return path;
+}
+
+static void m98PerAUEncryption(void)
+{
+    // Workplan acceptance: a per-AU-encrypted graph decrypts in
+    // place. Mechanism check: after encrypt the plaintext sequences
+    // channel is GONE and the segments compound exists — a no-op
+    // walker would still pass a bare round-trip.
+    NSData *src = [m98SynthGfa() dataUsingEncoding:NSUTF8StringEncoding];
+    NSString *path = m98WriteGraphFile(@"perau", src);
+    PASS(path != nil, "M98 perau: fixture file written");
+    if (!path) return;
+
+    NSError *err = nil;
+    PASS([TTIOPerAUFile encryptFilePath:path
+                                    key:m98Key(0x42)
+                         encryptHeaders:NO
+                           providerName:nil
+                                  error:&err],
+         "M98 perau: encryptFilePath succeeds (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+
+    @autoreleasepool {
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:NULL];
+        TTIOHDF5Group *seg =
+            [[[[f.rootGroup openGroupNamed:@"study" error:NULL]
+                openGroupNamed:@"assembly_graphs" error:NULL]
+                    openGroupNamed:@"graph_0001" error:NULL]
+                        openGroupNamed:@"segments" error:NULL];
+        PASS(![seg hasChildNamed:@"sequences"]
+                 && [seg hasChildNamed:@"sequences_segments"],
+             "M98 perau: plaintext channel replaced by segments");
+        [f close];
+    }
+
+    // The wrong key must not decrypt.
+    NSError *wrongErr = nil;
+    PASS(![TTIOPerAUFile decryptFilePathInPlace:path
+                                            key:m98Key(0x99)
+                                   providerName:nil
+                                          error:&wrongErr],
+         "M98 perau: wrong key rejected");
+
+    PASS([TTIOPerAUFile decryptFilePathInPlace:path
+                                           key:m98Key(0x42)
+                                  providerName:nil
+                                         error:&err],
+         "M98 perau: decryptFilePathInPlace succeeds (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+
+    @autoreleasepool {
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:NULL];
+        TTIOHDF5Group *seg =
+            [[[[f.rootGroup openGroupNamed:@"study" error:NULL]
+                openGroupNamed:@"assembly_graphs" error:NULL]
+                    openGroupNamed:@"graph_0001" error:NULL]
+                        openGroupNamed:@"segments" error:NULL];
+        PASS([seg hasChildNamed:@"sequences"]
+                 && ![seg hasChildNamed:@"sequences_segments"]
+                 && ![seg hasAttributeNamed:@"sequences_algorithm"],
+             "M98 perau: plaintext channel restored, segments removed");
+        NSArray *features =
+            [TTIOFeatureFlags featuresForRoot:f.rootGroup] ?: @[];
+        PASS(![features containsObject:@"opt_per_au_encryption"],
+             "M98 perau: opt_per_au_encryption stripped");
+        [f close];
+    }
+
+    TTIOSpectralDataset *ds =
+        [TTIOSpectralDataset readFromFilePath:path error:&err];
+    PASS(ds != nil, "M98 perau: dataset reopens after decrypt");
+    if (ds) {
+        NSData *emitted =
+            [ds.assemblyGraphs[@"graph_0001"] gfaDataWithError:&err];
+        PASS([emitted isEqualToData:src],
+             "M98 perau: decrypted graph re-emits byte-exact");
+        [ds closeFile];
+    }
+    m98Rm(path);
+}
+
+static void m98Signatures(void)
+{
+    // v2: signatures cover segments/sequences the way they cover
+    // genomic-run channels.
+    NSData *src = [m98SynthGfa() dataUsingEncoding:NSUTF8StringEncoding];
+    NSString *path = m98WriteGraphFile(@"sig", src);
+    PASS(path != nil, "M98 sig: fixture file written");
+    if (!path) return;
+
+    NSError *err = nil;
+    NSData *key = m98Key(0x10);
+    NSDictionary *sigs = [TTIOSignatureManager
+        signAssemblyGraph:@"graph_0001"
+                   inFile:path
+                  withKey:key
+                    error:&err];
+    PASS(sigs != nil && sigs[@"segments/sequences"] != nil,
+         "M98 sig: segments/sequences signed (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+    PASS([sigs[@"segments/sequences"] hasPrefix:@"v2:"],
+         "M98 sig: signature carries the v2: prefix");
+    PASS([TTIOSignatureManager verifyAssemblyGraph:@"graph_0001"
+                                            inFile:path
+                                           withKey:key
+                                             error:&err],
+         "M98 sig: verification passes with the signing key");
+    PASS(![TTIOSignatureManager verifyAssemblyGraph:@"graph_0001"
+                                             inFile:path
+                                            withKey:m98Key(0x77)
+                                              error:NULL],
+         "M98 sig: verification fails with the wrong key");
+    m98Rm(path);
+}
+
 void testM98AssemblyGraph(void);
 void testM98AssemblyGraph(void)
 {
@@ -307,4 +454,6 @@ void testM98AssemblyGraph(void)
     m98StorageRoundTrip();
     m98WriteMinimal();
     m98SequencesCodec();
+    m98PerAUEncryption();
+    m98Signatures();
 }

@@ -759,6 +759,62 @@ static NSArray<NSString *> *genomicSignedSubPaths(NSString *filePath, NSString *
 }
 
 
+#pragma mark - M98 assembly graphs
+
+// The signed set is the segments/sequences byte channel — signatures
+// cover it the way they cover genomic-run channels. The compound
+// tables (records, links, paths, extras, line_index) are outside the
+// signed set the way the pre-M90.15 chromosomes compound was.
+
++ (NSDictionary<NSString *, NSString *> *)
+    signAssemblyGraph:(NSString *)graphName
+               inFile:(NSString *)filePath
+              withKey:(NSData *)hmacKey
+                error:(NSError **)error
+{
+    NSMutableDictionary<NSString *, NSString *> *out =
+        [NSMutableDictionary dictionary];
+    NSString *subPath = @"segments/sequences";
+    NSString *fullPath = [NSString stringWithFormat:
+        @"/study/assembly_graphs/%@/%@", graphName, subPath];
+    if (!fileHasObjectAtPath(filePath, fullPath)) return out;
+    NSError *signErr = nil;
+    if (![self signDataset:fullPath
+                    inFile:filePath
+                   withKey:hmacKey
+                     error:&signErr]) {
+        if (error) *error = signErr;
+        return nil;
+    }
+    TTIOHDF5File *file =
+        [TTIOHDF5File openReadOnlyAtPath:filePath error:NULL];
+    if (file) {
+        hid_t did = openDatasetByPath([file rootGroup].groupId, fullPath);
+        if (did >= 0) {
+            NSString *stored = readStringAttribute(did, "ttio_signature");
+            H5Dclose(did);
+            if (stored) out[subPath] = stored;
+        }
+        [file close];
+    }
+    return out;
+}
+
++ (BOOL)verifyAssemblyGraph:(NSString *)graphName
+                     inFile:(NSString *)filePath
+                    withKey:(NSData *)hmacKey
+                      error:(NSError **)error
+{
+    NSString *fullPath = [NSString stringWithFormat:
+        @"/study/assembly_graphs/%@/segments/sequences", graphName];
+    if (!fileHasObjectAtPath(filePath, fullPath)) return YES;
+    return [self verifyDataset:fullPath
+                        inFile:filePath
+                       withKey:hmacKey
+                         error:error];
+}
+
+
 #pragma mark - Provenance signing
 
 + (BOOL)signProvenanceInRun:(NSString *)runPath

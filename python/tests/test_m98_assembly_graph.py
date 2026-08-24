@@ -38,6 +38,94 @@ def _synth_gfa() -> bytes:
     return ("\n".join(_SYNTH_LINES) + "\n").encode()
 
 
+# -------------------------------------------- per-AU encryption + signatures
+
+
+def _write_graph_tio(tmp_path: Path, name: str = "m98e.tio") -> tuple:
+    from ttio.importers.gfa import GfaReader
+    from ttio.spectral_dataset import SpectralDataset
+
+    src = _synth_gfa()
+    g = GfaReader.graph_from_bytes(src)
+    p = tmp_path / name
+    SpectralDataset.write_minimal(
+        p, title="M98", isa_investigation_id="ISA-M98", runs={},
+        assembly_graphs={"graph_0001": g},
+    )
+    return p, src
+
+
+def test_per_au_encrypt_decrypt_in_place(tmp_path: Path):
+    """Workplan acceptance: a per-AU-encrypted graph decrypts in
+    place. Mechanism check: after encrypt the plaintext sequences
+    channel is GONE and the segments compound exists -- a no-op
+    walker would still pass a bare round-trip."""
+    import h5py
+
+    from ttio.encryption_per_au import (
+        decrypt_per_au_in_place,
+        encrypt_per_au,
+    )
+    from ttio.spectral_dataset import SpectralDataset
+
+    p, src = _write_graph_tio(tmp_path)
+    key = bytes(range(32))
+    encrypt_per_au(str(p), key)
+
+    with h5py.File(p, "r") as f:
+        seg = f["study/assembly_graphs/graph_0001/segments"]
+        assert "sequences" not in seg, "plaintext channel not removed"
+        assert "sequences_segments" in seg, "segments compound missing"
+        alg = seg.attrs["sequences_algorithm"]
+        assert alg in ("aes-256-gcm", b"aes-256-gcm")
+
+    # The wrong key must not decrypt.
+    with pytest.raises(Exception):
+        decrypt_per_au_in_place(str(p), bytes(32))
+
+    decrypt_per_au_in_place(str(p), key)
+    with h5py.File(p, "r") as f:
+        seg = f["study/assembly_graphs/graph_0001/segments"]
+        assert "sequences" in seg and "sequences_segments" not in seg
+
+    ds = SpectralDataset.open(p)
+    try:
+        assert "opt_per_au_encryption" not in ds.feature_flags.features
+        assert ds.assembly_graphs["graph_0001"].gfa_bytes() == src
+    finally:
+        ds.close()
+
+
+def test_signatures_cover_sequences_channel(tmp_path: Path):
+    """v2: signatures cover segments/sequences the way they cover
+    genomic-run channels; a tampered channel fails verification."""
+    import h5py
+
+    from ttio.signatures import (
+        sign_assembly_graph,
+        verify_assembly_graph,
+    )
+
+    p, _src = _write_graph_tio(tmp_path, "m98s.tio")
+    key = b"k" * 32
+    with h5py.File(p, "r+") as f:
+        gg = f["study/assembly_graphs/graph_0001"]
+        sigs = sign_assembly_graph(gg, key)
+        assert "segments/sequences" in sigs
+        assert sigs["segments/sequences"].startswith("v2:")
+        assert verify_assembly_graph(gg, key)
+        assert not verify_assembly_graph(gg, b"x" * 32)
+
+    with h5py.File(p, "r+") as f:
+        seq = f["study/assembly_graphs/graph_0001/segments/sequences"]
+        first = int(seq[0])
+        seq[0] = (first + 1) % 256
+    with h5py.File(p, "r") as f:
+        gg = f["study/assembly_graphs/graph_0001"]
+        assert not verify_assembly_graph(gg, key), (
+            "tampered sequences channel must fail verification")
+
+
 # ---------------------------------------------------------------- parse/emit
 
 

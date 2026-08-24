@@ -150,6 +150,32 @@
                  withKey:(NSData *)hmacKey
                    error:(NSError **)error;
 
+/** Sign the byte channels of one assembly graph
+ *  (``/study/assembly_graphs/<name>/``) — M98. The signed set is
+ *  the ``segments/sequences`` channel; signatures cover it the way
+ *  they cover genomic-run channels. The compound tables are outside
+ *  the signed set.
+ *
+ *  Returns a dictionary mapping ``"segments/sequences"`` to the
+ *  prefixed signature stored on the dataset's ``@ttio_signature``
+ *  attribute. Absent datasets (a graph whose segments all carry
+ *  ``*``, or an encrypted file where the channel is a
+ *  ``sequences_segments`` compound) are silently skipped. */
++ (NSDictionary<NSString *, NSString *> *)
+    signAssemblyGraph:(NSString *)graphName
+               inFile:(NSString *)filePath
+              withKey:(NSData *)hmacKey
+                error:(NSError **)error;
+
+/** Verify every dataset ``signAssemblyGraph:`` would sign. Returns
+ *  YES iff every present, signed dataset verifies under the key;
+ *  a present unsigned dataset fails, matching
+ *  ``verifyGenomicRun:``. */
++ (BOOL)verifyAssemblyGraph:(NSString *)graphName
+                     inFile:(NSString *)filePath
+                    withKey:(NSData *)hmacKey
+                      error:(NSError **)error;
+
 #pragma mark - Provenance signing
 
 /** Sign the `@provenance_json` attribute on the given run group.

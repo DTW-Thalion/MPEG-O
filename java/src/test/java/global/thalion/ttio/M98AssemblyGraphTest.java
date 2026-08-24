@@ -9,7 +9,10 @@ import global.thalion.ttio.assembly.AssemblyGraph;
 import global.thalion.ttio.assembly.WrittenAssemblyGraph;
 import global.thalion.ttio.exporters.GfaWriter;
 import global.thalion.ttio.importers.GfaReader;
+import global.thalion.ttio.protection.PerAUFile;
+import global.thalion.ttio.protection.SignatureManager;
 import global.thalion.ttio.providers.MemoryProvider;
+import global.thalion.ttio.providers.ProviderRegistry;
 import global.thalion.ttio.providers.StorageDataset;
 import global.thalion.ttio.providers.StorageGroup;
 import global.thalion.ttio.providers.StorageProvider;
@@ -187,6 +190,100 @@ public class M98AssemblyGraphTest {
                 "BASE_PACK channel round-trips byte-exact");
         } finally {
             MemoryProvider.discardStore(url);
+        }
+    }
+
+    // ── per-AU encryption + signatures (stage E) ──────────────────
+
+    private static byte[] key32(int seed) {
+        byte[] k = new byte[32];
+        for (int i = 0; i < 32; i++) k[i] = (byte) (seed + i);
+        return k;
+    }
+
+    private Path writeGraphFile(Path tmp, String name) {
+        byte[] src = synthGfa();
+        WrittenAssemblyGraph g = GfaReader.graphFromBytes(src);
+        Path file = tmp.resolve(name);
+        SpectralDataset.create(file.toString(), "M98", "ISA-M98",
+            List.of(), List.of(), Map.of("graph_0001", g),
+            List.of(), List.of(), List.of(),
+            FeatureFlags.defaultCurrent()).close();
+        return file;
+    }
+
+    /** Workplan acceptance: a per-AU-encrypted graph decrypts in
+     *  place. Mechanism check: after encrypt the plaintext sequences
+     *  channel is GONE and the segments compound exists — a no-op
+     *  walker would still pass a bare round-trip. */
+    @Test
+    void perAuEncryptDecryptInPlace(@TempDir Path tmp) {
+        byte[] src = synthGfa();
+        Path file = writeGraphFile(tmp, "m98e.tio");
+        byte[] key = key32(0x42);
+        PerAUFile.encryptFile(file.toString(), key, false, "hdf5");
+
+        try (StorageProvider sp = ProviderRegistry.open(file.toString(),
+                StorageProvider.Mode.READ);
+             StorageGroup root = sp.rootGroup();
+             StorageGroup study = root.openGroup("study");
+             StorageGroup ag = study.openGroup("assembly_graphs");
+             StorageGroup g0 = ag.openGroup("graph_0001");
+             StorageGroup seg = g0.openGroup("segments")) {
+            assertFalse(seg.hasChild("sequences"),
+                "plaintext channel not removed");
+            assertTrue(seg.hasChild("sequences_segments"),
+                "segments compound missing");
+            assertEquals("aes-256-gcm",
+                seg.getAttribute("sequences_algorithm").toString());
+        }
+
+        // The wrong key must not decrypt.
+        assertThrows(RuntimeException.class, () ->
+            PerAUFile.decryptFileInPlace(file.toString(), key32(0x99),
+                                         "hdf5"));
+
+        PerAUFile.decryptFileInPlace(file.toString(), key, "hdf5");
+        try (StorageProvider sp = ProviderRegistry.open(file.toString(),
+                StorageProvider.Mode.READ);
+             StorageGroup root = sp.rootGroup();
+             StorageGroup study = root.openGroup("study");
+             StorageGroup ag = study.openGroup("assembly_graphs");
+             StorageGroup g0 = ag.openGroup("graph_0001");
+             StorageGroup seg = g0.openGroup("segments")) {
+            assertTrue(seg.hasChild("sequences"));
+            assertFalse(seg.hasChild("sequences_segments"));
+            assertFalse(seg.hasAttribute("sequences_algorithm"));
+        }
+
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            assertFalse(ds.featureFlags().has("opt_per_au_encryption"));
+            assertArrayEquals(src,
+                ds.assemblyGraphs().get("graph_0001").gfaBytes(),
+                "decrypted graph re-emits byte-exact");
+        }
+    }
+
+    /** v2: signatures cover segments/sequences the way they cover
+     *  genomic-run channels. */
+    @Test
+    void signaturesCoverSequencesChannel(@TempDir Path tmp) {
+        Path file = writeGraphFile(tmp, "m98s.tio");
+        byte[] key = key32(0x10);
+        try (StorageProvider sp = ProviderRegistry.open(file.toString(),
+                StorageProvider.Mode.READ_WRITE);
+             StorageGroup root = sp.rootGroup();
+             StorageGroup study = root.openGroup("study");
+             StorageGroup ag = study.openGroup("assembly_graphs");
+             StorageGroup g0 = ag.openGroup("graph_0001")) {
+            Map<String, String> sigs =
+                SignatureManager.signAssemblyGraph(g0, key);
+            assertTrue(sigs.containsKey("segments/sequences"));
+            assertTrue(sigs.get("segments/sequences").startsWith("v2:"),
+                "signature carries the v2: prefix");
+            assertTrue(SignatureManager.verifyAssemblyGraph(g0, key));
+            assertFalse(SignatureManager.verifyAssemblyGraph(
+                g0, key32(0x77)), "wrong key must fail verification");
         }
     }
 }

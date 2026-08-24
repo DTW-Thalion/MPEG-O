@@ -24,6 +24,7 @@
 #import "HDF5/TTIOHDF5Group.h"
 #import "ValueClasses/TTIOEnums.h"
 #import "Codecs/TTIOFloatDeltaZstd.h"  // codec id 17, Phase 2 MS default
+#import "Codecs/Registry/TTIOCodecRegistry.h"  // M98 assembly sequences
 
 #include <string.h>
 
@@ -42,6 +43,37 @@ static NSError *makeErr(NSInteger code, NSString *fmt, ...)
 
 
 // ---------------------------------------------------------------- helpers
+
+// M98: read an assembly sequences channel written with an optional
+// @compression codec attribute (0 or absent = raw bytes). Mirrors
+// the decode in TTIOAssemblyGraph.
+static NSData *decodeAssemblySequences(id<TTIOStorageDataset> ds,
+                                       NSError **error)
+{
+    NSData *raw = (NSData *)[ds readAll:error];
+    if (!raw) return nil;
+    uint8_t codec = 0;
+    if ([ds hasAttributeNamed:@"compression"]) {
+        id v = [ds attributeValueForName:@"compression" error:NULL];
+        if ([v isKindOfClass:[NSNumber class]]) {
+            codec = (uint8_t)[v unsignedIntegerValue];
+        }
+    }
+    if (codec == 0) return raw;
+    id<TTIOCodec> c = [TTIOCodecRegistry codecForId:(TTIOCompression)codec];
+    if (!c) {
+        if (error) *error = makeErr(2,
+            @"assembly sequences channel names unregistered codec %u",
+            codec);
+        return nil;
+    }
+    TTIODecodedChannel *dec =
+        [c decode:[[TTIOBytesPayload alloc] initWithBytes:raw]
+          context:[TTIOCodecContext emptyContext]
+            error:error];
+    if (![dec isKindOfClass:[TTIODecodedBytes class]]) return nil;
+    return ((TTIODecodedBytes *)dec).data;
+}
 
 static NSString *readStringAttr(id<TTIOStorageGroup> g, NSString *name)
 {
@@ -841,6 +873,73 @@ static NSData *decryptChannelWithDispatch(
             }
         }
 
+        // M98: assembly graphs. One AU per segment record; offsets /
+        // lengths come from segments/records (seq_missing rows have
+        // length 0 and encrypt to empty ciphertext). The stored
+        // channel is codec-encoded (@compression), so decode to raw
+        // bytes before slicing; decryptFilePathInPlace writes the raw
+        // channel back. datasetId continues after the genomic runs,
+        // matching the Python reference impl.
+        if ([study hasChildNamed:@"assembly_graphs"]) {
+            id<TTIOStorageGroup> agRoot =
+                [study openGroupNamed:@"assembly_graphs" error:error];
+            if (!agRoot) return NO;
+            for (NSString *agName in listGroupChildren(agRoot)) {
+                id<TTIOStorageGroup> gGroup =
+                    [agRoot openGroupNamed:agName error:error];
+                id<TTIOStorageGroup> segG = nil;
+                if (gGroup && [gGroup hasChildNamed:@"segments"]) {
+                    segG = [gGroup openGroupNamed:@"segments" error:error];
+                }
+                if (!segG || ![segG hasChildNamed:@"sequences"]
+                    || ![segG hasChildNamed:@"records"]) {
+                    datasetId++;
+                    continue;
+                }
+                id<TTIOStorageDataset> seqDs =
+                    [segG openDatasetNamed:@"sequences" error:error];
+                if (!seqDs) return NO;
+                NSData *raw = decodeAssemblySequences(seqDs, error);
+                if (!raw) return NO;
+                id<TTIOStorageDataset> recDs =
+                    [segG openDatasetNamed:@"records" error:error];
+                if (!recDs) return NO;
+                NSArray<NSDictionary *> *rows = [recDs readRows:error];
+                if (!rows) return NO;
+                NSUInteger segCount = rows.count;
+                uint64_t *aOffsets = malloc(segCount * sizeof(uint64_t));
+                uint32_t *aLengths = malloc(segCount * sizeof(uint32_t));
+                for (NSUInteger i = 0; i < segCount; i++) {
+                    aOffsets[i] =
+                        [rows[i][@"seq_offset"] unsignedLongLongValue];
+                    aLengths[i] =
+                        (uint32_t)[rows[i][@"length"] unsignedLongLongValue];
+                }
+                NSArray<TTIOChannelSegment *> *segs =
+                    [TTIOPerAUEncryption
+                        encryptChannelToSegments:raw
+                                          offsets:aOffsets
+                                          lengths:aLengths
+                                         nSpectra:segCount
+                                  bytesPerElement:1
+                                        datasetId:datasetId
+                                      channelName:@"sequences"
+                                              key:key
+                                            error:error];
+                free(aOffsets);
+                free(aLengths);
+                if (!segs) return NO;
+                if (!writeChannelSegments(segG, @"sequences_segments",
+                                          segs, error)) return NO;
+                if (![segG deleteChildNamed:@"sequences" error:error])
+                    return NO;
+                if (![segG setAttributeValue:@"aes-256-gcm"
+                                      forName:@"sequences_algorithm"
+                                        error:error]) return NO;
+                datasetId++;
+            }
+        }
+
         [featureSet addObject:@"opt_per_au_encryption"];
         if (encryptHeaders) [featureSet addObject:@"opt_encrypted_au_headers"];
         NSArray *sorted = [featureSet.allObjects
@@ -1242,6 +1341,59 @@ static BOOL _writePlainDataset(id<TTIOStorageGroup> group, NSString *name,
                     if ([gSig hasAttributeNamed:algAttr]) {
                         [gSig deleteAttributeNamed:algAttr error:NULL];
                     }
+                }
+                datasetId++;
+            }
+        }
+
+        // M98: assembly graphs. The raw sequences bytes come back as
+        // a plain uint8 dataset with no @compression; the graph
+        // re-emits byte-exactly from raw bytes. datasetId numbering
+        // mirrors encryptFilePath exactly.
+        if ([study hasChildNamed:@"assembly_graphs"]) {
+            id<TTIOStorageGroup> agRoot =
+                [study openGroupNamed:@"assembly_graphs" error:error];
+            if (!agRoot) return NO;
+            TTIOHDF5Group *hdf5StudyAg =
+                [hdf5Root openGroupNamed:@"study" error:NULL];
+            TTIOHDF5Group *hdf5AgRoot =
+                [hdf5StudyAg openGroupNamed:@"assembly_graphs" error:NULL];
+            for (NSString *agName in listGroupChildren(agRoot)) {
+                id<TTIOStorageGroup> gGroup =
+                    [agRoot openGroupNamed:agName error:error];
+                id<TTIOStorageGroup> segG = nil;
+                if (gGroup && [gGroup hasChildNamed:@"segments"]) {
+                    segG = [gGroup openGroupNamed:@"segments" error:error];
+                }
+                if (!segG || ![segG hasChildNamed:@"sequences_segments"]) {
+                    datasetId++;
+                    continue;
+                }
+                TTIOHDF5Group *hdf5G =
+                    [hdf5AgRoot openGroupNamed:agName error:NULL];
+                TTIOHDF5Group *hdf5Seg =
+                    [hdf5G openGroupNamed:@"segments" error:NULL];
+                NSArray *segs =
+                    readChannelSegments(hdf5Seg, @"sequences_segments",
+                                        error);
+                if (!segs) return NO;
+                NSData *plain = [TTIOPerAUEncryption
+                    decryptChannelFromSegments:segs
+                               bytesPerElement:1
+                                     datasetId:datasetId
+                                   channelName:@"sequences"
+                                           key:key
+                                         error:error];
+                if (!plain) return NO;
+                if (!_writePlainDataset(segG, @"sequences",
+                                        TTIOPrecisionUInt8,
+                                        plain.length, plain, error))
+                    return NO;
+                if (![segG deleteChildNamed:@"sequences_segments"
+                                      error:error]) return NO;
+                if ([segG hasAttributeNamed:@"sequences_algorithm"]) {
+                    [segG deleteAttributeNamed:@"sequences_algorithm"
+                                         error:NULL];
                 }
                 datasetId++;
             }

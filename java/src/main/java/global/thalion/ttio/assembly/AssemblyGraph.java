@@ -269,8 +269,10 @@ public final class AssemblyGraph {
     }
 
     /** Decode a byte channel written with an optional
-     *  {@code @compression} codec attribute (0 or absent = raw). */
-    private static byte[] decodeBytesChannel(StorageDataset ds) {
+     *  {@code @compression} codec attribute (0 or absent = raw).
+     *  Public because the per-AU encryption walker decodes the
+     *  channel before slicing it into per-segment AUs. */
+    public static byte[] decodeBytesChannel(StorageDataset ds) {
         byte[] raw = (byte[]) ds.readAll();
         int codec = 0;
         if (ds.hasAttribute("compression")
