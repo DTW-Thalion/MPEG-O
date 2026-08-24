@@ -1,39 +1,35 @@
-# HANDOFF — no active reference-impl milestone
+# HANDOFF — M97 long-read profile
 
-**As of 2026-05-24.** The TTI-O three-language reference
-implementation (`objc/`, `python/`, `java/`) and the JavaFX desktop
-client (`tio-browser/`) have no active milestone handoff. v1.0.0
-shipped 2026-05-04; the surface (format, codecs, transport,
-encryption, importers/exporters, Workbench Client SDK + GUI panels
-W1–W6) is stable. Ongoing post-v1.0 work appears in
-`CHANGELOG.md` § `[Unreleased]` and ships as small follow-up PRs
-rather than coordinated multi-language milestones.
+**As of 2026-08-24.** M97 adapts the genomic container surface for
+long-read assembly inputs: PacBio HiFi, ONT ultra-long, Hi-C and
+parental short reads feeding the T2T assembly pipeline (external
+A-series repo). Scope was fixed by the A0 ingest probe
+(`tti-assemble/docs/probe-report-a0.md`); the probe cleared integer
+widths, `.tis` AU limits, block-level slicing, and codec defaults from
+the original worry list, leaving the four items below. Branch:
+`m97-long-read-profile`.
 
-The recent in-flight workstream visible in the log was **FD-1**
-(server-side encrypted-pipeline processing), which spans this repo
-and `tti-workbench-server`. The reference-impl-side phases shipped
-through this repo are:
-
-| Phase | Scope | Status | Spec proof |
+| Task | Scope | Status | Spec proof |
 |---|---|---|---|
-| **A-1 / A-2 / A-3 / A-4** | Multi-recipient `ProtectionMetadata` wire format in Python / Java / ObjC + cross-language conformance vectors | ✅ shipped 2026-05-21 / 22 | — |
-| **B-1 / B-2** | Client envelope API (`upload_encrypted_multi` / `uploadEncryptedMulti`) in Python + Java | ✅ shipped 2026-05-22 | — |
-| **C-0** | Standalone ObjC key-wrap primitive (byte-compat with Java + Python) | ✅ shipped 2026-05-22 | — |
-| **C-2a / C-2a-4** | `server_kek_id` field in `ProtectionMetadata` (all 3 langs) + byte-parity vectors | ✅ shipped 2026-05-22 | — |
-| **D+** | Server pipeline (decrypt → process → re-encrypt for researcher) | ⏳ active in `tti-workbench-server` (not this repo) | — |
+| **Phase 0** | `slice_bytes` writer-only proof: hand-reassembled containers byte-identical; non-uniform byte-budget slices decode byte-exact with the unmodified decoder | ✅ 2026-08-24 (`tools/perf/refdiff_slice_bytes_prototype/`) | required before any SDK work (wire-change gate) |
+| **T1** | `@read_role` UTF-8 run attribute (vocabulary per Binding Decision §84) + write-side population on `WrittenGenomicRun` / stream-writer options / import CLIs, read accessors, all 3 SDKs | ✅ implemented + tested | — |
+| **T2** | QUALITY_BINNED rejected as a `qualities` override on HiFi/PacBio/ONT/Nanopore platforms (§86), whole-channel and stream writers, all 3 SDKs | ✅ implemented + tested | — |
+| **T3** | REF_DIFF_V2 `slice_bytes` byte budget (§85, §87): C kernel + `max_encoded_size2`, 3 SDK writers (`ref_diff_slice_bytes` / `refDiffSliceBytes`), both layouts | ✅ implemented + tested | Phase 0 |
+| **T4** | Fixtures: cross-language non-uniform-slice byte-equality case (`test_ref_diff_v2_cross_language.py` + CLI `slice_bytes` args), HiFi + ONT-UL shapes through the 3x3 transport matrix (`test_m97_long_read_matrix.py`) | ✅ implemented + verified 3-way byte-equal | — |
 
-The most recent reference-impl-side surface (PRs #161 + #162 +
-**#163**, the ObjC + Python + Java **per-AU decrypt-in-place**
-APIs) unblocks FD-1's D-1 pipeline step on the server side: the
-legacy `decryptInPlace` path was a silent no-op on per-AU
-containers, so the server pipeline ran on still-encrypted data
-and Phase E's "round-trip" was a false positive (documented in
-`tti-workbench-server` #41). PR #163 (`5462489d`) closed out the
-gap by adding genomic-run signal-channel coverage to all three
-languages — `dataset_id` continues from the MS loop into the
-genomic loop so the AAD matches the encrypt path exactly, and all
-three languages now unconditionally strip the per-AU feature
-flags + `@encrypted` after a successful decrypt.
+Deliberately out of scope, per the probe review:
+`AcquisitionMode.GENOMIC_LONGREAD` / `GENOMIC_HIC` (nothing dispatches
+on them yet), qualities-codec re-tuning (the M94.Z per-block
+auto-tuner already picks V4 on HiFi and V5 on ONT), and the `.tis`
+run-metadata JSON, which does not carry `@read_role` — a transport
+round-trip preserves read content but drops the attribute; adding the
+key is additive JSON if a later milestone needs it.
+
+Suite state at handoff: native ctest 30/30; ObjC 5187 pass / 3
+known-environmental TestM90Final failures; Python 2621 pass; Java
+1624 tests 0 failures. The M97 tests assert the mechanism engaged —
+slice counts are parsed out of the emitted blobs on every writer
+path, not inferred from a green round-trip.
 
 ---
 
@@ -41,18 +37,15 @@ flags + `@encrypted` after a successful decrypt.
 
 This `HANDOFF.md` is replaced *per active milestone* — the git
 history (`git log -- HANDOFF.md`) shows that pattern (M81 →
-M82 → … → M88.1 → this stub). When a new multi-language
-milestone kicks off (e.g. an `M97` codec, or a coordinated
-FD-2 plan landing in this repo), overwrite this file with the
-milestone's plan + task table; otherwise small post-v1.0
+M82 → … → M88.1 → FD-1 stub → this). When the next multi-language
+milestone kicks off (e.g. M98 `AssemblyGraph`), overwrite this file
+with the milestone's plan + task table; otherwise small post-v1.0
 follow-ups go to PRs + CHANGELOG only.
 
 For ongoing work not coordinated through HANDOFF, see:
 
 - `CHANGELOG.md` § `[Unreleased]` — what's landed since the last
   tag.
-- `WORKPLAN.md` — milestone history + binding decisions.
-- `tti-workbench-server` repository — daemon-side workstreams
-  (FD-1 D+, S-series milestones, etc.) which the reference-impl
-  side only feeds (via this repo's client SDK + ProtectionMetadata
-  wire format).
+- `WORKPLAN.md` — milestone history + binding decisions (§84–§87
+  are M97's).
+- `tti-workbench-server` repository — daemon-side workstreams.

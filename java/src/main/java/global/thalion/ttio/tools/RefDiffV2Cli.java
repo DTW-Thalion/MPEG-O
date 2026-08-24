@@ -39,10 +39,11 @@ import java.util.List;
 public final class RefDiffV2Cli {
 
     public static void main(String[] args) throws IOException {
-        if (args.length != 8) {
+        if (args.length != 8 && args.length != 9) {
             System.err.println(
                 "usage: RefDiffV2Cli sequences.bin offsets.bin positions.bin "
-                + "cigars.txt reference.bin reference_md5.bin reference_uri.txt out.bin");
+                + "cigars.txt reference.bin reference_md5.bin reference_uri.txt out.bin "
+                + "[slice_bytes]");
             System.err.println("  sequences.bin:     concatenated uint8 ACGTN read bases");
             System.err.println("  offsets.bin:       uint64 LE, n_reads + 1 entries");
             System.err.println("  positions.bin:     int64 LE per-read 1-based POS");
@@ -51,6 +52,7 @@ public final class RefDiffV2Cli {
             System.err.println("  reference_md5.bin: exactly 16 bytes");
             System.err.println("  reference_uri.txt: UTF-8 reference URI string");
             System.err.println("  out.bin:           encoded blob output (or '-' for stdout)");
+            System.err.println("  slice_bytes:       M97 slice byte budget (default 0 = fixed-count rule)");
             System.exit(1);
         }
 
@@ -88,9 +90,10 @@ public final class RefDiffV2Cli {
 
         String[] cigars = cigarsList.toArray(new String[0]);
 
+        long sliceBytes = args.length == 9 ? Long.parseLong(args[8]) : 0L;
         byte[] encoded = RefDiffV2.encode(
             sequences, offsets, positions, cigars,
-            reference, md5, referenceUri, 10000);
+            reference, md5, referenceUri, 10000, sliceBytes);
 
         if (args[7].equals("-")) {
             try (OutputStream out = System.out) {

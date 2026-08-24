@@ -94,6 +94,16 @@ Default `reads_per_slice` is **10000** (Python `encode` default and
 the C default when `in->reads_per_slice == 0`). The `reference_md5`
 must be exactly 16 bytes; `reference_uri` length must be ≤ `0xFFFF`.
 
+Since M97 the encoder also takes a `slice_bytes` byte budget
+(`in->slice_bytes`; Python `slice_bytes`; Java/ObjC `sliceBytes`).
+With a budget > 0 a slice closes before the read that would push it
+past that many bases; `reads_per_slice` still caps the read count and
+every slice keeps at least one read. This is writer policy only: the
+wire format and decoder are unchanged (the decoder walks the slice
+index and carries no assumption about boundary placement), and 0
+reproduces the fixed-count output byte for byte. The writers surface
+it as `WrittenGenomicRun.ref_diff_slice_bytes` / `refDiffSliceBytes`.
+
 ## 4. Wire format
 
 All multi-byte integers are little-endian.

@@ -168,3 +168,74 @@ def test_ref_diff_v2_cross_language_byte_equal(tmp_path, name, bam_path):
             name,
             next((i for i, (a, b) in enumerate(zip(py_blob, objc_blob)) if a != b), -1)))
     assert len(py_blob) == len(java_blob) == len(objc_blob)
+
+
+def test_ref_diff_v2_slice_bytes_cross_language(tmp_path):
+    """M97: the slice_bytes byte budget places the same non-uniform
+    slice boundaries in all 3 languages, byte for byte.
+
+    Synthetic corpus (no BAM dependency): 40 aligned reads alternating
+    20 and 100 bases, so a 200-base budget cuts mid-pattern and slice
+    read counts differ."""
+    import struct
+
+    n = 40
+    ref_len = 4096
+    reference = bytes(ord("ACGT"[i % 4]) for i in range(ref_len))
+    lengths = [20 if r % 2 == 0 else 100 for r in range(n)]
+    pos = np.array([r * 60 + 1 for r in range(n)], dtype=np.int64)
+    off = np.zeros(n + 1, dtype=np.uint64)
+    parts = bytearray()
+    for r in range(n):
+        start = int(pos[r]) - 1
+        read = bytearray(reference[start:start + lengths[r]])
+        read[3] = ord("C") if read[3] == ord("A") else ord("A")
+        parts.extend(read)
+        off[r + 1] = off[r] + lengths[r]
+    seq = np.frombuffer(bytes(parts), dtype=np.uint8)
+    cigars = [f"{L}M" for L in lengths]
+    md5 = hashlib.md5(reference).digest()
+    budget = "200"
+
+    py_blob = rdv2.encode(seq, off, pos, cigars, reference, md5,
+                          reference_uri="m97", slice_bytes=200)
+    n_slices = struct.unpack_from("<I", py_blob, 8)[0]
+    assert n_slices > 1, "budget must engage the byte-budget walk"
+    hdr = 38 + len("m97")
+    counts = {struct.unpack_from("<I", py_blob, hdr + 32 * s + 28)[0]
+              for s in range(n_slices)}
+    assert len(counts) >= 2, "slice read counts must be non-uniform"
+
+    files = _write_bin_inputs(tmp_path, "m97", seq, off, pos, cigars,
+                              reference, md5, "m97")
+
+    java_out = tmp_path / "m97_java.bin"
+    java_proc = subprocess.run(
+        ["java", *_JAVA_FLAGS,
+         f"-Djava.library.path=/usr/local/lib:{NATIVE_LIB_DIR}",
+         "-cp", str(JAVA_JAR),
+         "global.thalion.ttio.tools.RefDiffV2Cli",
+         str(files["sequences"]), str(files["offsets"]), str(files["positions"]),
+         str(files["cigars"]), str(files["reference"]), str(files["reference_md5"]),
+         str(files["reference_uri"]), str(java_out), budget],
+        capture_output=True, text=True,
+    )
+    assert java_proc.returncode == 0, java_proc.stderr
+
+    objc_out = tmp_path / "m97_objc.bin"
+    env = os.environ.copy()
+    env["LD_LIBRARY_PATH"] = (
+        "{}:{}/objc/Source/obj:{}".format(
+            NATIVE_LIB_DIR, REPO, env.get("LD_LIBRARY_PATH", ""))
+    )
+    objc_proc = subprocess.run(
+        [str(OBJC_CLI),
+         str(files["sequences"]), str(files["offsets"]), str(files["positions"]),
+         str(files["cigars"]), str(files["reference"]), str(files["reference_md5"]),
+         str(files["reference_uri"]), str(objc_out), budget],
+        capture_output=True, text=True, env=env,
+    )
+    assert objc_proc.returncode == 0, objc_proc.stderr
+
+    assert java_out.read_bytes() == py_blob, "Python vs Java diverge"
+    assert objc_out.read_bytes() == py_blob, "Python vs ObjC diverge"

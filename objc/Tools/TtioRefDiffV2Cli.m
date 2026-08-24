@@ -12,14 +12,16 @@
 #import "Codecs/TTIORefDiffV2.h"
 
 #import <stdio.h>
+#import <stdlib.h>
 
 int main(int argc, const char *argv[])
 {
     @autoreleasepool {
-        if (argc != 9) {
+        if (argc != 9 && argc != 10) {
             fprintf(stderr,
                 "usage: %s sequences.bin offsets.bin positions.bin cigars.txt "
-                "reference.bin reference_md5.bin reference_uri.txt out.bin\n",
+                "reference.bin reference_md5.bin reference_uri.txt out.bin "
+                "[slice_bytes]\n",
                 argv[0]);
             return 1;
         }
@@ -68,6 +70,8 @@ int main(int argc, const char *argv[])
             return 1;
         }
 
+        unsigned long long sliceBytes =
+            argc == 10 ? strtoull(argv[9], NULL, 10) : 0ULL;
         NSError *err = nil;
         NSData *encoded = [TTIORefDiffV2 encodeSequences:sequences
                                                   offsets:offsets
@@ -77,6 +81,7 @@ int main(int argc, const char *argv[])
                                              referenceMd5:referenceMd5
                                              referenceUri:referenceUri
                                            readsPerSlice:10000
+                                              sliceBytes:sliceBytes
                                                     error:&err];
         if (!encoded) {
             fprintf(stderr, "encode failed: %s\n",
