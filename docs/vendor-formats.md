@@ -429,7 +429,7 @@ A small canonical fixture (`m87_test.sam` + `m87_test.bam` + `m87_test.bam.bai`,
 * **Optional SAM tag fields** (`NM:i:`, `MD:Z:`, etc.) — ignored in v0. A future milestone could expose them as a `tags` field on `AlignedRead`.
 * **Multi-`@RG` aggregation** — only the first `@RG` is parsed. Caller can override `sample_name=` if needed.
 * **htslib direct linking** — subprocess via `samtools` is the Phase 5 design choice. A future optimisation milestone could add htslib-Java / pysam fast paths if the subprocess startup overhead (~50 ms per import) becomes a bottleneck.
-* **Streaming write** — the full `WrittenGenomicRun` is built in memory before being passed to the writer. For very large BAMs (10⁹+ reads) a streaming writer would be needed; future scope.
+* **Whole-run materialisation** — `to_genomic_run` builds the full `WrittenGenomicRun` in memory. Inputs that should not be held whole go through the streaming surface instead: `BamReader.iter_batches` / `stream_source` feed a `GenomicStreamWriter` batch by batch (see `docs/genomic-runs.md` §2.5, §6).
 
 ## CRAM (M88, post-M87 — reference-aware delegation to samtools)
 

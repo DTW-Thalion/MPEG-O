@@ -16,21 +16,16 @@ Two storage modes are supported by the spec:
   the .ibd; per-pixel intensity arrays follow.
 * **Processed** — every pixel carries its own m/z + intensity arrays.
 
-This importer covers both. For the v0.9 storage layer it produces one
-spectrum per pixel; the spatial grid (x, y, optionally z) and the
-``IMS:1000030`` continuous / ``IMS:1000031`` processed designation are
-preserved as a per-run :class:`ProvenanceRecord` parameter dict.
-A future MSImage cube writer (tracked under HANDOFF M64.5 caller
-refactor) will be able to read this back into a true 3-D
-``[height, width, spectral_points]`` dataset.
+This importer covers both. It produces one spectrum per pixel; the
+spatial grid (x, y, optionally z) and the ``IMS:1000030`` continuous /
+``IMS:1000031`` processed designation are preserved as a per-run
+:class:`ProvenanceRecord` parameter dict, from which an MSImage cube
+writer can allocate a 3-D ``[height, width, spectral_points]`` dataset.
 
 Cross-language equivalents
 --------------------------
-Objective-C: ``TTIOImzMLReader`` (Import/) — *deferred to M59 follow-up*
-Java:        ``ImzMLReader.java`` (importers/) — *deferred to M59 follow-up*
-
-The spec defines exactly the file layout we depend on; both ports can
-follow this Python module verbatim.
+Objective-C: ``TTIOImzMLReader`` (Import/)
+Java:        ``ImzMLReader.java`` (importers/)
 
 SPDX-License-Identifier: Apache-2.0
 """
@@ -95,8 +90,8 @@ class ImzMLImport:
         Either ``"continuous"`` or ``"processed"``.
     uuid_hex
         16-byte UUID encoded as 32 lowercase hex characters. Cross-
-        validated between the .imzML and the .ibd header (HANDOFF
-        gotcha 49 — mismatch is a hard error, not a warning).
+        validated between the .imzML and the .ibd header — a mismatch
+        is a hard error, not a warning.
     grid_max_x / grid_max_y / grid_max_z
         Pixel grid extents declared in the .imzML. Used by downstream
         MSImage writers to allocate the cube.
@@ -124,7 +119,7 @@ class ImzMLImport:
 
     # ---------------------------------------------------------------- #
     # Persistence — one spectrum per pixel, spatial metadata via
-    # provenance until the MSImage cube writer lands (M64.5).
+    # provenance.
     # ---------------------------------------------------------------- #
 
     def to_imported_dataset(
