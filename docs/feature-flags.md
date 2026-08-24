@@ -122,6 +122,7 @@ behaviour, not on-disk structure.
 | Flag                  | Required? | Since           | Semantics |
 |-----------------------|-----------|-----------------|-----------|
 | `bulk_mode_v2_blobs`  | required  | v1.0 (Phase 2c-T) | The stream carries verbatim genomic v2 codec blobs in `BlobV2MateInfo` (0x09), `BlobV2RefDiff` (0x0A), and `BlobV2NameTok` (0x0B) packets. Receivers write the blob bytes directly to `<run>/signal_channels/{mate_info/inline_v2, sequences/refdiff_v2, read_names}` in the target `.tio`, BYPASSING the v2 codec encode pass. Required (no `opt_` prefix) — receivers without bulk-mode support MUST refuse the stream rather than silently producing a half-decoded `.tio` with mate-normalized blobs labeled "bulk". See `docs/transport-spec.md` §6.4. |
+| `transport_v0_11`     | informational | transport v0.11 | The stream may carry the complete-coverage packet set (types 0x10–0x1B: reference groups and chromosomes, image cubes, identification/quantification tables, dataset-level provenance, subject/sample metadata, encryption-algorithm name). Readers without v0.11 support skip the unknown packet types via the length-prefixed wire frames; readers that need v0.11 semantics check this flag. See `docs/transport-spec.md` §4.13–§4.23. |
 
 ## v0.11 (M73) — no new flags
 

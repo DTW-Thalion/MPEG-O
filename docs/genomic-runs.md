@@ -17,8 +17,10 @@ the value/container classes, the on-disk layout under
 applied to each channel, and the BAM/CRAM/SAM import path. It is written
 against the Python reference implementation
 (`python/src/ttio/genomic_run.py`, `genomic_index.py`, `aligned_read.py`,
-`written_genomic_run.py`, `_dataset_write_genomic.py`); the Objective-C
-and Java SDKs expose the same classes and produce byte-exact files.
+`written_genomic_run.py`, `_dataset_write_genomic.py`, and the
+`genomic/` package — `stream_writer.py`, `_blocks.py`,
+`reference_resolver.py`); the Objective-C and Java SDKs expose the same
+classes and produce byte-exact files.
 
 ## 1. Overview — the run-and-element hierarchy
 
@@ -97,6 +99,19 @@ Public surface:
 - `len(gr)` → read count (delegates to `index.count`).
 - `gr[i]` / iteration → materialise the i-th `AlignedRead`. Negative
   indices wrap; out-of-range raises `IndexError`.
+- `gr.layout` → `"blocks_v1"` or `"whole"` (the legacy whole-channel
+  layout); `gr.block_count` → number of blocks (`1` for whole-channel
+  files).
+- `gr.iter_reads(start=0, stop=None, *, threads=None)` → yield reads
+  `[start, stop)` in order. Under `blocks_v1` the next few blocks
+  decode ahead on a thread pool; `threads=1` keeps the serial
+  one-block-at-a-time path.
+- `gr.for_each_block(fn, start=0, stop=None, *, threads=None)` → call
+  `fn(view, view_start, first_read, n_reads)` once per decoded block,
+  from several threads at once and in no particular order. `view` is a
+  run over one block's reads, indexed from 0 and valid only for the
+  duration of the call. Java: `GenomicRun.iterBlocks`; Objective-C:
+  `-iterBlocksFrom:to:threads:error:usingBlock:`.
 - `gr.reads_in_region(chromosome, start, end)` → `list[AlignedRead]` for
   reads whose **mapping start position** falls in `[start, end)` (see
   §4 for the overlap caveat).
@@ -180,18 +195,106 @@ ZLIB, the default; `"none"` → NONE), `signal_codec_overrides`
 (`dict[str, Compression]` per-channel codec opt-in for `sequences`,
 `qualities`, `cigars`), `embed_reference` (default `False`),
 `reference_chrom_seqs` (`chrom_name → uppercase ACGTN bytes`, required
-for the REF_DIFF_V2 path), `external_reference_path`, and `bulk_v2_blobs`
+for the REF_DIFF_V2 path), `external_reference_path`,
+`opt_disable_qualities_v5` (keep the qualities codec on the V4
+strategy set), `opt_legacy_whole_channel` (write the legacy
+whole-channel layout instead of `blocks_v1`, §3), and `bulk_v2_blobs`
 (a `BulkV2Blobs` carrying verbatim v2 codec blobs from the transport
 bulk-mode receiver, which bypass the codec encode step).
 
+### 2.5 `GenomicStreamWriter` — the streaming write path
+
+`ttio.genomic.stream_writer.GenomicStreamWriter` appends reads to one
+genomic run of an open-for-write dataset without holding the run in
+memory: `append(read)` / `append_batch(written_genomic_run)` accumulate
+a pending block, `flush()` closes it out, and `close()` finalises the
+run. Blocks are cut at `block_reads` / `block_bytes` bounds and at
+every chromosome change. With `threads` > 1 (the `threads` argument,
+else `TTIO_THREADS`, else cores minus 2) completed blocks are
+encoded on a pool and written in order by the caller's thread, bounded
+by `memory_budget_bytes`; the file is byte-for-byte the one thread's.
+`SpectralDataset.write_minimal` routes every genomic run through this
+writer, so the `blocks_v1` layout (§3) is the default for batch and
+streaming writes alike; `opt_legacy_whole_channel=True` restores the
+whole-channel layout.
+
 ## 3. On-disk storage layout
 
-A genomic run is written under `/study/genomic_runs/<name>/` by
-`_dataset_write_genomic._write_genomic_run`. The run group carries
-attributes `acquisition_mode` (int), `modality` (`"genomic_sequencing"`),
-`spectrum_class` (`5`), `reference_uri`, `platform`, `sample_name`, and
-`read_count`. The `genomic_runs` parent group carries a `_run_names`
-attribute (comma-joined run names) used to enumerate runs at open time.
+A genomic run is written under `/study/genomic_runs/<name>/`. The run
+group carries attributes `acquisition_mode` (int), `modality`
+(`"genomic_sequencing"`), `spectrum_class` (`5`), `reference_uri`,
+`platform`, `sample_name`, `read_count`, and `base_count`. The
+`genomic_runs` parent group carries a `_run_names` attribute
+(comma-joined run names) used to enumerate runs at open time.
+
+Two layouts exist, discriminated by the run group's `@layout`
+attribute (`format-spec.md` §10.12):
+
+- **`blocks_v1`** — the default for every write path
+  (`SpectralDataset.write_minimal` and `GenomicStreamWriter` alike).
+  The run is a sequence of independently coded blocks; a block index
+  records where each block's blob sits in each channel dataset.
+- **Whole-channel** — the legacy layout (no `@layout` attribute); one
+  codec blob per channel covering the whole run. Written only when
+  `opt_legacy_whole_channel=True`; readers keep full support.
+
+### 3.1 `blocks_v1` (default)
+
+```
+/study/genomic_runs/<name>/          @layout="blocks_v1", @block_policy,
+│                                    @read_count, @base_count
+├── blocks/
+│   └── index              compound  (one row per block: read_start, n_reads,
+│                                     base_start, n_bases, per-channel byte
+│                                     ranges, per-channel codec ids)
+├── genomic_index/                   (group — eager, parallel scalars;
+│   │                                 same element types as §3.2, extendable)
+│   ├── lengths            uint32  1-D
+│   ├── positions          int64   1-D
+│   ├── mapping_qualities  uint8   1-D
+│   ├── flags              uint32  1-D
+│   ├── chromosome_ids     uint16  1-D
+│   └── chromosome_names   compound[(name, VL_STRING)]
+├── signal_channels/                 (blocks' blobs back to back per channel)
+│   ├── sequences/         (GROUP, whatever the codec)
+│   │   └── data           uint8  1-D
+│   ├── qualities          uint8  1-D
+│   ├── read_names         uint8  1-D
+│   ├── cigars             uint8  1-D
+│   └── mate_info/         (GROUP)
+│       ├── inline_v2      uint8  1-D
+│       └── chrom_names    compound[(name, VL_STRING)]    (chrom_id → name)
+└── provenance/                      (group — optional)
+    └── steps              compound
+```
+
+Key facts for `blocks_v1`, verified against the writer:
+
+- **Every blob channel is codec-coded.** Per-block codec ids live in
+  the block index; the `@compression` attribute on a channel dataset
+  carries the first block's codec and is informative only. Defaults
+  when the caller sets no override: `sequences` → REF_DIFF_V2 (14)
+  with a reference, RANS_ORDER1 (5) without; `qualities` →
+  FQZCOMP_NX16_Z (12), unconditionally; `read_names` →
+  NAME_TOKENIZED_V2 (15); `cigars` → RANS_ORDER0 (4); `mate_info` →
+  MATE_INLINE_V2 (13).
+- **A block never spans two chromosomes** — the writer flushes the
+  pending block at every chromosome change, so a coordinate-sorted
+  whole-genome BAM streams through REF_DIFF_V2 as long
+  same-chromosome stretches. Unmapped reads inside a mapped block
+  (FLAG `0x4`, CIGAR `*`, placed on the mate's contig) stay in the
+  REF_DIFF_V2 blob via its UL substream; fully unmapped stretches
+  form their own blocks and fall back to BASE_PACK.
+- **Blocks are cut** at `block_reads` / `block_bytes` bounds (and at
+  chromosome changes); block boundaries do not change bytes within a
+  block, so a block's blob is byte-identical to what a whole-channel
+  writer would produce for a run holding that block's reads alone.
+- **Partial files are readable**: a writer that stops before `close`
+  leaves the block index and datasets agreeing up to the last flushed
+  block; readers use the index row count, not `@read_count`, when the
+  two disagree.
+
+### 3.2 Legacy whole-channel layout
 
 ```
 /study/genomic_runs/<name>/
@@ -224,12 +327,17 @@ Key layout facts, verified against the writer:
   README's "per-read parallel arrays (positions, flags,
   mapping_qualities)" describes the `genomic_index/` contents, not
   `signal_channels/`.
-- **`sequences` is a GROUP, not a dataset**, in the default v1.8+
-  REF_DIFF_V2 layout: it contains a single `refdiff_v2` child dataset
-  tagged `@compression = 14`. Readers dispatch on the link type
-  (group → v2 path; dataset → fallback path). When the run has no
-  reference, is multi-chromosome, or has unmapped reads, the writer
-  falls back to a flat `sequences` dataset encoded with BASE_PACK.
+- **`sequences` is a GROUP, not a dataset**, in the REF_DIFF_V2
+  layout: it contains a single `refdiff_v2` child dataset tagged
+  `@compression = 14`. Readers dispatch on the link type (group → v2
+  path; dataset → fallback path). When the run has no reference, the
+  writer falls back to a flat `sequences` dataset encoded with
+  BASE_PACK. Unmapped reads (CIGAR `*`) no longer force that
+  fallback — REF_DIFF_V2 carries them in its UL substream
+  (`codecs/ref_diff_v2.md` §4.4). Multi-chromosome runs raise on this
+  whole-channel path; write them through the default `blocks_v1`
+  layout (§3.1) instead, which cuts a block at every chromosome
+  change.
 - **`mate_info` is a GROUP** containing the `inline_v2` blob
   (`@compression = 13`) plus a `chrom_names` compound sidecar that maps
   chrom id → name. The sidecar covers mate-only chromosomes that no own
@@ -293,27 +401,37 @@ Each `signal_channels/` channel has a default codec; `sequences`,
 Codecs are dispatched through the shared codec registry and are
 byte-exact across the Python / Objective-C / Java SDKs.
 
-| Channel       | Default codec / id              | Override surface                          | Codec doc |
-|---------------|---------------------------------|-------------------------------------------|-----------|
-| `sequences`   | REF_DIFF_V2 (14); BASE_PACK fallback | RANS_ORDER0 (4) / RANS_ORDER1 (5) / BASE_PACK (6) | [`codecs/ref_diff_v2.md`](codecs/ref_diff_v2.md) |
+| Channel       | Default codec / id                                            | Override surface                          | Codec doc |
+|---------------|---------------------------------------------------------------|-------------------------------------------|-----------|
+| `sequences`   | REF_DIFF_V2 (14) with a reference; RANS_ORDER1 (5) without under `blocks_v1`, BASE_PACK (6) under whole-channel | RANS_ORDER0 (4) / RANS_ORDER1 (5) / BASE_PACK (6) | [`codecs/ref_diff_v2.md`](codecs/ref_diff_v2.md) |
 | `qualities`   | FQZCOMP_NX16_Z (12)             | RANS_ORDER0 / RANS_ORDER1 / BASE_PACK / QUALITY_BINNED (7) / FQZCOMP_NX16_Z | [`codecs/fqzcomp_nx16_z.md`](codecs/fqzcomp_nx16_z.md) |
 | `read_names`  | NAME_TOKENIZED_V2 (15)          | none (auto-only)                          | [`codecs/name_tokenizer_v2.md`](codecs/name_tokenizer_v2.md) |
-| `cigars`      | compound VL_STRING (uncoded)    | RANS_ORDER0 / RANS_ORDER1                 | [`codecs/rans.md`](codecs/rans.md) |
+| `cigars`      | RANS_ORDER0 (4) under `blocks_v1`; compound VL_STRING (uncoded) under whole-channel | RANS_ORDER0 / RANS_ORDER1                 | [`codecs/rans.md`](codecs/rans.md) |
 | `mate_info`   | MATE_INLINE_V2 (13)             | none (auto-only)                          | [`codecs/mate_info_v2.md`](codecs/mate_info_v2.md) |
 
 Notes:
 
 - **REF_DIFF_V2** (sequences) is context-aware: encoding needs the
-  per-read positions, CIGARs, and the per-chromosome reference sequence.
-  It is the v1.0 default when `signal_compression="gzip"` and a reference
-  is available, and is single-chromosome in the v1.8 first pass
-  (multi-chromosome runs raise; unmapped reads / missing reference fall
-  back to BASE_PACK).
+  per-read positions, CIGARs, and the per-chromosome reference
+  sequence. One blob codes one chromosome; under `blocks_v1` the
+  writer cuts a block at every chromosome change, so multi-chromosome
+  runs stream through it, while the whole-channel path raises on a
+  multi-chromosome run. Unmapped reads (CIGAR `*`) are carried by the
+  codec itself — bases as soft clip, lengths in the per-slice UL
+  substream — rather than forcing a fallback. A missing reference
+  falls back to RANS_ORDER1 (`blocks_v1`) or BASE_PACK
+  (whole-channel).
 - **FQZCOMP_NX16_Z** (qualities) carries its sibling-channel inputs
-  (read lengths, reverse-complement flags from `flags & 16`) inside its
-  wire format. It auto-applies when the run is already a "v1.5
-  candidate" (i.e. the sequences channel is going through REF_DIFF_V2),
-  preserving byte-parity for plain reference-less M82 writes.
+  (read lengths, reverse-complement flags from `flags & 16`) inside
+  its wire format. Under `blocks_v1` it is the unconditional
+  qualities default; on the legacy whole-channel path it auto-applies
+  only when the run is already a "v1.5 candidate" (i.e. the sequences
+  channel is going through REF_DIFF_V2), preserving byte-parity for
+  plain reference-less M82 writes. When the run carries a
+  base-parallel `sequences` channel the encoder also tries the
+  sequence-context V5 strategies and keeps the smallest stream;
+  `opt_disable_qualities_v5` pins the V4 strategy set
+  (`codecs/fqzcomp_nx16_z.md`).
 - **Override validation is content-aware**: applying BASE_PACK or
   QUALITY_BINNED to `cigars` (ASCII strings, not ACGT bytes or Phred
   values) is rejected with a named error, as is QUALITY_BINNED on
@@ -328,7 +446,7 @@ The rANS, BASE_PACK, and QUALITY_BINNED codecs are documented at
 DELTA_RANS_ORDER0 codec (used for sorted integer channels) is at
 [`codecs/delta_rans.md`](codecs/delta_rans.md). The on-disk
 `@compression` scheme and per-channel wire formats are specified in
-`format-spec.md` §§10.5–10.11.
+`format-spec.md` §§10.5–10.11; the `blocks_v1` block layout in §10.12.
 
 ## 6. Import path — BAM / CRAM / SAM → model
 
@@ -350,6 +468,16 @@ SAMv1 specification.
   succeeds without it; `to_genomic_run` raises `SamtoolsNotFoundError`
   (with apt/brew/conda install guidance) at first use if the binary is
   missing.
+
+`to_genomic_run` materialises the whole input in memory. For inputs
+that should not be held whole, the readers also stream:
+`BamReader.iter_batches(batch_reads=100_000, ...)` yields the input as
+consecutive `WrittenGenomicRun` batches parsed from the `samtools
+view` pipe line by line, and `BamReader.stream_source(...)` wraps that
+iterator as a `GenomicStreamSource` that feeds a `GenomicStreamWriter`
+(§2.5) batch by batch — `reference_fasta=` enables REF_DIFF_V2 through
+a `LazyReference` without loading the FASTA whole. The FASTQ importer
+exposes the same `iter_batches` / `stream_source` surface.
 
 Column mapping (SAM fields 1–11 → model; trailing optional tags are
 discarded):
@@ -397,7 +525,7 @@ storage provider, not just raw HDF5.
 
 ## See also
 
-- [`format-spec.md`](format-spec.md) §§10.5–10.11 — on-disk `@compression`
+- [`format-spec.md`](format-spec.md) §§10.5–10.12 — on-disk `@compression`
   scheme and per-channel wire formats.
 - [`providers.md`](providers.md) — the `StorageProvider` / `StorageGroup`
   / `StorageDataset` protocol the model is stored through.
@@ -406,5 +534,3 @@ storage provider, not just raw HDF5.
   [`codecs/fqzcomp_nx16_z.md`](codecs/fqzcomp_nx16_z.md),
   [`codecs/name_tokenizer_v2.md`](codecs/name_tokenizer_v2.md) — the
   genomic codecs.
-</content>
-</invoke>

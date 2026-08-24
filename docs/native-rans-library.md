@@ -9,11 +9,13 @@
 
 This document describes the native C library at `native/` that
 provides SIMD-accelerated rANS encode/decode kernels plus the v2
-codec C kernels (`ref_diff_v2`, `mate_info_v2`, `name_tok_v2`,
-`fqzcomp_qual` V4). The library is consumed by:
+codec C kernels (`ref_diff_v2`, `mate_info_v2`, `name_tok_v2`, and
+the M94.Z qualities family — `fqzcomp_qual` V4, the V5
+sequence-context strategies, and the V6 segmented variant with its
+thread/segment tuning entry points). The library is consumed by:
 
 - **Python** via `ctypes` (loader in
-  `python/src/ttio/codecs/fqzcomp_nx16_z.py`).
+  `python/src/ttio/codecs/_native_loader.py`).
 - **Java** via JNI (`native/src/ttio_rans_jni.c` +
   `java/src/main/java/global/thalion/ttio/codecs/TtioRansNative.java`).
 - **Objective-C** via direct `__has_include("ttio_rans.h")` linkage
@@ -28,16 +30,27 @@ codec C kernels (`ref_diff_v2`, `mate_info_v2`, `name_tok_v2`,
   [`tio-browser/README.md`](../tio-browser/README.md) for the
   install matrix.
 
-The library is **not** required for default operation — V1 streams
-are produced and consumed by every language binding without it. A
-file written under V1 by any language reads on every language
-without `libttio_rans`.
+The pure-language M94.Z V1 encoders that once made the library
+optional were removed in the v1.0 reset, so the default genomic
+codec stack (REF_DIFF_V2 sequences, FQZCOMP_NX16_Z qualities,
+NAME_TOKENIZED_V2 read names, MATE_INLINE_V2 mate info) requires
+`libttio_rans` in every binding. Only the pure-language codecs
+(rANS order-0/1, BASE_PACK, QUALITY_BINNED, DELTA_RANS decode)
+work without it.
 
 ---
 
 ## 1. Architecture
 
 ### 1.1 Public API surface (`native/include/ttio_rans.h`)
+
+The listing below covers the rANS kernel family. The same header also
+declares the v2 codec entry points (`ttio_ref_diff_v2_*`,
+`ttio_mate_info_v2_*`, `ttio_name_tok_v2_*`), the M94.Z qualities
+family (`ttio_m94z_v4_*`, `ttio_m94z_qual_*`, and the V6
+segment/thread tuning setters), and the engine probes
+(`ttio_engine_active_name`, `ttio_engine_gpu_available`); their
+contracts live in the per-codec documents under `docs/codecs/`.
 
 ```c
 /* Single-block encode/decode (no caller-managed pool). */

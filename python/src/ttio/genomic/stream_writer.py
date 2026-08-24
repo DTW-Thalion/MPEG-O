@@ -85,7 +85,7 @@ class GenomicStreamWriter:
     """Append reads to one genomic run of an open-for-write dataset.
 
     With ``threads`` > 1 (the ``threads`` argument, else ``TTIO_THREADS``,
-    else cores minus 8) completed blocks are encoded on a pool and written
+    else cores minus 2) completed blocks are encoded on a pool and written
     in order by the caller's thread; at most ``threads + 1`` blocks are
     pending or encoding, so memory is about that many block working sets
     (about 1.8 GB for a 1 M-read block of 100 bp reads, 10 GB for
