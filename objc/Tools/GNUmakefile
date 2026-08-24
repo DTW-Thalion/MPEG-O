@@ -1,6 +1,6 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioDekEnvelope TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioFastqEncodeBench TtioBamParseBench TtioGenomicReadBench TtioSpectralReadBench TtioGenomicWriteBench TtioMzMLProbe TtioTransportEncodeBench TtioRefXLangWriter TtioRefXLangReader TtioQualXLangReader TtioMsImageXLangReader TtioRamanImageXLangReader TtioEncode TtioExport
+TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioDekEnvelope TtioJcampDxDump TtioBamDump TtioGfaDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioFastqEncodeBench TtioBamParseBench TtioGenomicReadBench TtioSpectralReadBench TtioGenomicWriteBench TtioMzMLProbe TtioTransportEncodeBench TtioRefXLangWriter TtioRefXLangReader TtioQualXLangReader TtioMsImageXLangReader TtioRamanImageXLangReader TtioEncode TtioExport
 
 TtioTransportEncodeBench_OBJC_FILES = TtioTransportEncodeBench.m
 TtioTransportEncodeBench_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
@@ -109,6 +109,10 @@ TtioJcampDxDump_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 TtioBamDump_OBJC_FILES = TtioBamDump.m
 TtioBamDump_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets
 TtioBamDump_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
+
+TtioGfaDump_OBJC_FILES = TtioGfaDump.m
+TtioGfaDump_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets
+TtioGfaDump_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 TtioM94zV4Cli_OBJC_FILES = TtioM94zV4Cli.m
 TtioM94zV4Cli_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
