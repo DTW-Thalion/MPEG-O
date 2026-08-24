@@ -11,12 +11,23 @@
 #import "Codecs/Registry/TTIOCodecRegistry.h"
 #import "Providers/TTIOCompoundField.h"
 #import "ValueClasses/TTIOEnums.h"
+#include <pthread.h>
 
 static NSError *awError(NSInteger code, NSString *msg)
 {
     return [NSError errorWithDomain:@"TTIOSpectralDatasetErrorDomain"
                                code:code
                            userInfo:@{NSLocalizedDescriptionKey: msg}];
+}
+
+// BASE_PACK alphabet table, built once via pthread_once (libc only;
+// no libdispatch dependency).
+static uint8_t awAllowedByte[256];
+static pthread_once_t awAllowedOnce = PTHREAD_ONCE_INIT;
+static void awInitAllowedBytes(void)
+{
+    const char *ok = "ACGTNacgtn";
+    for (const char *p = ok; *p; p++) awAllowedByte[(uint8_t)*p] = 1;
 }
 
 /** Codec for a concatenated segment-sequences buffer: BASE_PACK when
@@ -26,15 +37,10 @@ static NSError *awError(NSInteger code, NSString *msg)
 static TTIOCompression awSequencesCodec(NSData *data)
 {
     if (data.length == 0) return TTIOCompressionNone;
-    static uint8_t allowed[256];
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        const char *ok = "ACGTNacgtn";
-        for (const char *p = ok; *p; p++) allowed[(uint8_t)*p] = 1;
-    });
+    pthread_once(&awAllowedOnce, awInitAllowedBytes);
     const uint8_t *b = data.bytes;
     for (NSUInteger i = 0; i < data.length; i++) {
-        if (!allowed[b[i]]) return TTIOCompressionRansOrder1;
+        if (!awAllowedByte[b[i]]) return TTIOCompressionRansOrder1;
     }
     return TTIOCompressionBasePack;
 }
