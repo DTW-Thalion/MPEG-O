@@ -375,9 +375,10 @@ def iter_batches_shard(path, ranges, *, threads, batch_reads, batch_bytes,
     with pool_context(threads):
         pool = _cf.ThreadPoolExecutor(max_workers=threads,
                                       thread_name_prefix="ttio-fastq-shard")
+        futs = []
         try:
             for rng, q in zip(ranges, queues):
-                pool.submit(_worker, rng, q)
+                futs.append(pool.submit(_worker, rng, q))
             failure = None
             for q in queues:
                 while True:
@@ -398,4 +399,22 @@ def iter_batches_shard(path, ranges, *, threads, batch_reads, batch_bytes,
             _fire(progress, n, n)
         finally:
             stop.set()
+            # A consumer that abandons the generator (close, or an
+            # exception thrown into a yield) reaches here with workers
+            # still parked in a depth-1 ``q.put``; a blocked put never
+            # re-checks ``stop``, so a bare shutdown(wait=True) joins
+            # forever. Cancel the shards that never started, then
+            # drain the queues until every worker has exited — each
+            # drained slot lets a parked put complete, after which the
+            # worker sees ``stop`` and delivers its done marker into
+            # the drained queue. On the normal and error paths every
+            # future is already done and this loop is a no-op.
+            for f in futs:
+                f.cancel()
+            while not all(f.done() for f in futs):
+                for q in queues:
+                    try:
+                        q.get(timeout=0.01)
+                    except _queue.Empty:
+                        pass
             pool.shutdown(wait=True, cancel_futures=True)
