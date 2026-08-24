@@ -133,13 +133,46 @@ static int rdv2_varint_decode(const uint8_t *in, size_t in_len,
     return TTIO_RANS_ERR_CORRUPT;
 }
 
-/* ── max_encoded_size (unchanged) ───────────────────────────────── */
+/* ── max_encoded_size ───────────────────────────────────────────── */
 
 size_t ttio_ref_diff_v2_max_encoded_size(uint64_t n_reads, uint64_t total_bases) {
     /* Generous bound covering header + slice index + bodies */
     uint64_t n_slices = (n_reads + 9999) / 10000;
     if (n_slices == 0) n_slices = 1;
     return 4096 + 38 + n_slices * (32 + 24 + 4 * 1037 + total_bases / n_slices + 1024);
+}
+
+size_t ttio_ref_diff_v2_max_encoded_size2(uint64_t n_reads, uint64_t total_bases,
+                                          uint64_t slice_bytes) {
+    if (slice_bytes == 0)
+        return ttio_ref_diff_v2_max_encoded_size(n_reads, total_bases);
+    /* A slice closes before the read that would push it past the
+     * budget, so a slice smaller than half the budget is always
+     * followed by one at least that big: of any two consecutive
+     * slices, one holds >= slice_bytes / 2 bases. Hence
+     * n_slices <= 4 * total / slice_bytes + 2, capped by n_reads
+     * (a slice never holds fewer than one read). */
+    uint64_t n_slices = 4 * (total_bases / slice_bytes) + 2;
+    if (n_slices > n_reads && n_reads > 0) n_slices = n_reads;
+    if (n_slices == 0) n_slices = 1;
+    return 4096 + 38 + n_slices * (32 + 24 + 6 * 1040 + 1024) + total_bases;
+}
+
+/* First read of the slice after the one starting at `first`, under the
+ * byte budget: extend while the next read keeps the slice at or under
+ * `slice_bytes` bases and the read count stays under `max_reads`;
+ * every slice keeps at least one read. */
+static uint64_t rdv2_slice_end(const uint64_t *offsets, uint64_t n_reads,
+                               uint64_t first, uint64_t slice_bytes,
+                               uint64_t max_reads)
+{
+    uint64_t end = first + 1;
+    while (end < n_reads
+           && end - first < max_reads
+           && offsets[end + 1] - offsets[first] <= slice_bytes) {
+        end++;
+    }
+    return end;
 }
 
 /* ── Per-slice encoder ──────────────────────────────────────────── */
@@ -367,7 +400,20 @@ int ttio_ref_diff_v2_encode(
     size_t uri_len = strlen(in->reference_uri);
     if (uri_len > 0xFFFF) return TTIO_RANS_ERR_PARAM;
     uint64_t reads_per_slice = in->reads_per_slice ? in->reads_per_slice : 10000;
-    uint64_t n_slices = in->n_reads == 0 ? 0 : (in->n_reads + reads_per_slice - 1) / reads_per_slice;
+    uint64_t slice_bytes = in->slice_bytes;
+    uint64_t n_slices;
+    if (slice_bytes == 0) {
+        n_slices = in->n_reads == 0 ? 0 : (in->n_reads + reads_per_slice - 1) / reads_per_slice;
+    } else {
+        /* Byte budget (M97): boundaries follow the offsets, so the
+         * count needs a walk. reads_per_slice still caps the reads. */
+        n_slices = 0;
+        for (uint64_t first = 0; first < in->n_reads;
+             first = rdv2_slice_end(in->offsets, in->n_reads, first,
+                                    slice_bytes, reads_per_slice)) {
+            n_slices++;
+        }
+    }
 
     size_t out_capacity = *out_len;
     size_t header_len = RDV2_OUTER_FIXED + uri_len;
@@ -388,10 +434,19 @@ int ttio_ref_diff_v2_encode(
     size_t slice_bodies_off = slice_index_off + n_slices * RDV2_SLICE_INDEX_ENTRY;
     size_t cur = slice_bodies_off;
 
+    uint64_t next_first = 0;
     for (uint64_t s = 0; s < n_slices; s++) {
-        uint64_t first_read = s * reads_per_slice;
-        uint64_t n_in_slice = in->n_reads - first_read;
-        if (n_in_slice > reads_per_slice) n_in_slice = reads_per_slice;
+        uint64_t first_read, n_in_slice;
+        if (slice_bytes == 0) {
+            first_read = s * reads_per_slice;
+            n_in_slice = in->n_reads - first_read;
+            if (n_in_slice > reads_per_slice) n_in_slice = reads_per_slice;
+        } else {
+            first_read = next_first;
+            next_first = rdv2_slice_end(in->offsets, in->n_reads, first_read,
+                                        slice_bytes, reads_per_slice);
+            n_in_slice = next_first - first_read;
+        }
 
         size_t slice_body_size = 0;
         int rc = rdv2_encode_slice(
