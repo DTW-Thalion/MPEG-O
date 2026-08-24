@@ -155,4 +155,48 @@ class AcquisitionRunIterBlocksTest {
         collect(run, 5, 5, 4, units);
         assertTrue(units.isEmpty());
     }
+
+    @Test
+    void theColumnMatchesTheSpectrumPath(@TempDir Path tmp) {
+        // The column has to agree with the spectra value for value, or a
+        // bulk caller reading it is reading something else.
+        AcquisitionRun run = open(write(tmp, synthetic()));
+        SpectrumIndex idx = run.spectrumIndex();
+        java.util.concurrent.atomic.AtomicLong checked = new java.util.concurrent.atomic.AtomicLong();
+        java.util.concurrent.atomic.AtomicLong wrong = new java.util.concurrent.atomic.AtomicLong();
+        java.util.concurrent.atomic.AtomicInteger withCol = new java.util.concurrent.atomic.AtomicInteger();
+
+        run.iterBlocks(0, N_SPEC, 2, (view, viewStart, firstSpectrum, nSpectra) -> {
+            double[] col = view.column("mz");
+            if (col == null) return;
+            withCol.incrementAndGet();
+            long c = 0, w = 0;
+            for (int k = 0; k < nSpectra; k++) {
+                int i = firstSpectrum + k;
+                MassSpectrum sp = (MassSpectrum) view.objectAtIndex(viewStart + k);
+                double[] sv = sp.mzValues();
+                int off = (int) (idx.offsetAt(i) - view.valueStart());
+                for (int j = 0; j < sv.length; j++) {
+                    c++;
+                    if (col[off + j] != sv[j]) w++;
+                }
+            }
+            checked.addAndGet(c);
+            wrong.addAndGet(w);
+        });
+
+        assertTrue(withCol.get() >= 2, "only " + withCol.get() + " unit(s) exposed a column");
+        assertTrue(checked.get() > 0);
+        assertEquals(0, wrong.get(), wrong.get() + " of " + checked.get() + " values disagree");
+    }
+
+    @Test
+    void anUnknownChannelHasNoColumn(@TempDir Path tmp) {
+        AcquisitionRun run = open(write(tmp, synthetic()));
+        java.util.List<double[]> seen = java.util.Collections.synchronizedList(new ArrayList<>());
+        run.iterBlocks(0, N_SPEC, 1, (view, viewStart, firstSpectrum, nSpectra) ->
+                seen.add(view.column("nope")));
+        assertFalse(seen.isEmpty());
+        for (double[] c : seen) assertNull(c);
+    }
 }

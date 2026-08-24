@@ -156,3 +156,44 @@ def test_empty_range_visits_nothing(corpus):
     with SpectralDataset.open(corpus) as ds:
         ds.ms_runs["run_0001"].for_each_block(lambda *a: calls.append(a), 5, 5)
     assert calls == []
+
+
+def test_column_matches_the_spectrum_path(corpus):
+    """The column has to agree with the spectra value for value, or a
+    bulk caller reading it is reading something else."""
+    checked = 0
+    wrong = 0
+    units_with_column = 0
+
+    with SpectralDataset.open(corpus) as ds:
+        run = ds.ms_runs["run_0001"]
+        offsets, lengths = run.index.offsets, run.index.lengths
+
+        def fn(view, view_start, first_spectrum, n_spectra):
+            nonlocal checked, wrong, units_with_column
+            col = view.column("mz")
+            if col is None:
+                return
+            units_with_column += 1
+            for k in range(n_spectra):
+                i = first_spectrum + k
+                sp = view[view_start + k]
+                sv = np.asarray(sp.mz_array.data)
+                o = int(offsets[i]) - view.value_start
+                cv = col[o:o + int(lengths[i])]
+                checked += len(sv)
+                wrong += int(np.count_nonzero(cv != sv))
+
+        run.for_each_block(fn, threads=2)
+
+    assert units_with_column >= 2, f"only {units_with_column} unit(s) exposed a column"
+    assert checked > 0
+    assert wrong == 0, f"{wrong} of {checked} values disagree"
+
+
+def test_column_is_none_for_an_unknown_channel(corpus):
+    seen = []
+    with SpectralDataset.open(corpus) as ds:
+        ds.ms_runs["run_0001"].for_each_block(
+            lambda view, vs, fs, n: seen.append(view.column("nope")), threads=1)
+    assert seen and all(c is None for c in seen)
