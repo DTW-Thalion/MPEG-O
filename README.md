@@ -39,10 +39,10 @@ This repository hosts three reference-implementation streams plus a desktop GUI 
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **Normative reference — 4501 PASS / 0 failures.** Current release: v1.7.1. | `objc/` |
+| **Objective-C (GNUstep)** | **Normative reference — 9516 PASS / 0 failures.** Current release: v1.8.0. | `objc/` |
 | **Python (`ttio`)**       | **Full parity with ObjC and Java, Python 3.11+.** | `python/` |
 | **Java (`global.thalion.ttio`)** | **Full parity with ObjC and Python, JDK 22, Maven.** Library + tio-browser combined `mvn test` is green across the suite. | `java/` |
-| **`tio-browser` (JavaFX desktop GUI)** | **v1.7.1 — TTI-O Workbench Client (W1–W6) shipped:** Connection Manager + Container Browser + Transfer Manager + Cohort Query Builder + Pipeline Launcher / Job Monitor + Interactive Session Launcher + Encoding + Export panels. Per-platform shaded JARs bundle HDF5 1.14.6 + LZ4 filter plugin + `libttio_rans_jni` for Linux x86_64, macOS Apple Silicon, and Windows x86_64; end users run `java -jar tio-browser-<ver>-<os>.jar` with no toolchain setup beyond a JDK 22+. See [`tio-browser/README.md`](tio-browser/README.md). | `tio-browser/` |
+| **`tio-browser` (JavaFX desktop GUI)** | **v1.8.0 — TTI-O Workbench Client (W1–W6) shipped:** Connection Manager + Container Browser + Transfer Manager + Cohort Query Builder + Pipeline Launcher / Job Monitor + Interactive Session Launcher + Encoding + Export panels. Per-platform shaded JARs bundle HDF5 1.14.6 + LZ4 filter plugin + `libttio_rans_jni` for Linux x86_64, macOS Apple Silicon, and Windows x86_64; end users run `java -jar tio-browser-<ver>-<os>.jar` with no toolchain setup beyond a JDK 22+. See [`tio-browser/README.md`](tio-browser/README.md). | `tio-browser/` |
 
 A **cross-language conformance harness** drives the per-AU encryption CLI and
 the JCAMP-DX bridge through small subprocess drivers in all three languages
@@ -65,7 +65,7 @@ implementation streams.
 * **2D correlation spectroscopy (2D-COS)** — `TwoDimensionalCorrelationSpectrum` holds synchronous + asynchronous rank-2 correlation matrices over a shared variable axis; gated behind `opt_native_2d_cos`.
 * **Chromatograms** — TIC / XIC / SRM traces persist as `Chromatogram` with a parallel-array chromatogram index, round-tripped via `<chromatogramList>` + `<index name="chromatogram">` in the mzML writer.
 * **MS imaging** — `MSImage` stores a 3-D `[height, width, spectralPoints]` HDF5 dataset with tile-aligned chunking (default 32×32 pixel tiles); inherits identifications / quantifications / provenance / access-policy from `SpectralDataset`. As of v1.7.0 `MSImage` / `RamanImage` / `IRImage` share a common `Image` base + `ImageKind` enum, accessed uniformly via `imageForKind(kind)` / `images` (the old `image()` / `ramanImage()` / `irImage()` accessors were replaced).
-* **Genomic sequencing** — `GenomicRun` is a parallel run-and-element hierarchy alongside the spectrum-based classes. `AlignedRead` is the per-read value class (read_name, chromosome, position, mapping_quality, cigar, sequence, qualities, flags, mate-pair info — modelled on SAM/BAM). `GenomicIndex` carries parallel-array per-read scalars (offsets, lengths, chromosomes, positions, mapping qualities, flags) for region / unmapped / flag queries. `WrittenGenomicRun` is the write-side container. Storage under `/study/genomic_runs/<name>/`: `signal_channels/` holds per-base byte arrays (sequences, qualities) plus VL_STRING compounds (cigars, read_names, mate_info), while the per-read integer parallel arrays (positions, flags, mapping_qualities) live under `genomic_index/` (moved out of `signal_channels/` in v1.6). See [`docs/genomic-runs.md`](docs/genomic-runs.md) for the data-model walkthrough.
+* **Genomic sequencing** — `GenomicRun` is a parallel run-and-element hierarchy alongside the spectrum-based classes. `AlignedRead` is the per-read value class (read_name, chromosome, position, mapping_quality, cigar, sequence, qualities, flags, mate-pair info — modelled on SAM/BAM). `GenomicIndex` carries parallel-array per-read scalars (offsets, lengths, chromosomes, positions, mapping qualities, flags) for region / unmapped / flag queries. `WrittenGenomicRun` is the write-side container; `GenomicStreamWriter` appends reads block by block without holding the run in memory. Storage under `/study/genomic_runs/<name>/` uses the `blocks_v1` layout by default: the run is a sequence of independently coded blocks, `signal_channels/` holds each codec-coded blob channel (sequences, qualities, read_names, cigars, mate_info) back to back, `blocks/index` records per-block byte ranges and codec ids, and the per-read integer parallel arrays (positions, flags, mapping_qualities) live under `genomic_index/`. Readers stream via `iter_reads` (in-order, decode-ahead) or `for_each_block` / `iterBlocks` (parallel, unordered). See [`docs/genomic-runs.md`](docs/genomic-runs.md) for the data-model walkthrough.
 
 ### Genomic compression codecs
 
@@ -74,12 +74,12 @@ A complete genomic codec stack ships across all three languages with cross-langu
 * **rANS order-0 / order-1** (codec ids `4` / `5`) — clean-room implementation of the range Asymmetric Numeral Systems entropy coder from Duda 2014 (arXiv:1311.2540). Wire format, frequency-table normalisation, and state width all specified for byte-identical output across Python / ObjC / Java. Python ships a Cython accelerator at `ttio.codecs._rans._rans` that runs faster than ObjC's hand-rolled C; the pure-Python reference at `ttio.codecs.rans` remains the byte-exact fallback. See [`docs/codecs/rans.md`](docs/codecs/rans.md).
 * **BASE_PACK** (codec id `6`) — 2-bit ACGT packing with a sparse position+byte sidecar mask for non-ACGT bytes (`N`, IUPAC ambiguity codes, soft-masking lowercase, gaps). Lossless on the full 256-byte alphabet; case-sensitive (preserves soft-masking convention). See [`docs/codecs/base_pack.md`](docs/codecs/base_pack.md).
 * **QUALITY_BINNED** (codec id `7`) — fixed Illumina-8 / CRUMBLE-derived 8-bin Phred quantisation with 4-bit-packed bin indices. Lossy by construction; round-trip via bin centres. See [`docs/codecs/quality.md`](docs/codecs/quality.md).
-* **DELTA_RANS_ORDER0** (codec id `11`) — delta + zigzag + LEB128 + rANS order-0 wrapper for sorted-ascending integer channels. Auto-default for `positions` on genomic runs. See [`docs/codecs/delta_rans.md`](docs/codecs/delta_rans.md).
-* **FQZCOMP_NX16_Z** (codec id `12`) — CRAM-mimic lossless quality codec (V4 wire format, magic `M94Z`). Static-per-block frequency tables, 16-bit renormalisation, `T = 4096` fixed (`T | b·L` exactly — byte-pairing invariant). Default for the `qualities` channel. See [`docs/codecs/fqzcomp_nx16_z.md`](docs/codecs/fqzcomp_nx16_z.md).
+* **DELTA_RANS_ORDER0** (codec id `11`) — delta + zigzag + LEB128 + rANS order-0 wrapper for sorted-ascending integer channels. Read-compatibility codec: per-read integer fields moved to `genomic_index/` (zlib) in v1.6, so no current write path selects it; readers decode it from earlier files. See [`docs/codecs/delta_rans.md`](docs/codecs/delta_rans.md).
+* **FQZCOMP_NX16_Z** (codec id `12`) — CRAM-mimic lossless quality codec (magic `M94Z`). The V4 wire format (static-per-block frequency tables, 16-bit renormalisation, `T = 4096` fixed — byte-pairing invariant) is the baseline; when the run carries a base-parallel `sequences` channel the encoder also tries the V5 sequence-context strategies and keeps the smallest stream by exact size, and writers can force the V6 segmented-adaptive variant for block-parallel encode. Default for the `qualities` channel. See [`docs/codecs/fqzcomp_nx16_z.md`](docs/codecs/fqzcomp_nx16_z.md) and [`docs/codecs/m94z_v6.md`](docs/codecs/m94z_v6.md).
 * **MATE_INLINE_V2** (codec id `13`) — inlined per-record mate_info (chrom + pos + tlen) as a single channel. See [`docs/codecs/mate_info_v2.md`](docs/codecs/mate_info_v2.md).
-* **REF_DIFF_V2** (codec id `14`) — reference-aligned sequence-diff codec for genomic `sequences` channels. Slice-based wire format with embedded reference at `/study/references/<reference_uri>/`; closes ~80% of the chr22 sequence-channel compression gap to CRAM 3.1. Falls back to BASE_PACK silently when the reference is unavailable at write. See [`docs/codecs/ref_diff_v2.md`](docs/codecs/ref_diff_v2.md).
+* **REF_DIFF_V2** (codec id `14`) — reference-aligned sequence-diff codec for genomic `sequences` channels. Slice-based wire format with embedded reference at `/study/references/<reference_uri>/`; closes ~80% of the chr22 sequence-channel compression gap to CRAM 3.1. Unmapped reads (CIGAR `*`) are carried in the codec's UL substream; when the reference is unavailable at write, sequences fall back to RANS_ORDER1 (`blocks_v1`) or BASE_PACK (whole-channel layout). See [`docs/codecs/ref_diff_v2.md`](docs/codecs/ref_diff_v2.md).
 * **NAME_TOKENIZED_V2** (codec id `15`) — 8-substream multi-token columnar codec for read names. FLAG / POOL_IDX / MATCH_K / COL_TYPES / NUM_DELTA / DICT_CODE / DICT_LIT / VERB_LIT substreams; per-block reset every 4096 reads; auto-picked rANS-O0 vs raw passthrough per substream. ~67 MB savings on chr22 NA12878 vs a VL-string compound layout. See [`docs/codecs/name_tokenizer_v2.md`](docs/codecs/name_tokenizer_v2.md).
-* **Pipeline wiring** — every genomic-run channel in `signal_channels/` accepts at least one codec via `WrittenGenomicRun.signal_codec_overrides`. Per-channel `@compression` attribute; lazy whole-channel decode + per-instance cache. The cigars channel accepts rANS-O0/O1; per-channel codec selection guidance is documented in [`docs/format-spec.md`](docs/format-spec.md) §10.4–§10.10.
+* **Pipeline wiring** — every genomic-run channel in `signal_channels/` accepts at least one codec via `WrittenGenomicRun.signal_codec_overrides`. Per-channel `@compression` attribute; lazy whole-channel decode + per-instance cache. The cigars channel accepts rANS-O0/O1 (the `blocks_v1` default); per-channel codec selection guidance is documented in [`docs/format-spec.md`](docs/format-spec.md) §10.4–§10.12.
 * **`libttio_rans`** — native C library at `native/` providing AVX2/SSE4.1/scalar SIMD-dispatched rANS kernels and the v2-codec C kernels (`ref_diff_v2`, `mate_info_v2`, `name_tok_v2`, `fqzcomp_qual` V4). Consumed by Python (ctypes), Java (JNI), and ObjC (direct linkage). **Required at runtime** for genomic-run write/read on all three bindings — set `TTIO_RANS_LIB_PATH` or place `libttio_rans.{so,dylib,jni}` on the loader search path. See [`docs/native-rans-library.md`](docs/native-rans-library.md).
 
 ### The six data primitives
@@ -101,14 +101,15 @@ A complete genomic codec stack ships across all three languages with cross-langu
 * **VL_BYTES compound field kind** — variable-length byte segments in compound rows across all providers; Java's HDF5 provider uses a native `hvl_t` raw-buffer pool to work around JHI5 1.10's marshalling gap.
 * **Cloud-native access** — Python `SpectralDataset.open("s3://bucket/run.tio")` routes through `fsspec` (HTTP / S3 / GCS / Azure); alternatively stream HDF5 metadata + chunks directly over S3 / HTTPS via libhdf5's **ROS3 VFD**. Benchmark: 10 random spectra from a 15 MB remote file in ~50 ms, ~24% of bytes transferred.
 * **Thread safety** — `HDF5File` carries a `pthread_rwlock_t` serializing writes and allowing concurrent reads; Python side opt-in via `SpectralDataset.open(..., thread_safe=True)` with a writer-preferring `RWLock`. Degrades to exclusive locking on non-threadsafe libhdf5 builds.
-* **Chunked + compressed storage** — zlib via HDF5, plus optional **LZ4** (filter 32004; ~35× faster write / ~2× faster read than zlib) and **Numpress-delta** (sub-ppm relative error for m/z). Both cross-language byte-identical between ObjC and Python. LZ4 skips cleanly at runtime when the plugin isn't loadable.
-* **Streaming + query** — `StreamWriter` / `StreamReader` for incremental write + sequential read over runs of arbitrary size. `Query` evaluates compressed-domain predicates (RT range, MS level, polarity, precursor m/z range, base peak threshold) over the in-memory index without touching signal channels; a 10k-spectrum scan runs in ~0.2 ms in CI.
+* **Chunked + compressed storage** — zlib via HDF5, plus optional **LZ4** (filter 32004; ~35× faster write / ~2× faster read than zlib) and **Numpress-delta** (sub-ppm relative error for m/z; kept for mzML / msNumpress interchange parity, not as a size optimisation). Both cross-language byte-identical between ObjC and Python. LZ4 skips cleanly at runtime when the plugin isn't loadable. Float64 channels of MS runs default to the lossless **FLOAT_DELTA_ZSTD** codec (id 17: per-block none/delta on the uint64 bit view, byte-plane transpose, one zstd frame; bit-exact round-trip incl. NaN payloads); writers opt out via `opt_disable_float_delta`.
+* **Streaming + query** — `StreamWriter` / `StreamReader` for incremental write + sequential read over runs of arbitrary size. `Query` evaluates compressed-domain predicates (RT range, MS level, polarity, precursor m/z range, base peak threshold) over the in-memory index without touching signal channels; a 10k-spectrum scan runs in ~0.2 ms in CI. Spectral runs also expose a parallel block consumer — `for_each_block` (Python) / `iterBlocks` (Java, ObjC) visits decoded blocks unordered across threads, and the delivered view's `column(channel)` / `-unitColumnForChannel:valueStart:` hands back a unit's decoded column without building spectrum objects.
 
 ### Importers
 
 All importers and exporters are registered through a unified `Reader` / `Writer` registry (one entry per format) across the three languages (v1.7.0). Readers return an `ImportedDataset` draft with a write-through delegate, and advertise a per-language `requiredTool` (genomic readers report `samtools` in Python / ObjC; Java uses htsjdk and reports `null`).
 
 * **mzML 1.1** — SAX-parsed, base64 + zlib-aware, CV-mapped; populates activation method, isolation window, ion mobility, and chromatograms.
+* **imzML 1.1** — MS-imaging pair (`.imzML` XML + `.ibd` binary): continuous and processed storage modes, UUID cross-check between the two files, per-pixel coordinates preserved; the `.ibd` is read at the named byte offsets rather than loaded whole.
 * **nmrML 1.0+** — element-based acquisition parameters, int32/int64 FID payloads widened to complex128 on import, dimension-scale extraction. Validated against BMRB `bmse000325.nmrML`.
 * **JCAMP-DX 5.01** — AFFN `##XYDATA=(X++(Y..Y))` plus the full §5.9 **compressed dialect (PAC / SQZ / DIF / DUP)**. Reader auto-detects compression via a sentinel-char scan that excludes `e`/`E` so AFFN scientific notation doesn't false-trigger. Dispatches on `##DATA TYPE=` to Raman, IR (transmittance + absorbance), and UV/Vis. 2-D NTUPLES is intentionally out of scope.
 * **Bruker timsTOF `.d`** — SQLite metadata reads natively in every language (`java.sql`, `libsqlite3`, stdlib `sqlite3`); binary frame decompression via `opentimspy` + `opentims-bruker-bridge` (Python native; Java / ObjC subprocess the Python helper). `inv_ion_mobility` channel preserves the 2-D timsTOF geometry per-peak. Install with `pip install 'ttio[bruker]'`. Both `analysis.tdf` (TIMS) and `analysis.tsf` (non-TIMS Bruker QTOF / MALDI) directories are recognised for metadata reads; per-frame decode is TDF-only in v1.0 (`.tsf` raises a clear `BrukerTDFUnavailableError` pointing at the msconvert workaround).
@@ -132,7 +133,7 @@ All importers and exporters are registered through a unified `Reader` / `Writer`
 
 ### Streaming transport (`.tis`)
 
-* **Packet codec** — 24-byte headers, twelve packet types: StreamHeader, DatasetHeader, AccessUnit, ProtectionMetadata, Annotation, Provenance, Chromatogram, EndOfDataset, BlobV2MateInfo, BlobV2RefDiff, BlobV2NameTok, EndOfStream. Three-language parity; bidirectional conformance matrix (any writer × any reader). Optional CRC-32C per packet. See [`docs/transport-spec.md`](docs/transport-spec.md).
+* **Packet codec** — 24-byte headers, twenty-four packet types: the core set (StreamHeader, DatasetHeader, AccessUnit, ProtectionMetadata, Annotation, Provenance, Chromatogram, EndOfDataset, EndOfStream), the bulk-mode v2-blob carriage (BlobV2MateInfo, BlobV2RefDiff, BlobV2NameTok), and the complete-coverage set behind the `transport_v0_11` stream feature flag (reference groups and chromosomes, image cubes, identification/quantification tables, dataset provenance, subject/sample metadata, encryption-algorithm name — types 0x10–0x1B). Three-language parity; bidirectional conformance matrix (any writer × any reader). Optional CRC-32C per packet. See [`docs/transport-spec.md`](docs/transport-spec.md).
 * **WebSocket client + server** — libwebsockets (ObjC), `websockets` (Python), Java-WebSocket (Java). Stream `.tio` as `.tis` over `ws://` / `wss://`.
 * **Acquisition simulator** — replays a fixture at wall-clock pace to exercise client/server scheduling.
 * **Selective access** — per-packet `AUFilter` for client-driven filtering without decryption; ProtectionMetadata packet carries `cipher_suite`, `kek_algorithm`, `wrapped_dek`, `signature_algorithm`, `public_key`. `AUFilter` includes chromosome + position-range predicates so subscribers can scope a stream to a genomic region without decrypting AUs they won't read.
@@ -162,7 +163,7 @@ All importers and exporters are registered through a unified `Reader` / `Writer`
 * **Per-AU encryption CLIs** — `per_au_cli` (Python), `PerAUCli` (Java), `TtioPerAU` (ObjC) all expose `{encrypt, decrypt, send, recv, transcode}` subcommands. `decrypt` emits a canonical "MPAD" dump for byte-compare; `transcode --rekey` rotates DEKs.
 * **PQC conformance matrix** — 32-cell verification across languages × providers (primitive ML-DSA / ML-KEM sign-verify-encaps-decaps, `v3:` signatures on HDF5 / Zarr / SQLite, v2+v3 coexistence).
 * **JCAMP-DX conformance** — 6 integration tests compare bit-for-bit parses across Python↔Java and Python↔ObjC. ObjC CLI `TtioJcampDxDump`.
-* **API stability audit** — every public API classified Stable / Provisional / Deprecated in [`docs/api-stability.md`](docs/api-stability.md).
+* **API stability audit** — the public API surface classified Stable / Provisional / Deprecated ahead of the v1.0 freeze in [`docs/api-stability-v0.8.md`](docs/api-stability-v0.8.md).
 
 ### Foundation
 
@@ -186,12 +187,16 @@ Runs every push on `ubuntu-latest` with **clang + libobjc2 + gnustep-base built 
 
 ## Python Installation
 
+The `ttio` package builds as an sdist + cross-platform wheels and is
+published to **TestPyPI** on release tags; it is not yet on PyPI
+proper. Install from a checkout:
+
 ```bash
 # Core reader/writer only
-pip install ttio
+pip install ./python
 
 # With every optional extra (crypto, import, cloud, codecs)
-pip install 'ttio[all]'
+pip install './python[all]'
 ```
 
 Individual extras:
@@ -338,7 +343,7 @@ works on both Debian/Ubuntu's apt packages and source builds against
 - [`docs/transport-encryption-design.md`](docs/transport-encryption-design.md) — Per-AU encryption design
 - [`docs/feature-flags.md`](docs/feature-flags.md) — Feature-flag registry
 - [`docs/providers.md`](docs/providers.md) — Storage provider feature matrix (HDF5 / Memory / SQLite / Zarr) and compound-field-kind support
-- [`docs/api-stability.md`](docs/api-stability.md) — Per-symbol stability classification across all three languages
+- [`docs/api-stability-v0.8.md`](docs/api-stability-v0.8.md) — Per-symbol stability classification across all three languages (v0.8 audit, ahead of the v1.0 freeze)
 - [`docs/pqc.md`](docs/pqc.md) — Post-quantum crypto: ML-KEM-1024 + ML-DSA-87
 - [`docs/migration-guide.md`](docs/migration-guide.md) — Migration guide from mzML / nmrML
 - [`docs/vendor-formats.md`](docs/vendor-formats.md) — Vendor format support (Thermo `.raw`, Bruker `.d`, Waters MassLynx, JCAMP-DX Raman/IR/UV-Vis incl. compressed dialects)

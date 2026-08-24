@@ -39,12 +39,14 @@ are. The reference itself is embedded elsewhere in the file at
 §10.10). On decode, the registry adapter resolves the reference via
 `CodecContext.reference_resolver.resolve(uri, expected_md5, chromosome)`.
 
-**Silent BASE_PACK fallback (write side).** REF_DIFF_V2 is the default
-`sequences` codec, but it can only run when a reference is available at
-write time. When `embed_reference=True` but `reference_chrom_seqs` is
-absent, the writer silently falls back to BASE_PACK on the `sequences`
-channel (`python/src/ttio/written_genomic_run.py` lines ~118-123, "Q5b
-= C"). Likewise, the codec functions require the native library: if
+**Fallback without a reference (write side).** REF_DIFF_V2 is the
+default `sequences` codec, but it can only run when a reference is
+available at write time. Under the default `blocks_v1` layout a run
+without a reference codes sequences with RANS_ORDER1, and fully
+unmapped blocks fall back to BASE_PACK (`format-spec.md` §10.12.3);
+on the legacy whole-channel path the no-reference fallback is
+BASE_PACK (`python/src/ttio/written_genomic_run.py`, "Q5b = C").
+Likewise, the codec functions require the native library: if
 `TTIO_RANS_LIB_PATH` does not point at a built `libttio_rans.so` then
 `HAVE_NATIVE_LIB` is False and `encode`/`decode` raise `RuntimeError`.
 

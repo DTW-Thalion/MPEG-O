@@ -1,20 +1,22 @@
 # TTI-O M95 — DELTA_RANS_ORDER0 Codec
 
-> **Status:** shipping in v1.2.0 (M95). Reference implementation in
+> **Status:** read-compatibility codec. Reference implementation in
 > Python, normative implementation in Objective-C, parity
 > implementation in Java. All three produce byte-identical encoded
 > streams for the four canonical conformance vectors. Applies to
-> sorted-ascending integer channels (primarily `positions`); codec id `11`.
+> sorted-ascending integer channels; codec id `11`.
+>
+> No current write path selects this codec: the per-read integer
+> fields (`positions`, `flags`, `mapping_qualities`) moved out of
+> `signal_channels/` into `genomic_index/` (zlib-filtered) in v1.6,
+> and the per-field `mate_info_*` override surface was removed in
+> v1.7 with the MATE_INLINE_V2 consolidation. Readers keep full
+> decode support for files written while the integer-channel
+> defaults below were live.
 
-This document specifies the DELTA_RANS_ORDER0 codec used by TTI-O for
-lossless integer-channel compression starting with v1.2.0. It is a
-delta + zigzag + varint + rANS order-0 wrapper designed for
-sorted-ascending integer channels.
-
-M95 runs alongside M83 (`RANS_ORDER0`, codec id `4`) and M94.Z
-(`FQZCOMP_NX16_Z`, codec id `12`); all three codecs coexist in the
-codebase. The v1.5 default codec stack assigns DELTA_RANS_ORDER0 to
-the `positions` channel and RANS_ORDER0 to other integer channels.
+This document specifies the DELTA_RANS_ORDER0 codec: a delta +
+zigzag + varint + rANS order-0 wrapper designed for sorted-ascending
+integer channels.
 
 ---
 
@@ -169,22 +171,25 @@ Throws on invalid or corrupt input.
 
 ---
 
-## 5. Auto-default channel assignments (v1.5)
+## 5. Channel assignments (historical, v1.5-era files)
 
-For a `WrittenGenomicRun`, the following integer-channel codec
-defaults apply (channels stored under `genomic_index/`):
+Files written while the v1.5 integer-channel defaults were live carry
+these codecs on the integer channels then stored under
+`signal_channels/`; readers decode them via this table:
 
-| Channel            | Default codec       | Id  |
+| Channel            | Codec               | Id  |
 |--------------------|---------------------|-----|
 | positions          | DELTA_RANS_ORDER0   | 11  |
 | flags              | RANS_ORDER0         | 4   |
 | mapping_qualities  | RANS_ORDER0         | 4   |
 | template_lengths   | RANS_ORDER0         | 4   |
 
-`positions` is the only channel that gets DELTA_RANS_ORDER0 by
-default. Other integer channels use RANS_ORDER0 because their values
-are not sorted-ascending. The `mate_info` channel is encoded via the
-inline MATE_INLINE_V2 codec (id 13) — see `docs/codecs/mate_info_v2.md`.
+`positions` was the only channel that got DELTA_RANS_ORDER0 by
+default; the other integer channels used RANS_ORDER0 because their
+values are not sorted-ascending. Current files store these fields
+under `genomic_index/` with the zlib filter (`format-spec.md` §10.7),
+and the `mate_info` channel is encoded via the inline MATE_INLINE_V2
+codec (id 13) — see `docs/codecs/mate_info_v2.md`.
 
 ---
 

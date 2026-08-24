@@ -23,11 +23,11 @@ export TTIO_RANS_LIB_PATH="$(pwd)/native/_build/libttio_rans.so"
 cd python && pytest tests/ -q --ignore=tests/stress
 ```
 
-A clean Python+native install reaches **~1365 passing tests, ~4
-skipped, 1 xfailed**. Skips are vendor-format integration tests
-that need optional fixtures (see "Optional vendor-format fixtures"
-below); the xfail is by-design (separate Java process can't see a
-Python in-memory store).
+A clean Python+native install reaches **~2320 passing tests, ~145
+skipped**. Skips are platform-conditional tests and vendor-format
+integration tests that need optional fixtures (see "Optional
+vendor-format fixtures" below); the by-design xfail is a separate
+Java process that can't see a Python in-memory store.
 
 ## Repository layout
 

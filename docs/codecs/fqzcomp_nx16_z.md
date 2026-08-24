@@ -4,17 +4,24 @@
 > id `12`, magic `M94Z`. All three reference implementations (Python,
 > Objective-C, Java) produce byte-identical encoded streams.
 >
-> **v1.0 reset — current state.** Only the **V4** wire format (version
-> byte `4`, CRAM 3.1 `fqzcomp_qual` port) is live. The native
-> `libttio_rans` library is **required** for top-level encode/decode in
-> all three languages — there is no pure-Python or Cython fallback. The
-> earlier V1 (pure-language static rANS), V2 (native-body) and V3
-> (adaptive Range Coder) formats were removed: their encoders/decoders
-> are gone and `decode_with_metadata` rejects V1/V2/V3 blobs with a
-> migration error. The V1/V2/V3 wire-format and algorithm sections below
-> are retained as historical record; they no longer describe a path the
-> current code can produce or read. See `python/src/ttio/codecs/`
-> `fqzcomp_nx16_z.py` for the live V4-only surface.
+> **Current state.** Three wire versions are live, discriminated by
+> the version byte: **V4** (CRAM 3.1 `fqzcomp_qual` port — the
+> baseline this document specifies), **V5** (sequence-context
+> strategies S5/S6: emitted only when the caller supplies a
+> base-parallel `sequences` channel and a sequence strategy yields
+> the smaller stream by exact size; the decoder then requires the
+> decoded sequences as side input), and **V6** (segmented adaptive
+> body for block-parallel encode, reached only by writer policy /
+> strategy hint 8, never by auto-tune — specified in
+> [`m94z_v6.md`](m94z_v6.md)). Writers pin the V4 strategy set per
+> run with `opt_disable_qualities_v5` / `optDisableQualitiesV5`.
+> The native `libttio_rans` library is **required** for top-level
+> encode/decode in all three languages — there is no pure-Python or
+> Cython fallback. The earlier V1 (pure-language static rANS), V2
+> (native-body) and V3 (adaptive Range Coder) formats were removed:
+> their encoders/decoders are gone and `decode_with_metadata` rejects
+> V1/V2/V3 blobs with a migration error. See
+> `python/src/ttio/codecs/fqzcomp_nx16_z.py` for the live surface.
 
 This document specifies the FQZCOMP_NX16_Z codec used by TTI-O for
 lossless quality-score compression in v1.0. It is a clean-room
@@ -45,21 +52,26 @@ rationale that motivated M94.Z's fixed `T = 4096` / 16-bit
 renormalisation invariant is preserved in §8 below because the live
 V4 path inherits the same numeric discipline.
 
-Everything below describes the **live V4 wire format only**.
+Everything below specifies the **V4 wire format**, the baseline of
+the live surface. The V5 emission rule (sequence-context strategies,
+version byte `5`) is summarised in the status note above and in
+`format-spec.md` §10.4 / §10.11; the V6 segmented format (version
+byte `6`) is specified in [`m94z_v6.md`](m94z_v6.md).
 
 ---
 
 ## 2. Wire format (codec id 12)
 
-The only on-disk shape produced or read by the current code is the
-**V4** format (magic `M94Z`, codec id `12`, version byte `4`):
-a CRAM 3.1 `fqzcomp_qual` byte-compatible inner body wrapped by an
-M94.Z outer header. The encoder is auto-tuning and byte-equal with
-htscodecs on all 4 benchmark corpora. V4 is the default — and only —
-format when `_HAVE_NATIVE_LIB` is true; the native `libttio_rans`
-library is required (there is no pure-language fallback). Blobs
-carrying the removed version bytes 1, 2, or 3 are rejected at decode
-with a migration error.
+The baseline on-disk shape is the **V4** format (magic `M94Z`, codec
+id `12`, version byte `4`): a CRAM 3.1 `fqzcomp_qual` byte-compatible
+inner body wrapped by an M94.Z outer header. The encoder is
+auto-tuning and byte-equal with htscodecs on all 4 benchmark corpora.
+When no `sequences` side input is supplied, V4 is the only emitted
+format; with sequences supplied, the encoder emits version byte `5`
+exactly when a sequence-context strategy wins by size (status note
+above). The native `libttio_rans` library is required (there is no
+pure-language fallback). Blobs carrying the removed version bytes 1,
+2, or 3 are rejected at decode with a migration error.
 
 All multi-byte integers little-endian.
 
