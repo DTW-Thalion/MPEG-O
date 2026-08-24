@@ -54,6 +54,12 @@ libTTIO_HEADER_FILES = \
 	Genomics/TTIOBlockView.h \
 	Genomics/TTIOLazyReference.h \
 	Dataset/TTIOSpectralDataset+GenomicWrite.h \
+	Dataset/TTIOSpectralDataset+AssemblyWrite.h \
+	Assembly/TTIOGraphSegment.h \
+	Assembly/TTIOGraphLink.h \
+	Assembly/TTIOGraphPath.h \
+	Assembly/TTIOWrittenAssemblyGraph.h \
+	Assembly/TTIOAssemblyGraph.h \
 	Genomics/TTIOGenomicRun.h \
 	Genomics/TTIOPackedReference.h \
 	Genomics/TTIOReferenceImport.h \
@@ -104,6 +110,7 @@ libTTIO_HEADER_FILES = \
 	Import/TTIOJcampDxDecode.h \
 	Import/TTIOFastaReader.h \
 	Import/TTIOFastqReader.h \
+	Import/TTIOGfaReader.h \
 	Export/TTIOMzMLWriter.h \
 	Export/TTIORunSelection.h \
 	Export/TTIOBamWriter.h \
@@ -117,6 +124,7 @@ libTTIO_HEADER_FILES = \
 	Export/TTIOJcampDxEncode.h \
 	Export/TTIOFastaWriter.h \
 	Export/TTIOFastqWriter.h \
+	Export/TTIOGfaWriter.h \
 	Providers/TTIOCompoundField.h \
 	Providers/TTIOStorageProtocols.h \
 	Providers/TTIOProviderRegistry.h \
@@ -221,6 +229,12 @@ libTTIO_OBJC_FILES = \
 	Dataset/TTIOTransitionList.m \
 	Dataset/TTIOSpectralDataset.m \
 	Dataset/TTIOSpectralDataset+GenomicWrite.m \
+	Dataset/TTIOSpectralDataset+AssemblyWrite.m \
+	Assembly/TTIOGraphSegment.m \
+	Assembly/TTIOGraphLink.m \
+	Assembly/TTIOGraphPath.m \
+	Assembly/TTIOWrittenAssemblyGraph.m \
+	Assembly/TTIOAssemblyGraph.m \
 	Dataset/TTIOWrittenRun.m \
 	Dataset/TTIOCompoundIO.m \
 	Image/TTIOImage.m \
@@ -267,6 +281,7 @@ libTTIO_OBJC_FILES = \
   Import/TTIOInputSegmenter.m \
   Import/TTIOFastqParallelProducer.m \
 	Import/TTIOFastqReader.m \
+	Import/TTIOGfaReader.m \
 	Export/TTIOMzMLWriter.m \
 	Export/TTIORunSelection.m \
 	Export/TTIOWriterAdapters.m \
@@ -281,6 +296,7 @@ libTTIO_OBJC_FILES = \
 	Export/TTIOJcampDxEncode.m \
 	Export/TTIOFastaWriter.m \
 	Export/TTIOFastqWriter.m \
+	Export/TTIOGfaWriter.m \
 	Providers/TTIOCompoundField.m \
 	Providers/TTIOProviderRegistry.m \
 	Providers/TTIOCanonicalBytes.m \

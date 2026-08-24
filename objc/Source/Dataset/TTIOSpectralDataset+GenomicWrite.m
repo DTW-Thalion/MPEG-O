@@ -17,6 +17,8 @@
  */
 #include <pthread.h>
 #import "TTIOSpectralDataset.h"
+#import "Dataset/TTIOSpectralDataset+AssemblyWrite.h"
+#import "Assembly/TTIOWrittenAssemblyGraph.h"
 #import "TTIOWrittenRun.h"
 #import "TTIOIdentification.h"
 #import "TTIOQuantification.h"
@@ -2872,6 +2874,29 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
           provenanceRecords:(NSArray *)provenance
                       error:(NSError **)error
 {
+    return [self writeMinimalToPath:path
+                              title:title
+                 isaInvestigationId:isaId
+                             msRuns:runs
+                        genomicRuns:genomicRuns
+                     assemblyGraphs:nil
+                    identifications:identifications
+                    quantifications:quantifications
+                  provenanceRecords:provenance
+                              error:error];
+}
+
++ (BOOL)writeMinimalToPath:(NSString *)path
+                      title:(NSString *)title
+        isaInvestigationId:(NSString *)isaId
+                    msRuns:(NSDictionary<NSString *, TTIOWrittenRun *> *)runs
+                genomicRuns:(NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)genomicRuns
+             assemblyGraphs:(NSDictionary<NSString *, TTIOWrittenAssemblyGraph *> *)assemblyGraphs
+            identifications:(NSArray *)identifications
+            quantifications:(NSArray *)quantifications
+          provenanceRecords:(NSArray *)provenance
+                      error:(NSError **)error
+{
     // M82.2 + Task 30: provider-agnostic write path for non-HDF5 URLs.
     // MS runs are now wired through the StorageGroup protocol (Task 30);
     // genomic_runs were already supported via M82.2. Identifications /
@@ -2880,6 +2905,17 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // today (follow-up work; the JSON-mirror attribute mechanism is the
     // workaround per-run for provenance).
     if (isNonHdf5ProviderURL(path)) {
+        if (assemblyGraphs.count > 0) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:1002
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"writeMinimal via provider URL does not yet "
+                           @"support assembly graphs; use the HDF5 fast "
+                           @"path, or writeAssemblyGraph:named:"
+                           @"toStudyGroup: against the provider's study "
+                           @"group directly."}];
+            return NO;
+        }
         if (identifications.count > 0 || quantifications.count > 0 ||
             provenance.count > 0) {
             if (error) *error = [NSError
@@ -2929,6 +2965,16 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     if (hasGenomic) {
         if (![features containsObject:[TTIOFeatureFlags featureOptGenomic]]) {
             [features addObject:[TTIOFeatureFlags featureOptGenomic]];
+        }
+    }
+
+    // M98: opt_assembly_graph advertises assembly-graph content the
+    // same way, added only when a graph is present (the REF_DIFF
+    // bump rule: absent graphs leave ms-only files byte-identical).
+    BOOL hasGraphs = assemblyGraphs.count > 0;
+    if (hasGraphs) {
+        if (![features containsObject:[TTIOFeatureFlags featureOptAssemblyGraph]]) {
+            [features addObject:[TTIOFeatureFlags featureOptAssemblyGraph]];
         }
     }
 
@@ -3147,6 +3193,21 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                 if (!studyAdapter) return NO;
                 if (![self _ttio_streamGenomicRun:gRun name:gName study:studyAdapter error:error]) return NO;
             }
+        }
+    }
+
+    // assembly_graphs subtree (M98, only when non-empty).
+    if (hasGraphs) {
+        id<TTIOStorageGroup> studyAdapter =
+            (id<TTIOStorageGroup>)_TTIO_MakeHDF5GroupAdapter(study);
+        if (!studyAdapter) return NO;
+        NSArray *agNames = [[assemblyGraphs allKeys]
+            sortedArrayUsingSelector:@selector(compare:)];
+        for (NSString *agName in agNames) {
+            if (![self writeAssemblyGraph:assemblyGraphs[agName]
+                                    named:agName
+                             toStudyGroup:studyAdapter
+                                    error:error]) return NO;
         }
     }
 

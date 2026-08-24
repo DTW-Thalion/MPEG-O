@@ -42,6 +42,7 @@
 #import "Genomics/TTIOGenomicIndex.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOReferenceImport.h"
+#import "Assembly/TTIOAssemblyGraph.h"          // M98
 #import "Genomics/TTIOBulkV2Blobs.h"           // Phase 2c-T
 #import "Codecs/TTIORans.h"
 #import "Codecs/TTIOBasePack.h"
@@ -78,6 +79,35 @@ id _TTIO_MakeHDF5GroupAdapter(id group)
     SEL sel = NSSelectorFromString(@"initWithGroup:");
     id (*msg)(id, SEL, id) = (id (*)(id, SEL, id))objc_msgSend;
     return msg(obj, sel, group);
+}
+
+// M98: enumerate /study/assembly_graphs/ (storage-protocol group)
+// into name -> TTIOAssemblyGraph. Empty dict when the subtree is
+// absent or malformed; individual unreadable graphs are skipped the
+// way unreadable genomic runs are.
+static NSDictionary<NSString *, TTIOAssemblyGraph *> *
+_ttio_loadAssemblyGraphs(id<TTIOStorageGroup> study)
+{
+    NSMutableDictionary *out = [NSMutableDictionary dictionary];
+    if (![study hasChildNamed:@"assembly_graphs"]) return out;
+    id<TTIOStorageGroup> ag = [study openGroupNamed:@"assembly_graphs"
+                                              error:NULL];
+    if (!ag) return out;
+    id namesObj = [ag attributeValueForName:@"_graph_names" error:NULL];
+    if (![namesObj isKindOfClass:[NSString class]]) return out;
+    for (NSString *gn in [(NSString *)namesObj
+             componentsSeparatedByString:@","]) {
+        NSString *trimmed = [gn stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceCharacterSet]];
+        if (trimmed.length == 0 || ![ag hasChildNamed:trimmed]) continue;
+        id<TTIOStorageGroup> graphG = [ag openGroupNamed:trimmed
+                                                   error:NULL];
+        if (!graphG) continue;
+        TTIOAssemblyGraph *graph = [TTIOAssemblyGraph
+            openFromGroup:graphG name:trimmed error:NULL];
+        if (graph) out[trimmed] = graph;
+    }
+    return out;
 }
 
 // Internal SPI surfaced by TTIOAcquisitionRun for the dataset-level
@@ -119,6 +149,7 @@ static BOOL datasetRunsHaveActivationDetail(NSDictionary *msRuns)
 @synthesize provider = _provider;
 @synthesize encryptedAlgorithm = _encryptedAlgorithm;
 @synthesize genomicRuns = _genomicRuns;
+@synthesize assemblyGraphs = _assemblyGraphs;
 @synthesize references = _references;
 
 - (BOOL)isEncrypted
@@ -142,6 +173,7 @@ static BOOL datasetRunsHaveActivationDetail(NSDictionary *msRuns)
         _msRuns             = [msRuns copy] ?: @{};
         _nmrRuns            = [nmrRuns copy] ?: @{};
         _genomicRuns        = @{};   // populated by +readFromFilePath: when present
+        _assemblyGraphs     = @{};   // populated by +readFromFilePath: when present
         _references         = @{};   // populated by +readFromFilePath: when present
         _identifications    = [identifications copy] ?: @[];
         _quantifications    = [quantifications copy] ?: @[];
@@ -423,6 +455,7 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
     NSString *title = @"", *isaId = @"";
     NSMutableDictionary *msRuns = [NSMutableDictionary dictionary];
     NSMutableDictionary *genomicRunsMap = [NSMutableDictionary dictionary];
+    NSMutableDictionary *assemblyGraphsMap = [NSMutableDictionary dictionary];
     NSMutableDictionary<NSString *, TTIOReferenceImport *> *refsMap =
         [NSMutableDictionary dictionary];
     NSArray *idents = @[], *quants = @[], *provRecs = @[];
@@ -467,6 +500,10 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
                 }
             }
         }
+
+        // provider-agnostic assembly_graphs read (M98).
+        [assemblyGraphsMap addEntriesFromDictionary:
+            _ttio_loadAssemblyGraphs(study)];
 
         // /study/references/<uri>/ — embedded references read-back
         // (1.1.0 — Phase 0 tio-browser). Empty dict when absent.
@@ -533,6 +570,7 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
                                                transitions:nil];
     ds->_filePath    = [url copy];
     ds->_genomicRuns = [genomicRunsMap copy];
+    ds->_assemblyGraphs = [assemblyGraphsMap copy];
     ds->_references  = [refsMap copy];
     // Surface the root `encrypted` attr for provider-backed reads too.
     id encObj = [root attributeValueForName:@"encrypted" error:NULL];
@@ -598,6 +636,17 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
                 [TTIOGenomicRun openFromGroup:runAdapter name:trimmed error:error];
             if (!gr) return nil;
             genomicRuns[trimmed] = gr;
+        }
+    }
+
+    // assembly_graphs subtree (M98) — read through the storage
+    // adapter so the same loader serves the provider-backed path.
+    NSDictionary *assemblyGraphs = @{};
+    if ([study hasChildNamed:@"assembly_graphs"]) {
+        id<TTIOStorageGroup> studyAdapter =
+            (id<TTIOStorageGroup>)_TTIO_MakeHDF5GroupAdapter(study);
+        if (studyAdapter) {
+            assemblyGraphs = _ttio_loadAssemblyGraphs(studyAdapter);
         }
     }
 
@@ -682,6 +731,7 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
     ds->_provider    = p;
     ds->_filePath    = [path copy];
     ds->_genomicRuns = [genomicRuns copy];
+    ds->_assemblyGraphs = [assemblyGraphs copy];
 
     // /study/references/<uri>/ — embedded references read-back
     // (1.1.0 — Phase 0 tio-browser). Empty dict when absent.

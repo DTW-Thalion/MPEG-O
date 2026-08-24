@@ -19,6 +19,8 @@
 @class TTIOHDF5Group;
 @class TTIOGenomicRun;
 @class TTIOWrittenGenomicRun;
+@class TTIOAssemblyGraph;
+@class TTIOWrittenAssemblyGraph;
 @class TTIOReferenceImport;
 @protocol TTIOStorageProvider;
 
@@ -65,6 +67,10 @@
 /** Genomic runs keyed by name. Empty for files without genomic
  *  content. */
 @property (readonly, copy) NSDictionary<NSString *, TTIOGenomicRun *> *genomicRuns;
+
+/** Assembly graphs keyed by name (M98, format-spec 11a). Empty for
+ *  files without <code>/study/assembly_graphs/</code>. */
+@property (readonly, copy) NSDictionary<NSString *, TTIOAssemblyGraph *> *assemblyGraphs;
 
 /**
  * Map of reference URI → <code>TTIOReferenceImport</code> for
@@ -168,6 +174,26 @@
         isaInvestigationId:(NSString *)isaId
                     msRuns:(NSDictionary<NSString *, TTIOWrittenRun *> *)runs
                genomicRuns:(nullable NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)genomicRuns
+           identifications:(nullable NSArray *)identifications
+           quantifications:(nullable NSArray *)quantifications
+         provenanceRecords:(nullable NSArray *)provenance
+                     error:(NSError * _Nullable * _Nullable)error;
+
+/**
+ * Extended <code>+writeMinimalToPath:</code> accepting assembly
+ * graphs (M98) alongside MS and genomic runs. Setting
+ * <code>assemblyGraphs</code> to a non-empty dictionary adds the
+ * <code>opt_assembly_graph</code> feature flag and writes each graph
+ * at <code>/study/assembly_graphs/&lt;name&gt;/</code>
+ * (format-spec 11a). The shorter overload above delegates here with
+ * <code>assemblyGraphs:nil</code>.
+ */
++ (BOOL)writeMinimalToPath:(NSString *)path
+                     title:(NSString *)title
+        isaInvestigationId:(NSString *)isaId
+                    msRuns:(NSDictionary<NSString *, TTIOWrittenRun *> *)runs
+               genomicRuns:(nullable NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)genomicRuns
+            assemblyGraphs:(nullable NSDictionary<NSString *, TTIOWrittenAssemblyGraph *> *)assemblyGraphs
            identifications:(nullable NSArray *)identifications
            quantifications:(nullable NSArray *)quantifications
          provenanceRecords:(nullable NSArray *)provenance

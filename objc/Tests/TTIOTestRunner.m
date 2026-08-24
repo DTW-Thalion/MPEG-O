@@ -106,6 +106,7 @@ extern void testMateInfoV2Dispatch(void);
 extern void testRefDiffV2(void);
 extern void testRefDiffV2Dispatch(void);
 extern void testM97LongReadProfile(void);
+extern void testM98AssemblyGraph(void);
 extern void testNameTokenizerV2(void);
 extern void testNameTokenizedV2Dispatch(void);
 extern void testOffsetsCumsum(void);
@@ -582,6 +583,10 @@ int main(int argc, const char *argv[])
         START_SET("M97: read_role + QUALITY_BINNED guard + slice_bytes")
             testM97LongReadProfile();
         END_SET("M97: read_role + QUALITY_BINNED guard + slice_bytes")
+
+        START_SET("M98: assembly graph GFA + storage round-trip")
+            testM98AssemblyGraph();
+        END_SET("M98: assembly graph GFA + storage round-trip")
 
         START_SET("name_tok v2 codec round-trip + invalid-input")
             testNameTokenizerV2();
