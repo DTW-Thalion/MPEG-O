@@ -212,6 +212,69 @@ class FastaReader:
             progress=progress,
         )
 
+    def iter_batches(
+        self,
+        *,
+        sample_name: str = "",
+        platform: str = "",
+        reference_uri: str = "",
+        acquisition_mode: AcquisitionMode = AcquisitionMode.GENOMIC_WGS,
+        batch_reads: int = 100_000,
+        batch_bytes: int = 64 * 2**20,
+        progress: ProgressSinkLike | None = None,
+    ) -> Iterator[WrittenGenomicRun]:
+        """Yield the file as consecutive unaligned
+        :class:`WrittenGenomicRun` batches of at most ``batch_reads``
+        records (and at most ``batch_bytes`` sequence bytes; the first
+        limit reached cuts) with bounded memory. Each record carries
+        the SAM-unmapped sentinel values of :meth:`read_unaligned`.
+        """
+        if batch_reads < 1:
+            raise ValueError("batch_reads must be >= 1")
+        if batch_bytes < 1:
+            raise ValueError("batch_bytes must be >= 1")
+        pending: list[tuple[str, bytes, bytes]] = []
+        pending_bases = 0
+        n = 0
+
+        def _emit(records):
+            return _build_unaligned_run(
+                iter_records=lambda: iter(records), sample_name=sample_name,
+                platform=platform, reference_uri=reference_uri,
+                acquisition_mode=acquisition_mode)
+
+        for rec in self._iter_record_pairs(quality_default=None):
+            pending.append(rec)
+            pending_bases += len(rec[1])
+            n += 1
+            if n % PROGRESS_INTERVAL_READS == 0:
+                _fire(progress, n, -1)
+            if len(pending) >= batch_reads or pending_bases >= batch_bytes:
+                yield _emit(pending)
+                pending = []
+                pending_bases = 0
+        _fire(progress, n, n)
+        if pending or n == 0:
+            yield _emit(pending)
+
+    def stream_source(self, *, name: str = "genomic_0001",
+                      sample_name: str = "", platform: str = "",
+                      reference_uri: str = "",
+                      acquisition_mode: AcquisitionMode = AcquisitionMode.GENOMIC_WGS,
+                      batch_reads: int = 100_000,
+                      batch_bytes: int = 64 * 2**20,
+                      progress: ProgressSinkLike | None = None):
+        """A :class:`~ttio.importers.import_result.GenomicStreamSource`
+        over :meth:`iter_batches`."""
+        from .import_result import GenomicStreamSource
+        return GenomicStreamSource(
+            name=name,
+            iter_batches=lambda: self.iter_batches(
+                sample_name=sample_name, platform=platform,
+                reference_uri=reference_uri,
+                acquisition_mode=acquisition_mode, batch_reads=batch_reads,
+                batch_bytes=batch_bytes, progress=progress))
+
     def _iter_record_pairs(
         self, *, quality_default: bytes | None
     ) -> Iterator[tuple[str, bytes, bytes]]:

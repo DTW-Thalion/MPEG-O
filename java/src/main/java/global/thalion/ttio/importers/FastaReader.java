@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.zip.GZIPInputStream;
 
@@ -186,6 +187,201 @@ public class FastaReader {
             throws IOException {
         return readUnaligned(sampleName, "", "", AcquisitionMode.GENOMIC_WGS,
             progress);
+    }
+
+    // ------------------------------------------------------------------
+    // Streaming batches
+    // ------------------------------------------------------------------
+
+    /** Reads per streamed batch. */
+    public static final int DEFAULT_BATCH_READS = 100_000;
+
+    /** Decoded sequence + quality bytes per streamed batch by default
+     *  (64 MiB). Bytes are the primary batch limit: a read count is
+     *  blind to read length. */
+    public static final long DEFAULT_BATCH_BYTES = 64L << 20;
+
+    /** Batches of {@code batchReads} reads as unaligned
+     *  {@link WrittenGenomicRun}s, each record carrying the
+     *  SAM-unmapped sentinels of {@link #readUnaligned}. The iterator
+     *  closes the input at EOF. */
+    public Iterator<WrittenGenomicRun> iterBatches(
+            String sampleName, String platform, String referenceUri,
+            AcquisitionMode acquisitionMode, int batchReads) throws IOException {
+        return iterBatches(sampleName, platform, referenceUri, acquisitionMode, batchReads, 0L);
+    }
+
+    /** As above with an explicit byte limit; a batch cuts at whichever
+     *  of {@code batchReads} / {@code batchBytes} is hit first
+     *  (0 = the default for each). */
+    public Iterator<WrittenGenomicRun> iterBatches(
+            String sampleName, String platform, String referenceUri,
+            AcquisitionMode acquisitionMode, int batchReads, long batchBytesIn) throws IOException {
+        if (batchReads < 1) throw new IllegalArgumentException("batchReads must be >= 1");
+        final long batchBytes = batchBytesIn > 0 ? batchBytesIn : DEFAULT_BATCH_BYTES;
+        InputStream in = openMaybeGzip(path);
+        final RecordCursor cursor = new RecordCursor(unescapeLiteralNewlines(in, path));
+        return new Iterator<>() {
+            final List<String> names = new ArrayList<>();
+            final List<byte[]> seqs = new ArrayList<>();
+            WrittenGenomicRun next;
+            boolean done;
+
+            @Override public boolean hasNext() {
+                if (next != null) return true;
+                if (done) return false;
+                try {
+                    long pendingBytes = 0L;
+                    while (names.size() < batchReads && pendingBytes < batchBytes) {
+                        FastaRecord rec = cursor.next();
+                        if (rec == null) break;
+                        names.add(rec.name());
+                        seqs.add(rec.seq());
+                        pendingBytes += (long) rec.seq().length * 2L;
+                    }
+                } catch (IOException e) {
+                    throw new java.io.UncheckedIOException(e);
+                }
+                if (names.isEmpty()) {
+                    finish();
+                    return false;
+                }
+                next = batch();
+                names.clear(); seqs.clear();
+                return true;
+            }
+
+            @Override public WrittenGenomicRun next() {
+                if (!hasNext()) throw new java.util.NoSuchElementException();
+                WrittenGenomicRun r = next;
+                next = null;
+                return r;
+            }
+
+            private void finish() {
+                if (done) return;
+                done = true;
+                try { in.close(); } catch (IOException ignored) { }
+            }
+
+            private WrittenGenomicRun batch() {
+                List<Long> offsetsL = new ArrayList<>(names.size());
+                List<Integer> lengthsL = new ArrayList<>(names.size());
+                ByteArrayOutputStream seqBuf = new ByteArrayOutputStream();
+                ByteArrayOutputStream qualBuf = new ByteArrayOutputStream();
+                long running = 0L;
+                for (byte[] s : seqs) {
+                    offsetsL.add(running);
+                    lengthsL.add(s.length);
+                    seqBuf.write(s, 0, s.length);
+                    byte[] qualSentinel = new byte[s.length];
+                    Arrays.fill(qualSentinel, QUAL_UNKNOWN_BYTE);
+                    qualBuf.write(qualSentinel, 0, qualSentinel.length);
+                    running += s.length;
+                }
+                return buildUnalignedRun(new ArrayList<>(names), seqBuf.toByteArray(),
+                    qualBuf.toByteArray(), offsetsL, lengthsL, sampleName, platform,
+                    referenceUri, acquisitionMode);
+            }
+        };
+    }
+
+    /** {@link #iterBatches} as a {@link GenomicStreamSource}. */
+    public GenomicStreamSource stream(String name, String sampleName, int batchReads) {
+        return stream(name, sampleName, batchReads, 0L);
+    }
+
+    /** As above with the byte limit of
+     *  {@link #iterBatches(String, String, String, AcquisitionMode, int, long)}. */
+    public GenomicStreamSource stream(String name, String sampleName, int batchReads, long batchBytes) {
+        return new GenomicStreamSource(name, () -> {
+            try {
+                return iterBatches(sampleName, "", "", AcquisitionMode.GENOMIC_WGS,
+                    batchReads, batchBytes);
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        }, null, false, null, null, false);
+    }
+
+    /** Default batch of 100 000 reads. */
+    public GenomicStreamSource stream(String name, String sampleName) {
+        return stream(name, sampleName, DEFAULT_BATCH_READS);
+    }
+
+    /** One parsed FASTA record. */
+    private record FastaRecord(String name, byte[] seq) { }
+
+    /** Pull-style counterpart of {@link #iterateRecords}: same line
+     *  handling (CR dropped, blank lines skipped, header description
+     *  stripped, sequence bytes before any header rejected), delivered
+     *  one record per {@link #next} call instead of through a
+     *  {@link RecordSink}. */
+    private static final class RecordCursor {
+        private final InputStream in;
+        private String pendingName;
+        private boolean eof;
+
+        RecordCursor(InputStream in) { this.in = in; }
+
+        /** The next record, or {@code null} at end of input. */
+        FastaRecord next() throws IOException {
+            if (eof && pendingName == null) return null;
+            ByteArrayOutputStream lineBuf = new ByteArrayOutputStream();
+            ByteArrayOutputStream seqBuf = new ByteArrayOutputStream();
+            String currentName = pendingName;
+            pendingName = null;
+            int b;
+            while (!eof) {
+                b = in.read();
+                if (b == -1) { eof = true; break; }
+                if (b == '\n') {
+                    byte[] line = lineBuf.toByteArray();
+                    lineBuf.reset();
+                    if (line.length == 0) continue;
+                    if (line[0] == '>') {
+                        String newName = parseHeader(line);
+                        if (currentName != null) {
+                            pendingName = newName;
+                            return new FastaRecord(currentName, seqBuf.toByteArray());
+                        }
+                        currentName = newName;
+                        seqBuf.reset();
+                    } else {
+                        if (currentName == null) {
+                            throw new FastaParseException(
+                                "FASTA sequence bytes encountered before any header line");
+                        }
+                        seqBuf.write(line);
+                    }
+                } else if (b != '\r') {
+                    lineBuf.write(b);
+                }
+            }
+            // Final line without trailing newline.
+            byte[] line = lineBuf.toByteArray();
+            if (line.length > 0) {
+                if (line[0] == '>') {
+                    String newName = parseHeader(line);
+                    if (currentName != null) {
+                        pendingName = newName;
+                        return new FastaRecord(currentName, seqBuf.toByteArray());
+                    }
+                    currentName = newName;
+                    seqBuf.reset();
+                } else {
+                    if (currentName == null) {
+                        throw new FastaParseException(
+                            "FASTA sequence bytes encountered before any header line");
+                    }
+                    seqBuf.write(line);
+                }
+            }
+            if (currentName != null) {
+                return new FastaRecord(currentName, seqBuf.toByteArray());
+            }
+            return null;
+        }
     }
 
     // ------------------------------------------------------------------

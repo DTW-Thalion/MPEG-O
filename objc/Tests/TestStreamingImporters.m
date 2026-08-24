@@ -11,6 +11,7 @@
 #import "Testing.h"
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Import/TTIOBamReader.h"
+#import "Import/TTIOFastaReader.h"
 #import "Import/TTIOFastqReader.h"
 #import "Import/TTIOMzMLReader.h"
 #import "Import/TTIOImportedDataset.h"
@@ -207,6 +208,95 @@ static void siFastq(void)
     [g close];
     [[NSFileManager defaultManager] removeItemAtPath:out error:NULL];
     [[NSFileManager defaultManager] removeItemAtPath:fq error:NULL];
+}
+
+static void siFasta(void)
+{
+    NSError *err = nil;
+    NSString *fa = siTmp("panel", "fasta");
+    NSMutableString *text = [NSMutableString string];
+    for (int i = 0; i < 7; i++) {
+        [text appendFormat:@">read%d extra desc\nACGTAC%d\n", i, i % 10];
+    }
+    [text writeToFile:fa atomically:YES encoding:NSASCIIStringEncoding error:NULL];
+    TTIOWrittenGenomicRun *whole =
+        [TTIOFastaReader readUnalignedFromPath:fa sampleName:@"s" platform:@""
+                                  referenceUri:@"" acquisitionMode:TTIOAcquisitionModeGenomicWGS
+                                         error:&err];
+    PASS(whole != nil && whole.readCount == 7, "streaming importers: FASTA eager read (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+
+    NSMutableArray *batches = [NSMutableArray array];
+    BOOL ok = [TTIOFastaReader iterBatchesFromPath:fa sampleName:@"s" platform:@"" referenceUri:@""
+                                   acquisitionMode:TTIOAcquisitionModeGenomicWGS batchReads:3
+                                          progress:nil error:&err
+                                        usingBlock:^BOOL(TTIOWrittenGenomicRun *b, NSError **e) {
+        (void)e; [batches addObject:b]; return YES;
+    }];
+    PASS(ok && batches.count == 3, "streaming importers: FASTA batches of 3 (%lu)",
+         (unsigned long)batches.count);
+    PASS(siSameRun([TTIOGenomicBlocks concatRuns:batches], whole),
+         "streaming importers: FASTA batches concatenate to the eager run");
+    const uint8_t *qb = [batches.firstObject qualitiesData].bytes;
+    NSUInteger qn = [batches.firstObject qualitiesData].length;
+    BOOL allFF = qn > 0;
+    for (NSUInteger i = 0; i < qn; i++) if (qb[i] != 0xFF) { allFF = NO; break; }
+    PASS(allFF, "streaming importers: FASTA batch qualities are the 0xFF sentinel");
+
+    err = nil;
+    __block int seen = 0;
+    ok = [TTIOFastaReader iterBatchesFromPath:fa sampleName:@"s" platform:@"" referenceUri:@""
+                              acquisitionMode:TTIOAcquisitionModeGenomicWGS batchReads:2
+                                     progress:nil error:&err
+                                   usingBlock:^BOOL(TTIOWrittenGenomicRun *b, NSError **e) {
+        (void)b;
+        if (++seen == 2) {
+            *e = [NSError errorWithDomain:@"si-test" code:7 userInfo:nil];
+            return NO;
+        }
+        return YES;
+    }];
+    PASS(!ok && seen == 2 && err.code == 7,
+         "streaming importers: a FASTA consumer stop ends the walk with its error");
+
+    // CRLF line ends, a blank line, a multi-line record, and no
+    // trailing newline: the batch walk must parse these exactly as
+    // the eager read does.
+    NSString *awk = siTmp("awk", "fasta");
+    [@">a one\r\nACGT\r\nTTAA\r\n\r\n>b two\nGG\n>c three\nCCC"
+        writeToFile:awk atomically:YES encoding:NSASCIIStringEncoding error:NULL];
+    TTIOWrittenGenomicRun *awkWhole =
+        [TTIOFastaReader readUnalignedFromPath:awk sampleName:@"s" platform:@""
+                                  referenceUri:@"" acquisitionMode:TTIOAcquisitionModeGenomicWGS
+                                         error:&err];
+    NSMutableArray *awkBatches = [NSMutableArray array];
+    ok = [TTIOFastaReader iterBatchesFromPath:awk sampleName:@"s" platform:@"" referenceUri:@""
+                              acquisitionMode:TTIOAcquisitionModeGenomicWGS batchReads:1
+                                     progress:nil error:&err
+                                   usingBlock:^BOOL(TTIOWrittenGenomicRun *b, NSError **e) {
+        (void)e; [awkBatches addObject:b]; return YES;
+    }];
+    PASS(ok && awkBatches.count == 3 && awkWhole != nil
+         && siSameRun([TTIOGenomicBlocks concatRuns:awkBatches], awkWhole),
+         "streaming importers: FASTA awkward line forms batch like the eager read");
+
+    NSString *out = siTmp("fa", "tio");
+    [[NSFileManager defaultManager] removeItemAtPath:out error:NULL];
+    TTIOImportedDataset *d = [[TTIOImportedDataset alloc] init];
+    d.genomicStreams[@"fa"] = [TTIOFastaReader streamFromPath:fa name:@"fa" sampleName:@"s"
+                                                   batchReads:2 progress:nil];
+    PASS([d writeToPath:out error:&err], "streaming importers: FASTA stream writes (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+    TTIOGenomicRun *g = [TTIOSpectralDataset readFromFilePath:out error:&err].genomicRuns[@"fa"];
+    PASS(g != nil && g.readCount == 7 && [g.layout isEqualToString:@"blocks_v1"],
+         "streaming importers: streamed FASTA run reads back (%lu)", (unsigned long)(g ? g.readCount : 0));
+    TTIOAlignedRead *r6 = [g readAtIndex:6 error:&err];
+    PASS(r6 && [r6.readName isEqualToString:@"read6"] && [r6.sequence isEqualToString:@"ACGTAC6"],
+         "streaming importers: last FASTA read intact");
+    [g close];
+    [[NSFileManager defaultManager] removeItemAtPath:out error:NULL];
+    [[NSFileManager defaultManager] removeItemAtPath:awk error:NULL];
+    [[NSFileManager defaultManager] removeItemAtPath:fa error:NULL];
 }
 
 static void siFastqBatchBytes(void)
@@ -434,6 +524,7 @@ void testStreamingImporters(void)
         siBamBatches();
         siBamStreamWrite();
         siFastq();
+    siFasta();
     siFastqBatchBytes();
     siFastqParallelIdentity();
     siFastqShardIdentity();

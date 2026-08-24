@@ -252,3 +252,84 @@ def test_threaded_writer_memory_window(tmp_path):
 
     one, eight = rss(1), rss(8)
     assert eight < 9 * one, (one, eight)
+
+
+def _write_fasta(path, n, seq="ACGT" * 25):
+    with open(path, "w") as f:
+        for i in range(n):
+            f.write(f">r{i} extra desc\n{seq}\n")
+
+
+def test_fasta_iter_batches_concatenates_to_the_whole_run(tmp_path):
+    from ttio.importers import fasta as fa_imp
+    fa = tmp_path / "in.fasta"
+    _write_fasta(fa, 2500)
+    reader = fa_imp.FastaReader(fa)
+    whole = reader.read_unaligned()
+    batches = list(reader.iter_batches(batch_reads=1000))
+    assert [len(b.read_names) for b in batches] == [1000, 1000, 500]
+    assert [n for b in batches for n in b.read_names] == whole.read_names
+    assert b"".join(bytes(b.sequences) for b in batches) == bytes(whole.sequences)
+    assert b"".join(bytes(b.qualities) for b in batches) == bytes(whole.qualities)
+    for b in batches:
+        assert set(bytes(b.qualities)) == {0xFF}
+        assert int(b.flags[0]) == 4 and b.chromosomes[0] == "*"
+        assert b.cigars[0] == "*"
+
+
+def test_fasta_iter_batches_cuts_on_bytes(tmp_path):
+    from ttio.importers import fasta as fa_imp
+    fa = tmp_path / "in.fasta"
+    _write_fasta(fa, 10, seq="A" * 100)
+    batches = list(fa_imp.FastaReader(fa).iter_batches(batch_bytes=100))
+    assert [len(b.read_names) for b in batches] == [1] * 10
+
+
+def test_fasta_iter_batches_empty_input_raises(tmp_path):
+    from ttio.importers import fasta as fa_imp
+    from ttio.importers.fasta import FastaParseError
+    fa = tmp_path / "empty.fasta"
+    fa.write_text("")
+    with pytest.raises(FastaParseError):
+        list(fa_imp.FastaReader(fa).iter_batches())
+
+
+def test_fasta_stream_source_writes_blocks(tmp_path):
+    from ttio.importers import fasta as fa_imp
+    fa = tmp_path / "in.fasta"
+    _write_fasta(fa, 2500)
+    whole = fa_imp.FastaReader(fa).read_unaligned()
+    src = fa_imp.FastaReader(fa).stream_source(batch_reads=400)
+    src.block_reads = 700
+    out = tmp_path / "o.tio"
+    SpectralDataset.write_minimal(str(out), title="", isa_investigation_id="", runs={})
+    with SpectralDataset.open(str(out), writable=True) as ds:
+        assert src.write_into(ds.study_group) == 2500
+    with SpectralDataset.open(str(out)) as ds:
+        g = ds.genomic_runs["genomic_0001"]
+        assert g.layout == "blocks_v1" and g.block_count == 4
+        assert len(g) == 2500
+        got = [(r.read_name, r.sequence, r.qualities) for r in g.iter_reads(threads=1)]
+    expect = [
+        (whole.read_names[i],
+         bytes(whole.sequences[int(whole.offsets[i]):int(whole.offsets[i]) + int(whole.lengths[i])]).decode(),
+         bytes(whole.qualities[int(whole.offsets[i]):int(whole.offsets[i]) + int(whole.lengths[i])]))
+        for i in range(len(whole.read_names))
+    ]
+    assert got == expect
+
+
+def test_fasta_import_cli_streams(tmp_path):
+    from ttio.tools import fasta_import_cli
+    fa = tmp_path / "in.fasta"
+    _write_fasta(fa, 2500)
+    out = tmp_path / "o.tio"
+    assert fasta_import_cli.main([
+        "unaligned", "--fasta", str(fa), "--out", str(out),
+        "--block-reads", "700"]) == 0
+    with SpectralDataset.open(str(out)) as ds:
+        g = ds.genomic_runs["genomic_0001"]
+        assert g.layout == "blocks_v1" and g.block_count == 4
+        assert len(g) == 2500
+        assert g[0].read_name == "r0" and g[2499].read_name == "r2499"
+        assert g[1234].sequence == "ACGT" * 25

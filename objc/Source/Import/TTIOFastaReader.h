@@ -14,6 +14,7 @@
 
 @class TTIOReferenceImport;
 @class TTIOWrittenGenomicRun;
+@class TTIOGenomicStreamSource;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -103,6 +104,62 @@ typedef NS_ENUM(NSInteger, TTIOFastaReaderErrorCode) {
                                            acquisitionMode:(TTIOAcquisitionMode)acquisitionMode
                                                   progress:(nullable TTIOProgressBlock)progress
                                                      error:(NSError **)error;
+
+/** Reads per streamed batch by default (100 000). */
+FOUNDATION_EXPORT const NSUInteger TTIOFastaReaderDefaultBatchReads;
+
+/** Sequence + sentinel-quality bytes per streamed batch by default
+ *  (64 MiB). Bytes are the primary batch limit: a read count is blind
+ *  to record length. */
+FOUNDATION_EXPORT const unsigned long long TTIOFastaReaderDefaultBatchBytes;
+
+/**
+ * Walk the records in batches of <code>batchReads</code> reads, each
+ * batch an unaligned run of its own carrying the SAM-unmapped
+ * sentinels of <code>+readUnalignedFromPath:…</code>, so a file of
+ * any size is imported with bounded memory. <code>block</code>
+ * returns NO to stop (its <code>error</code> is reported).
+ */
++ (BOOL)iterBatchesFromPath:(NSString *)path
+                 sampleName:(NSString *)sampleName
+                   platform:(NSString *)platform
+               referenceUri:(NSString *)referenceUri
+            acquisitionMode:(TTIOAcquisitionMode)acquisitionMode
+                 batchReads:(NSUInteger)batchReads
+                   progress:(nullable TTIOProgressBlock)progress
+                      error:(NSError **)error
+                 usingBlock:(BOOL (^)(TTIOWrittenGenomicRun *batch, NSError **error))block;
+
+/** As above with an explicit byte limit; a batch cuts at whichever of
+ *  <code>batchReads</code> / <code>batchBytes</code> is hit first
+ *  (0 = the default for each). */
++ (BOOL)iterBatchesFromPath:(NSString *)path
+                 sampleName:(NSString *)sampleName
+                   platform:(NSString *)platform
+               referenceUri:(NSString *)referenceUri
+            acquisitionMode:(TTIOAcquisitionMode)acquisitionMode
+                 batchReads:(NSUInteger)batchReads
+                 batchBytes:(unsigned long long)batchBytes
+                   progress:(nullable TTIOProgressBlock)progress
+                      error:(NSError **)error
+                 usingBlock:(BOOL (^)(TTIOWrittenGenomicRun *batch, NSError **error))block;
+
+/** The batches of <code>+iterBatchesFromPath:…</code> as a
+ *  TTIOGenomicStreamSource named <code>name</code>. */
++ (TTIOGenomicStreamSource *)streamFromPath:(NSString *)path
+                                       name:(NSString *)name
+                                 sampleName:(NSString *)sampleName
+                                 batchReads:(NSUInteger)batchReads
+                                   progress:(nullable TTIOProgressBlock)progress;
+
+/** As above with the byte limit of
+ *  <code>+iterBatchesFromPath:…batchBytes:…</code>. */
++ (TTIOGenomicStreamSource *)streamFromPath:(NSString *)path
+                                       name:(NSString *)name
+                                 sampleName:(NSString *)sampleName
+                                 batchReads:(NSUInteger)batchReads
+                                 batchBytes:(unsigned long long)batchBytes
+                                   progress:(nullable TTIOProgressBlock)progress;
 
 @end
 

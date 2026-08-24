@@ -50,6 +50,12 @@ def _parser() -> argparse.ArgumentParser:
                      help="genomic-run name under /study/genomic_runs/")
     una.add_argument("--sample", default="", help="sample name")
     una.add_argument("--platform", default="", help="platform tag")
+    una.add_argument("--block-reads", type=int, default=None,
+                     help="reads per blocks_v1 block (default 1000000)")
+    una.add_argument("--block-bytes", type=int, default=None,
+                     help="sequence bytes per blocks_v1 block (default 256 MiB)")
+    una.add_argument("--legacy-whole-channel", action="store_true",
+                     help="write the v1.8 whole-channel layout (memory-unbounded)")
     return p
 
 
@@ -102,19 +108,24 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         else:
-            run = reader.read_unaligned(
-                sample_name=args.sample, platform=args.platform
+            src = reader.stream_source(
+                name=args.name, sample_name=args.sample,
+                platform=args.platform,
             )
+            src.block_reads = args.block_reads
+            src.block_bytes = args.block_bytes
+            src.opt_legacy_whole_channel = args.legacy_whole_channel
             SpectralDataset.write_minimal(
                 args.out,
                 title="",
                 isa_investigation_id="",
                 runs={},
-                genomic_runs={args.name: run},
             )
+            with SpectralDataset.open(args.out, writable=True) as ds:
+                n = src.write_into(ds.study_group)
             print(
                 f"wrote unaligned run {args.name!r} "
-                f"({len(run.read_names)} reads) to {args.out}"
+                f"({n} reads) to {args.out}"
             )
             return 0
     except FastaParseError as e:
