@@ -201,10 +201,14 @@ token; Python and Java map it to their native class via
 
 For genomic runs (`spectrum_class == "TTIOGenomicRead"`), the
 `instrument_json` slot carries
-``{"reference_uri", "platform", "sample_name", "modality"}``
-instead of an `InstrumentConfig` (M89.2). Channel names for genomic
-runs are `["sequences", "qualities"]` in M89.2; compound channels
-(cigars, read_names, mate_*) are not yet carried on the wire.
+``{"reference_uri", "platform", "sample_name", "modality",
+"read_role"}`` instead of an `InstrumentConfig` (M89.2; `read_role`
+added in M97 — always present, `""` means the run has no
+`@read_role` attribute, receivers leave the container attribute
+absent on `""`, and pre-M97 streams simply lack the key). Channel
+names for genomic runs are `["sequences", "qualities"]` in M89.2;
+compound channels (cigars, read_names, mate_*) are not yet carried
+on the wire.
 
 `expected_au_count = 0` is the real-time acquisition signal — the
 receiver MUST allocate growable structures and MUST NOT pre-size

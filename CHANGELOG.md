@@ -28,8 +28,13 @@ public API is stable from onward.
   in all 3 SDKs. A `QUALITY_BINNED` qualities override is now rejected
   when `@platform` names a HiFi/PacBio/ONT/Nanopore instrument — the
   fixed Illumina-8 bin table does not fit those quality distributions
-  (`quality.binned_allowed_for_platform` and equivalents). HiFi- and
-  ONT-UL-shaped fixtures run the 3x3 transport matrix.
+  (`quality.binned_allowed_for_platform` and equivalents). The `.tis`
+  genomic run-metadata JSON carries a `read_role` key (plain and
+  encrypted transport; always present, `""` means no role, receivers
+  leave the container attribute absent on `""`), so the attribute
+  survives transport round-trips. HiFi- and ONT-UL-shaped fixtures
+  run the 3x3 transport matrix, which asserts the attribute in every
+  cell.
 
 - **The FASTA importer streams.** The unaligned path gains the batch
   surface the FASTQ and BAM readers already have: Python

@@ -211,6 +211,7 @@ public final class EncryptedTransport {
             String metadataJson = genomicRunMetadataJson(
                 attrStr(run, "modality", ""),
                 attrStr(run, "platform", ""),
+                attrStr(run, "read_role", ""),
                 attrStr(run, "reference_uri", ""),
                 attrStr(run, "sample_name", ""));
             long expectedAUs = channelNames.isEmpty()
@@ -317,6 +318,7 @@ public final class EncryptedTransport {
     }
 
     private static String genomicRunMetadataJson(String modality, String platform,
+                                                   String readRole,
                                                    String referenceUri, String sampleName) {
         char QT = (char) 34;
         char OB = (char) 123;
@@ -326,6 +328,9 @@ public final class EncryptedTransport {
         sb.append(QT).append("modality").append(QT).append(": ").append(QT).append(esc(modality)).append(QT);
         sb.append(", ");
         sb.append(QT).append("platform").append(QT).append(": ").append(QT).append(esc(platform)).append(QT);
+        sb.append(", ");
+        // M97: always present, "" when the run has no @read_role.
+        sb.append(QT).append("read_role").append(QT).append(": ").append(QT).append(esc(readRole)).append(QT);
         sb.append(", ");
         sb.append(QT).append("reference_uri").append(QT).append(": ").append(QT).append(esc(referenceUri)).append(QT);
         sb.append(", ");
@@ -1180,6 +1185,9 @@ public final class EncryptedTransport {
             run.setAttribute("platform", extractJsonField(acc.instrumentJson, "platform"));
             run.setAttribute("reference_uri", extractJsonField(acc.instrumentJson, "reference_uri"));
             run.setAttribute("sample_name", extractJsonField(acc.instrumentJson, "sample_name"));
+            // M97: absent on the container when "" on the wire.
+            String rxRole = extractJsonField(acc.instrumentJson, "read_role");
+            if (!rxRole.isEmpty()) run.setAttribute("read_role", rxRole);
             run.setAttribute("read_count", (long) acc.genomicChromosomes.size());
 
             try (StorageGroup sig = run.createGroup("signal_channels")) {

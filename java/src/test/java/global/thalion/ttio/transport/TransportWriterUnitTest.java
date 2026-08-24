@@ -367,12 +367,15 @@ class TransportWriterUnitTest {
         try (SpectralDataset src = makeGenomicFixture(tmp)) {
             GenomicRun run = src.genomicRuns().values().iterator().next();
             String json = TransportWriter.genomicRunMetadataJson(run);
-            // Field order: modality, platform, reference_uri, sample_name.
+            // Field order: modality, platform, read_role,
+            // reference_uri, sample_name (M97).
             int mod = json.indexOf("modality");
             int plat = json.indexOf("platform");
+            int role = json.indexOf("read_role");
             int ref = json.indexOf("reference_uri");
             int sn = json.indexOf("sample_name");
-            assertTrue(mod >= 0 && mod < plat && plat < ref && ref < sn,
+            assertTrue(mod >= 0 && mod < plat && plat < role
+                    && role < ref && ref < sn,
                 "unexpected key order in: " + json);
         }
     }

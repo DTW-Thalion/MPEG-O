@@ -84,13 +84,19 @@ def _write_source(path: Path, shape: str) -> Path:
 
 def _verify_round_trip(rt_tio: Path, shape: str) -> None:
     """Content check against a regenerated copy of the fixture: read
-    counts, per-read lengths, and the byte-exact sequence + quality
-    payload of the first, middle, and last reads."""
+    counts, per-read lengths, the @read_role attribute, and the
+    byte-exact sequence + quality payload of the first, middle, and
+    last reads."""
     expect = _build_run(shape)
     n = len(expect.lengths)
     with SpectralDataset.open(rt_tio) as ds:
         gr = ds.genomic_runs["genomic_0001"]
         assert len(gr) == n
+        # M97: @read_role rides the .tis run-metadata JSON, so every
+        # (writer, reader) cell must deliver it into the container.
+        assert gr.read_role == expect.read_role, (
+            f"{shape}: read_role {gr.read_role!r} != "
+            f"{expect.read_role!r}")
         np.testing.assert_array_equal(
             gr.index.lengths, expect.lengths)
         for i in (0, n // 2, n - 1):
@@ -124,9 +130,7 @@ def test_m97_long_read_3x3_transport(
 
 
 def test_m97_read_role_survives_python_container(tmp_path: Path) -> None:
-    """@read_role is a container attribute; the source .tio carries it.
-    (The .tis run-metadata JSON does not carry it yet — the transport
-    matrix above therefore checks content, not the attribute.)"""
+    """@read_role lands on the source container before any transport."""
     source = _write_source(tmp_path / "source.tio", "ont_ul")
     with SpectralDataset.open(source) as ds:
         assert ds.genomic_runs["genomic_0001"].read_role == "ont_ul"

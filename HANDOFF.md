@@ -16,14 +16,12 @@ the original worry list, leaving the four items below. Branch:
 | **T2** | QUALITY_BINNED rejected as a `qualities` override on HiFi/PacBio/ONT/Nanopore platforms (§86), whole-channel and stream writers, all 3 SDKs | ✅ implemented + tested | — |
 | **T3** | REF_DIFF_V2 `slice_bytes` byte budget (§85, §87): C kernel + `max_encoded_size2`, 3 SDK writers (`ref_diff_slice_bytes` / `refDiffSliceBytes`), both layouts | ✅ implemented + tested | Phase 0 |
 | **T4** | Fixtures: cross-language non-uniform-slice byte-equality case (`test_ref_diff_v2_cross_language.py` + CLI `slice_bytes` args), HiFi + ONT-UL shapes through the 3x3 transport matrix (`test_m97_long_read_matrix.py`) | ✅ implemented + verified 3-way byte-equal | — |
+| **T5** | `read_role` key in the `.tis` genomic run-metadata JSON (plain + encrypted transport, writers and receivers, all 3 SDKs; always present, `""` = no role, receivers leave the container attribute absent on `""`) | ✅ implemented + tested; the 3x3 matrix asserts the attribute in every cell | additive JSON key, no packet-format change |
 
 Deliberately out of scope, per the probe review:
 `AcquisitionMode.GENOMIC_LONGREAD` / `GENOMIC_HIC` (nothing dispatches
-on them yet), qualities-codec re-tuning (the M94.Z per-block
-auto-tuner already picks V4 on HiFi and V5 on ONT), and the `.tis`
-run-metadata JSON, which does not carry `@read_role` — a transport
-round-trip preserves read content but drops the attribute; adding the
-key is additive JSON if a later milestone needs it.
+on them yet) and qualities-codec re-tuning (the M94.Z per-block
+auto-tuner already picks V4 on HiFi and V5 on ONT).
 
 Suite state at handoff: native ctest 30/30; ObjC 5187 pass / 3
 known-environmental TestM90Final failures; Python 2621 pass; Java

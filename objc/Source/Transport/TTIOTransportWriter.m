@@ -1304,6 +1304,9 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
     NSDictionary *d = @{
         @"modality":      run.modality      ?: @"",
         @"platform":      run.platform      ?: @"",
+        /* M97: always present, "" when the run has no read role, so
+         * the JSON stays byte-identical across the 3 SDK writers. */
+        @"read_role":     run.readRole      ?: @"",
         @"reference_uri": run.referenceUri  ?: @"",
         @"sample_name":   run.sampleName    ?: @"",
     };

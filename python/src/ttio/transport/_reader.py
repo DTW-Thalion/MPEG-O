@@ -939,6 +939,8 @@ class TransportReader:
                 reference_uri=instrument_meta.get("reference_uri", ""),
                 platform=instrument_meta.get("platform", ""),
                 sample_name=instrument_meta.get("sample_name", ""),
+                # M97: "" on the wire means no role (attribute absent).
+                read_role=instrument_meta.get("read_role") or None,
                 positions=np.array(gd["positions"], dtype=np.int64),
                 mapping_qualities=np.array(gd["mapping_qualities"], dtype=np.uint8),
                 flags=np.array(gd["flags"], dtype=np.uint32),

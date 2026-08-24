@@ -545,6 +545,8 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
             NSDictionary *gMetaDict = @{
                 @"modality":      readStringAttr(gRun, @"modality")      ?: @"",
                 @"platform":      readStringAttr(gRun, @"platform")      ?: @"",
+                /* M97: "" when the run has no @read_role attribute. */
+                @"read_role":     readStringAttr(gRun, @"read_role")     ?: @"",
                 @"reference_uri": readStringAttr(gRun, @"reference_uri") ?: @"",
                 @"sample_name":   readStringAttr(gRun, @"sample_name")   ?: @"",
             };
@@ -1382,6 +1384,11 @@ static BOOL writeEncryptedFile(NSString *path,
                         ? gMeta[fld] : @"";
                     [gRun setAttributeValue:v forName:fld error:NULL];
                 }
+                /* M97: absent on the container when "" on the wire. */
+                NSString *gRole = [gMeta[@"read_role"] isKindOfClass:[NSString class]]
+                    ? gMeta[@"read_role"] : @"";
+                if (gRole.length > 0)
+                    [gRun setAttributeValue:gRole forName:@"read_role" error:NULL];
 
                 id<TTIOStorageGroup> gSig =
                     [gRun createGroupNamed:@"signal_channels" error:error];
