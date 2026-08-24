@@ -476,8 +476,9 @@ consecutive `WrittenGenomicRun` batches parsed from the `samtools
 view` pipe line by line, and `BamReader.stream_source(...)` wraps that
 iterator as a `GenomicStreamSource` that feeds a `GenomicStreamWriter`
 (§2.5) batch by batch — `reference_fasta=` enables REF_DIFF_V2 through
-a `LazyReference` without loading the FASTA whole. The FASTQ importer
-exposes the same `iter_batches` / `stream_source` surface.
+a `LazyReference` without loading the FASTA whole. The FASTQ and
+FASTA importers expose the same `iter_batches` / `stream_source`
+surface (the FASTA batches carry the unaligned-import sentinels).
 
 Column mapping (SAM fields 1–11 → model; trailing optional tags are
 discarded):
