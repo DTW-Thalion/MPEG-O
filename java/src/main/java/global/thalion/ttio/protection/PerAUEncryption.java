@@ -232,6 +232,20 @@ public final class PerAUEncryption {
             byte[] plaintextLe, long[] offsets, int[] lengths,
             int datasetId, String channelName, byte[] key,
             int bytesPerElement) {
+        return encryptChannelToSegments(plaintextLe, offsets, lengths,
+                datasetId, channelName, key, bytesPerElement, 0, 0);
+    }
+
+    /** Block-streaming variant (M99): the caller hands in ONE block at
+     *  a time. {@code offsets} are then block-local, {@code auBase} is
+     *  the block's first global AU ordinal (feeding the AAD), and
+     *  {@code offsetBase} is the block's global plaintext element
+     *  offset (feeding the stored segment offset). Both 0 reproduces
+     *  the whole-channel behaviour. */
+    public static List<ChannelSegment> encryptChannelToSegments(
+            byte[] plaintextLe, long[] offsets, int[] lengths,
+            int datasetId, String channelName, byte[] key,
+            int bytesPerElement, int auBase, long offsetBase) {
         if (offsets.length != lengths.length) {
             throw new IllegalArgumentException(
                 "offsets / lengths length mismatch");
@@ -248,9 +262,9 @@ public final class PerAUEncryption {
             int byteLen = len * bytesPerElement;
             byte[] chunk = Arrays.copyOfRange(plaintextLe,
                                                 byteOff, byteOff + byteLen);
-            byte[] aad = aadForChannel(datasetId, auSeq, channelName);
+            byte[] aad = aadForChannel(datasetId, auBase + auSeq, channelName);
             GcmResult r = encryptWithAad(chunk, key, aad, null);
-            out.add(new ChannelSegment(off, len, r.iv(), r.tag(),
+            out.add(new ChannelSegment(offsetBase + off, len, r.iv(), r.tag(),
                                          r.ciphertext()));
         }
         return out;
@@ -277,6 +291,17 @@ public final class PerAUEncryption {
     public static byte[] decryptChannelFromSegments(
             List<ChannelSegment> segments, int datasetId,
             String channelName, byte[] key, int bytesPerElement) {
+        return decryptChannelFromSegments(segments, datasetId, channelName,
+                key, bytesPerElement, 0);
+    }
+
+    /** Block-streaming variant (M99): {@code auBase} offsets the AAD's
+     *  AU ordinal for callers that decrypt one block's rows at a
+     *  time. */
+    public static byte[] decryptChannelFromSegments(
+            List<ChannelSegment> segments, int datasetId,
+            String channelName, byte[] key, int bytesPerElement,
+            int auBase) {
         if (bytesPerElement < 1) {
             throw new IllegalArgumentException(
                 "bytesPerElement must be >= 1, got " + bytesPerElement);
@@ -287,7 +312,7 @@ public final class PerAUEncryption {
         int cursor = 0;
         for (int auSeq = 0; auSeq < segments.size(); auSeq++) {
             ChannelSegment s = segments.get(auSeq);
-            byte[] aad = aadForChannel(datasetId, auSeq, channelName);
+            byte[] aad = aadForChannel(datasetId, auBase + auSeq, channelName);
             byte[] plain = decryptWithAad(s.iv(), s.tag(), s.ciphertext(),
                                             key, aad);
             int expected = s.length() * bytesPerElement;

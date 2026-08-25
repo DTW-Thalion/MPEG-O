@@ -593,19 +593,40 @@ public final class Hdf5CompoundIO {
     /**
      * Create an empty compound dataset with an unlimited first dimension,
      * chunked in {@code chunkRows} records. Rows are added with
-     * {@link #appendCompoundRows}. Primitive field kinds only.
+     * {@link #appendCompoundRows}. VL-string and VL-bytes fields are
+     * supported; the append path routes them through the split
+     * writers (M99).
      */
     public static void createExtendableCompound(Hdf5Group parent, String datasetName,
                                                 Schema schema, int chunkRows) {
-        requirePrimitiveSchema(schema, datasetName);
         if (chunkRows <= 0) {
             throw new IllegalArgumentException("chunkRows must be > 0");
         }
         Hdf5File owner = parent.owningFile();
         owner.lockForWriting();
         long ctype = -1, dspace = -1, plist = -1, dset = -1;
+        long strType = -1, vlBytesType = -1;
         try {
-            ctype = compoundType(schema);
+            boolean hasVl = schema.fields.stream()
+                    .anyMatch(f -> f.kind() == FieldKind.VL_STRING
+                                || f.kind() == FieldKind.VL_BYTES);
+            if (hasVl) {
+                strType = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+                H5.H5Tset_size(strType, HDF5Constants.H5T_VARIABLE);
+                vlBytesType = H5.H5Tvlen_create(HDF5Constants.H5T_NATIVE_UCHAR);
+                ctype = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND, schema.totalSize);
+                for (int i = 0; i < schema.fields.size(); i++) {
+                    Field f = schema.fields.get(i);
+                    long t = switch (f.kind()) {
+                        case VL_STRING -> strType;
+                        case VL_BYTES  -> vlBytesType;
+                        default        -> f.kind().nativeType;
+                    };
+                    H5.H5Tinsert(ctype, f.name(), schema.offsets[i], t);
+                }
+            } else {
+                ctype = compoundType(schema);
+            }
             dspace = H5.H5Screate_simple(1, new long[]{0},
                     new long[]{HDF5Constants.H5S_UNLIMITED});
             plist = H5.H5Pcreate(HDF5Constants.H5P_DATASET_CREATE);
@@ -624,17 +645,27 @@ public final class Hdf5CompoundIO {
             if (plist >= 0)  try { H5.H5Pclose(plist);  } catch (Exception ig) {}
             if (dspace >= 0) try { H5.H5Sclose(dspace); } catch (Exception ig) {}
             if (ctype >= 0)  try { H5.H5Tclose(ctype);  } catch (Exception ig) {}
+            if (vlBytesType >= 0) try { H5.H5Tclose(vlBytesType); } catch (Exception ig) {}
+            if (strType >= 0)     try { H5.H5Tclose(strType);     } catch (Exception ig) {}
             owner.unlockForWriting();
         }
     }
 
     /**
      * Append rows ({@code Object[]} per record, field order) to a dataset
-     * created by {@link #createExtendableCompound}.
+     * created by {@link #createExtendableCompound}. Schemas with VL
+     * fields route through the split writers, mirroring
+     * {@link #writeCompoundDataset}'s dispatch (M99).
      */
     public static void appendCompoundRows(Hdf5Group parent, String datasetName,
                                           Schema schema, List<Object[]> rows) {
-        requirePrimitiveSchema(schema, datasetName);
+        boolean hasVl = schema.fields.stream()
+                .anyMatch(f -> f.kind() == FieldKind.VL_STRING
+                            || f.kind() == FieldKind.VL_BYTES);
+        if (hasVl) {
+            appendCompoundRowsSplit(parent, datasetName, schema, rows);
+            return;
+        }
         if (rows.isEmpty()) return;
         Hdf5File owner = parent.owningFile();
         owner.lockForWriting();
@@ -667,6 +698,304 @@ public final class Hdf5CompoundIO {
             if (ctype >= 0)  try { H5.H5Tclose(ctype);  } catch (Exception ig) {}
             if (dset >= 0)   try { H5.H5Dclose(dset);   } catch (Exception ig) {}
             owner.unlockForWriting();
+        }
+    }
+
+    /** VL-capable append: set_extent + a hyperslab selection, then the
+     *  same three split passes as {@link #writeCompoundDataset} (packed
+     *  primitives, H5Dwrite_VLStrings, VL_BYTES via FFM), each with an
+     *  explicit {@code n}-element memory space matching the compact
+     *  row buffers. */
+    private static void appendCompoundRowsSplit(Hdf5Group parent, String datasetName,
+                                                Schema schema, List<Object[]> rows) {
+        if (rows.isEmpty()) return;
+        Hdf5File owner = parent.owningFile();
+        owner.lockForWriting();
+        long dset = -1, fspace = -1, mspace = -1, strType = -1, vlBytesType = -1;
+        int n = rows.size();
+        try {
+            dset = H5.H5Dopen(parent.getGroupId(), datasetName, HDF5Constants.H5P_DEFAULT);
+            if (dset < 0) {
+                throw new Hdf5Errors.DatasetOpenException(datasetName);
+            }
+            long cur = currentCount(dset);
+            H5.H5Dset_extent(dset, new long[]{cur + n});
+            fspace = H5.H5Dget_space(dset);
+            H5.H5Sselect_hyperslab(fspace, HDF5Constants.H5S_SELECT_SET,
+                    new long[]{cur}, null, new long[]{n}, null);
+            mspace = H5.H5Screate_simple(1, new long[]{n}, null);
+
+            strType = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+            H5.H5Tset_size(strType, HDF5Constants.H5T_VARIABLE);
+            vlBytesType = H5.H5Tvlen_create(HDF5Constants.H5T_NATIVE_UCHAR);
+
+            Schema primSchema = primitiveProjection(schema);
+            if (!primSchema.fields.isEmpty()) {
+                long memType = -1;
+                try {
+                    memType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND,
+                                           primSchema.totalSize);
+                    for (int i = 0; i < primSchema.fields.size(); i++) {
+                        Field f = primSchema.fields.get(i);
+                        H5.H5Tinsert(memType, f.name(), primSchema.offsets[i],
+                                     f.kind().nativeType);
+                    }
+                    ByteBuffer buf =
+                        ByteBuffer.allocate(primSchema.totalSize * n)
+                                  .order(ByteOrder.nativeOrder());
+                    for (int row = 0; row < n; row++) {
+                        Object[] vals = rows.get(row);
+                        int base = row * primSchema.totalSize;
+                        for (int pi = 0; pi < primSchema.fields.size(); pi++) {
+                            Field f = primSchema.fields.get(pi);
+                            int off = base + primSchema.offsets[pi];
+                            int origIdx = schema.fields.indexOf(f);
+                            switch (f.kind()) {
+                                case UINT32  ->
+                                    buf.putInt(off, ((Number) vals[origIdx]).intValue());
+                                case INT64, UINT64 ->
+                                    buf.putLong(off, ((Number) vals[origIdx]).longValue());
+                                case FLOAT64 ->
+                                    buf.putDouble(off, ((Number) vals[origIdx]).doubleValue());
+                                default -> { /* no VL here */ }
+                            }
+                        }
+                    }
+                    int rc = H5.H5Dwrite(dset, memType,
+                            mspace, fspace,
+                            HDF5Constants.H5P_DEFAULT, buf.array());
+                    if (rc < 0) {
+                        throw new Hdf5Errors.DatasetWriteException(
+                                "H5Dwrite (append primitives) failed for '%s'"
+                                .formatted(datasetName));
+                    }
+                } finally {
+                    if (memType >= 0) try { H5.H5Tclose(memType); } catch (Exception ig) {}
+                }
+            }
+
+            for (int i = 0; i < schema.fields.size(); i++) {
+                Field f = schema.fields.get(i);
+                if (f.kind() != FieldKind.VL_STRING) continue;
+                Object[] colData = new Object[n];
+                for (int row = 0; row < n; row++) {
+                    Object v = rows.get(row)[i];
+                    colData[row] = (v instanceof String s) ? s
+                                 : (v == null ? "" : v.toString());
+                }
+                long memType = -1;
+                try {
+                    memType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND,
+                                           FieldKind.VL_STRING.byteSize);
+                    H5.H5Tinsert(memType, f.name(), 0, strType);
+                    int rc = H5.H5Dwrite_VLStrings(dset, memType,
+                            mspace, fspace,
+                            HDF5Constants.H5P_DEFAULT, colData);
+                    if (rc < 0) {
+                        throw new Hdf5Errors.DatasetWriteException(
+                                "H5Dwrite_VLStrings (append) failed for '%s' in '%s'"
+                                .formatted(f.name(), datasetName));
+                    }
+                } finally {
+                    if (memType >= 0) try { H5.H5Tclose(memType); } catch (Exception ig) {}
+                }
+            }
+
+            for (int i = 0; i < schema.fields.size(); i++) {
+                Field f = schema.fields.get(i);
+                if (f.kind() != FieldKind.VL_BYTES) continue;
+                byte[][] colData = new byte[n][];
+                for (int row = 0; row < n; row++) {
+                    Object v = rows.get(row)[i];
+                    colData[row] = (v instanceof byte[] b) ? b : new byte[0];
+                }
+                long memType = -1;
+                try {
+                    memType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND,
+                                           FieldKind.VL_BYTES.byteSize);
+                    H5.H5Tinsert(memType, f.name(), 0, vlBytesType);
+                    VlBytesFFM.write(dset, memType, mspace, fspace, n, colData);
+                } finally {
+                    if (memType >= 0) try { H5.H5Tclose(memType); } catch (Exception ig) {}
+                }
+            }
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.DatasetWriteException(
+                    "compound VL append '%s' failed: %s"
+                    .formatted(datasetName, e.getMessage()));
+        } finally {
+            if (vlBytesType >= 0) try { H5.H5Tclose(vlBytesType); } catch (Exception ig) {}
+            if (strType >= 0)     try { H5.H5Tclose(strType);     } catch (Exception ig) {}
+            if (mspace >= 0)      try { H5.H5Sclose(mspace);      } catch (Exception ig) {}
+            if (fspace >= 0)      try { H5.H5Sclose(fspace);      } catch (Exception ig) {}
+            if (dset >= 0)        try { H5.H5Dclose(dset);        } catch (Exception ig) {}
+            owner.unlockForWriting();
+        }
+    }
+
+    /** Rows {@code [offset, offset+count)} of a compound dataset —
+     *  the block-streaming walker's bounded counterpart to
+     *  {@link #readCompoundFull} (M99). Every pass reads through an
+     *  explicit {@code n}-element memory space matching the compact
+     *  row buffers. */
+    public static List<Object[]> readCompoundFullRange(Hdf5Group parent,
+                                                        String datasetName,
+                                                        Schema schema,
+                                                        long offset, int count) {
+        Hdf5File owner = parent.owningFile();
+        owner.lockForReading();
+        long dset = -1, fspace = -1, mspace = -1, strType = -1, vlBytesType = -1;
+        try {
+            dset = H5.H5Dopen(parent.getGroupId(), datasetName,
+                              HDF5Constants.H5P_DEFAULT);
+            if (dset < 0) return List.of();
+            fspace = H5.H5Dget_space(dset);
+            long[] dims = {0};
+            H5.H5Sget_simple_extent_dims(fspace, dims, null);
+            long from = Math.min(offset, dims[0]);
+            int n = (int) Math.min(count, dims[0] - from);
+            if (n <= 0) return List.of();
+            H5.H5Sselect_hyperslab(fspace, HDF5Constants.H5S_SELECT_SET,
+                    new long[]{from}, null, new long[]{n}, null);
+            mspace = H5.H5Screate_simple(1, new long[]{n}, null);
+
+            strType = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+            H5.H5Tset_size(strType, HDF5Constants.H5T_VARIABLE);
+            vlBytesType = H5.H5Tvlen_create(HDF5Constants.H5T_NATIVE_UCHAR);
+            long csetFileType = H5.H5Dget_type(dset);
+
+            Object[][] result = new Object[n][schema.fields.size()];
+
+            Schema primSchema = primitiveProjection(schema);
+            if (!primSchema.fields.isEmpty()) {
+                long memType = -1;
+                try {
+                    memType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND,
+                                           primSchema.totalSize);
+                    for (int i = 0; i < primSchema.fields.size(); i++) {
+                        Field f = primSchema.fields.get(i);
+                        H5.H5Tinsert(memType, f.name(), primSchema.offsets[i],
+                                     f.kind().nativeType);
+                    }
+                    byte[] buf = new byte[primSchema.totalSize * n];
+                    int rc = H5.H5Dread(dset, memType,
+                            mspace, fspace,
+                            HDF5Constants.H5P_DEFAULT, buf);
+                    if (rc < 0) return List.of();
+                    ByteBuffer bb = ByteBuffer.wrap(buf)
+                                              .order(ByteOrder.nativeOrder());
+                    for (int row = 0; row < n; row++) {
+                        for (int pi = 0; pi < primSchema.fields.size(); pi++) {
+                            Field f = primSchema.fields.get(pi);
+                            int off = row * primSchema.totalSize
+                                    + primSchema.offsets[pi];
+                            int origIdx = schema.fields.indexOf(f);
+                            result[row][origIdx] = switch (f.kind()) {
+                                case UINT32  -> bb.getInt(off);
+                                case INT64, UINT64 -> bb.getLong(off);
+                                case FLOAT64 -> bb.getDouble(off);
+                                default -> null;
+                            };
+                        }
+                    }
+                } finally {
+                    if (memType >= 0)
+                        try { H5.H5Tclose(memType); } catch (Exception ig) {}
+                }
+            }
+
+            try {
+            for (int i = 0; i < schema.fields.size(); i++) {
+                Field f = schema.fields.get(i);
+                if (f.kind() != FieldKind.VL_STRING) continue;
+                Object[] colData = new Object[n];
+                long memType = -1, fieldStrType = -1;
+                try {
+                    fieldStrType = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+                    H5.H5Tset_size(fieldStrType, HDF5Constants.H5T_VARIABLE);
+                    try {
+                        int mi = H5.H5Tget_member_index(csetFileType, f.name());
+                        if (mi >= 0) {
+                            long mt = H5.H5Tget_member_type(csetFileType, mi);
+                            if (H5.H5Tget_cset(mt)
+                                    == HDF5Constants.H5T_CSET_UTF8) {
+                                H5.H5Tset_cset(fieldStrType,
+                                               HDF5Constants.H5T_CSET_UTF8);
+                            }
+                            H5.H5Tclose(mt);
+                        }
+                    } catch (HDF5LibraryException ignored) {
+                        // Member lookup failed: keep the ASCII default.
+                    }
+                    memType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND,
+                                           FieldKind.VL_STRING.byteSize);
+                    H5.H5Tinsert(memType, f.name(), 0, fieldStrType);
+                    int rc = H5.H5Dread_VLStrings(dset, memType,
+                            mspace, fspace,
+                            HDF5Constants.H5P_DEFAULT, colData);
+                    if (rc < 0) {
+                        java.util.Arrays.fill(colData, "");
+                    }
+                } finally {
+                    if (memType >= 0)
+                        try { H5.H5Tclose(memType); } catch (Exception ig) {}
+                    if (fieldStrType >= 0)
+                        try { H5.H5Tclose(fieldStrType); } catch (Exception ig) {}
+                }
+                for (int row = 0; row < n; row++) {
+                    result[row][i] = colData[row] instanceof String s ? s : "";
+                }
+            }
+            } finally {
+                if (csetFileType >= 0)
+                    try { H5.H5Tclose(csetFileType); } catch (Exception ig) {}
+            }
+
+            for (int i = 0; i < schema.fields.size(); i++) {
+                Field f = schema.fields.get(i);
+                if (f.kind() != FieldKind.VL_BYTES) continue;
+                long memType = -1;
+                try {
+                    memType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND,
+                                           FieldKind.VL_BYTES.byteSize);
+                    H5.H5Tinsert(memType, f.name(), 0, vlBytesType);
+                    byte[][] colData =
+                        VlBytesFFM.read(dset, memType, mspace, fspace, n);
+                    for (int row = 0; row < n; row++) {
+                        result[row][i] = colData[row];
+                    }
+                } finally {
+                    if (memType >= 0)
+                        try { H5.H5Tclose(memType); } catch (Exception ig) {}
+                }
+            }
+
+            List<Object[]> out = new ArrayList<>(n);
+            for (int row = 0; row < n; row++) {
+                Object[] rec = result[row];
+                for (int i = 0; i < schema.fields.size(); i++) {
+                    if (rec[i] == null) {
+                        rec[i] = switch (schema.fields.get(i).kind()) {
+                            case UINT32    -> 0;
+                            case INT64, UINT64 -> 0L;
+                            case FLOAT64   -> 0.0;
+                            case VL_STRING -> "";
+                            case VL_BYTES  -> new byte[0];
+                        };
+                    }
+                }
+                out.add(rec);
+            }
+            return out;
+        } catch (HDF5LibraryException e) {
+            return List.of();
+        } finally {
+            if (vlBytesType >= 0) try { H5.H5Tclose(vlBytesType); } catch (Exception ig) {}
+            if (strType >= 0)     try { H5.H5Tclose(strType);     } catch (Exception ig) {}
+            if (mspace >= 0)      try { H5.H5Sclose(mspace);      } catch (Exception ig) {}
+            if (fspace >= 0)      try { H5.H5Sclose(fspace);      } catch (Exception ig) {}
+            if (dset >= 0)        try { H5.H5Dclose(dset);        } catch (Exception ig) {}
+            owner.unlockForReading();
         }
     }
 

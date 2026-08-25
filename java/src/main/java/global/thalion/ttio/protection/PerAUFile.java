@@ -14,7 +14,17 @@ import global.thalion.ttio.providers.ProviderRegistry;
 import global.thalion.ttio.providers.StorageDataset;
 import global.thalion.ttio.providers.StorageGroup;
 import global.thalion.ttio.providers.StorageProvider;
+import global.thalion.ttio.SpectralDatasetGenomicWriter;
+import global.thalion.ttio.genomics.AlignedRead;
+import global.thalion.ttio.genomics.BlockTable;
+import global.thalion.ttio.genomics.BlockView;
+import global.thalion.ttio.genomics.GenomicBlocks;
+import global.thalion.ttio.genomics.GenomicRun;
+import global.thalion.ttio.genomics.GenomicWriteContext;
+import global.thalion.ttio.genomics.PackedReference;
+import global.thalion.ttio.genomics.WrittenGenomicRun;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -23,6 +33,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * v1.0 file-level per-Access-Unit encryption orchestrator.
@@ -119,7 +130,13 @@ public final class PerAUFile {
                 if (study.hasChild("genomic_runs")) {
                     try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
                         for (String runName : runNames(gRuns)) {
-                            encryptOneGenomicRun(gRuns, runName, datasetId, key);
+                            if (isBlocksV1(gRuns, runName)) {
+                                encryptBlocksV1Run(study, gRuns, runName,
+                                                   datasetId, key);
+                            } else {
+                                encryptOneGenomicRun(gRuns, runName,
+                                                     datasetId, key);
+                            }
                             datasetId++;
                         }
                     }
@@ -271,8 +288,14 @@ public final class PerAUFile {
                 if (study.hasChild("genomic_runs")) {
                     try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
                         for (String runName : runNames(gRuns)) {
-                            decryptOneGenomicRunInPlace(gRuns, runName,
+                            if (isBlocksV1(gRuns, runName)) {
+                                decryptBlocksV1RunInPlace(study, gRuns,
+                                                          runName,
                                                           datasetId, key);
+                            } else {
+                                decryptOneGenomicRunInPlace(gRuns, runName,
+                                                              datasetId, key);
+                            }
                             datasetId++;
                         }
                     }
@@ -1137,6 +1160,410 @@ public final class PerAUFile {
             out.add(idx2 < nameTable.size() ? nameTable.get(idx2) : "");
         }
         return out;
+    }
+
+    // ────────────────────────────────────── M99: blocks_v1 walkers
+    //
+    // The default genomic layout stores codec-coded per-block blobs,
+    // so the walkers stream block by block: decode one block, slice
+    // its reads, encrypt one AU per read with GLOBAL AU numbering,
+    // append to extendable segments tables. Restore re-encodes each
+    // block with the stream writer's machinery; because writer policy
+    // the file does not persist would break that reproducibility,
+    // ENCRYPT re-encodes and byte-compares every block BEFORE
+    // deleting anything, and refuses the run when a blob is not
+    // reproducible.
+
+    private static final List<String> BLOCKS_V1_CHANNELS =
+        List.of("sequences", "qualities");
+
+    private static boolean isBlocksV1(StorageGroup gRuns, String runName) {
+        try (StorageGroup run = gRuns.openGroup(runName)) {
+            if (!run.hasAttribute("layout")) return false;
+            Object layout = run.getAttribute("layout");
+            return layout != null && "blocks_v1".equals(layout.toString());
+        }
+    }
+
+    /** {@code {chromosome: bytes}} of an embedded reference; null when
+     *  absent. */
+    private static Map<String, byte[]> embeddedReferenceSeqs(
+            StorageGroup study, String uri) {
+        if (uri == null || uri.isEmpty()
+                || !study.hasChild("references")) return null;
+        try (StorageGroup refs = study.openGroup("references")) {
+            if (!refs.hasChild(uri)) return null;
+            try (StorageGroup ref = refs.openGroup(uri)) {
+                if (!ref.hasChild("chromosomes")) return null;
+                try (StorageGroup chroms = ref.openGroup("chromosomes")) {
+                    Map<String, byte[]> out = new LinkedHashMap<>();
+                    for (String cname : chroms.childNames()) {
+                        try (StorageGroup cg = chroms.openGroup(cname)) {
+                            out.put(cname,
+                                    PackedReference.readChromosomeBytes(cg));
+                        }
+                    }
+                    return out;
+                }
+            }
+        }
+    }
+
+    /** The run-wide chromosome-id map the writer accumulated: the
+     *  {@code mate_info/chrom_names} table in row order. */
+    private static Map<String, Integer> blocksV1ChromMap(StorageGroup sig) {
+        Map<String, Integer> map = new LinkedHashMap<>();
+        if (sig.hasChild("mate_info")) {
+            try (StorageGroup mate = sig.openGroup("mate_info")) {
+                List<String> names = BlockView.readNames(mate, "chrom_names");
+                for (int i = 0; i < names.size(); i++) map.put(names.get(i), i);
+            }
+        }
+        return map;
+    }
+
+    private record BlockRun(WrittenGenomicRun run, byte[] seq, byte[] qual) {}
+
+    /** Collect reads {@code [indexBase, indexBase+nn)} from an open
+     *  reader into a per-block {@link WrittenGenomicRun}. The encrypt
+     *  walker reads block {@code b} through the run's own reader
+     *  ({@code indexBase = readStartAt(b)}); the decrypt walker reads
+     *  a materialised one-block view ({@code indexBase = 0}). */
+    private static BlockRun blocksV1BlockRun(GenomicRun rd,
+            StorageGroup runGroup, StorageGroup study, BlockTable t,
+            int b, long indexBase) {
+        int nn = t.nReadsAt(b);
+        long[] positions = new long[nn];
+        byte[] mapqs = new byte[nn];
+        int[] flags = new int[nn];
+        long[] offsets = new long[nn];
+        int[] lengths = new int[nn];
+        long[] matePos = new long[nn];
+        int[] tlens = new int[nn];
+        List<String> cigars = new ArrayList<>(nn);
+        List<String> names = new ArrayList<>(nn);
+        List<String> mateChroms = new ArrayList<>(nn);
+        List<String> chroms = new ArrayList<>(nn);
+        ByteArrayOutputStream seq = new ByteArrayOutputStream();
+        ByteArrayOutputStream qual = new ByteArrayOutputStream();
+        for (int i = 0; i < nn; i++) {
+            AlignedRead r = rd.readAt((int) (indexBase + i));
+            byte[] sb = r.sequence().getBytes(StandardCharsets.US_ASCII);
+            offsets[i] = seq.size();
+            seq.writeBytes(sb);
+            qual.writeBytes(r.qualities());
+            lengths[i] = sb.length;
+            positions[i] = r.position();
+            mapqs[i] = (byte) r.mappingQuality();
+            flags[i] = r.flags();
+            matePos[i] = r.matePosition();
+            tlens[i] = r.templateLength();
+            cigars.add(r.cigar());
+            names.add(r.readName());
+            mateChroms.add(r.mateChromosome());
+            chroms.add(r.chromosome());
+        }
+
+        String refUri = rd.referenceUri();
+        int seqCodec = t.hasCodecs() ? t.codecOf("sequences", b) : 0;
+        int qualCodec = t.hasCodecs() ? t.codecOf("qualities", b) : 0;
+        Map<String, byte[]> refSeqs = null;
+        Map<String, Compression> overrides = new LinkedHashMap<>();
+        if (seqCodec == Compression.REF_DIFF_V2.ordinal()) {
+            refSeqs = embeddedReferenceSeqs(study, refUri);
+            if (refSeqs == null) {
+                throw new IllegalStateException(
+                    "per-AU blocks_v1: block " + b + " codes sequences "
+                    + "with REF_DIFF_V2 but reference '" + refUri
+                    + "' is not embedded in /study/references; restoring "
+                    + "the blob needs the reference bytes");
+            }
+        } else if (seqCodec != 0) {
+            overrides.put("sequences", Compression.values()[seqCodec]);
+        }
+        if (qualCodec != 0) {
+            overrides.put("qualities", Compression.values()[qualCodec]);
+        }
+
+        byte[] seqBytes = seq.toByteArray();
+        byte[] qualBytes = qual.toByteArray();
+        WrittenGenomicRun block = new WrittenGenomicRun(
+            rd.acquisitionMode(), refUri, rd.platform(), rd.sampleName(),
+            positions, mapqs, flags, seqBytes, qualBytes,
+            offsets, lengths, cigars, names, mateChroms, matePos, tlens,
+            chroms, Compression.ZLIB, overrides,
+            List.of(), false, refSeqs, null, null,
+            false, false, rd.getReadRole(), 0);
+        return new BlockRun(block, seqBytes, qualBytes);
+    }
+
+    /** The stream writer's sticky qualities discipline: after the
+     *  first FQZCOMP_NX16_Z block, read the winning strategy back from
+     *  the encoded stream and pin it for the rest of the run. */
+    private static int blocksV1DeriveQualHint(
+            GenomicBlocks.BlockBlobs blobs, int current) {
+        if (current != -1) return current;
+        Integer qc = blobs.codecs().get("qualities");
+        if (qc == null || qc != Compression.FQZCOMP_NX16_Z.ordinal()) {
+            return current;
+        }
+        int strat = global.thalion.ttio.codecs.FqzcompNx16Z
+            .streamStrategy(blobs.blobs().get("qualities"));
+        if (strat <= 0) return current;
+        return strat == 4
+            ? global.thalion.ttio.codecs.FqzcompNx16Z.HINT_V4_AUTO : strat;
+    }
+
+    private static void encryptBlocksV1Run(StorageGroup study,
+            StorageGroup gRuns, String runName, int datasetId,
+            byte[] key) {
+        try (StorageGroup runGroup = gRuns.openGroup(runName);
+             StorageGroup sig = runGroup.openGroup("signal_channels")) {
+            List<String> channels = new ArrayList<>();
+            for (String ch : BLOCKS_V1_CHANNELS) {
+                if (sig.hasChild(ch)) channels.add(ch);
+            }
+            if (channels.isEmpty()) return;
+            BlockTable t = BlockTable.read(runGroup);
+            GenomicRun rd = GenomicRun.readFrom(runGroup, runName);
+            Map<String, Integer> chromMap = blocksV1ChromMap(sig);
+
+            Map<String, StorageDataset> blobDs = new LinkedHashMap<>();
+            Map<String, StorageDataset> segDs = new LinkedHashMap<>();
+            try {
+                for (String ch : channels) {
+                    blobDs.put(ch, ch.equals("sequences")
+                        ? sig.openGroup("sequences").openDataset("data")
+                        : sig.openDataset(ch));
+                    String segName = ch + "_segments";
+                    if (sig.hasChild(segName)) sig.deleteChild(segName);
+                    segDs.put(ch, sig.createCompoundDataset(
+                        segName, CHANNEL_SEG_FIELDS, 0, true, 1024));
+                }
+                int qualHint = -1;
+                byte[] refMd5 = null;
+                for (int b = 0; b < t.count(); b++) {
+                    BlockRun br = blocksV1BlockRun(rd, runGroup, study,
+                                                   t, b, t.readStartAt(b));
+                    if (refMd5 == null
+                            && br.run().referenceChromSeqs() != null) {
+                        refMd5 = SpectralDatasetGenomicWriter
+                            .referenceMd5ForRun(br.run());
+                    }
+                    GenomicWriteContext ctx =
+                        new GenomicWriteContext(chromMap, refMd5, qualHint);
+                    GenomicBlocks.BlockBlobs blobs =
+                        GenomicBlocks.encodeBlock(br.run(), ctx);
+                    qualHint = blocksV1DeriveQualHint(blobs, qualHint);
+
+                    long[] local = new long[t.nReadsAt(b)];
+                    int[] blkLens = br.run().lengths();
+                    long cum = 0;
+                    for (int i = 0; i < blkLens.length; i++) {
+                        local[i] = cum;
+                        cum += blkLens[i];
+                    }
+                    for (String ch : channels) {
+                        long off = t.offsetOf(ch, b);
+                        long ln = t.lengthOf(ch, b);
+                        byte[] stored = ln > 0
+                            ? (byte[]) blobDs.get(ch).readSlice(off, ln)
+                            : new byte[0];
+                        byte[] reenc = blobs.blobs()
+                            .getOrDefault(ch, new byte[0]);
+                        if (!Arrays.equals(reenc, stored)) {
+                            throw new IllegalStateException(
+                                "per-AU blocks_v1: block " + b
+                                + " channel '" + ch + "' does not "
+                                + "re-encode byte-identically, so a "
+                                + "decrypt could not restore this file. "
+                                + "The run was likely written with "
+                                + "writer policy the file does not "
+                                + "persist (for example a non-default "
+                                + "ref_diff_slice_bytes); per-AU "
+                                + "in-place protection is unsupported "
+                                + "for it.");
+                        }
+                        byte[] plain = ch.equals("sequences")
+                            ? br.seq() : br.qual();
+                        List<ChannelSegment> segs =
+                            PerAUEncryption.encryptChannelToSegments(
+                                plain, local, blkLens, datasetId, ch,
+                                key, 1, (int) t.readStartAt(b),
+                                t.baseStartAt(b));
+                        List<Object[]> rows =
+                            new ArrayList<>(segs.size());
+                        for (ChannelSegment s : segs) {
+                            rows.add(new Object[]{ s.offset(), s.length(),
+                                s.iv(), s.tag(), s.ciphertext() });
+                        }
+                        segDs.get(ch).append(rows);
+                    }
+                }
+            } catch (RuntimeException e) {
+                for (String ch : channels) {
+                    String segName = ch + "_segments";
+                    if (sig.hasChild(segName)) sig.deleteChild(segName);
+                }
+                throw e;
+            } finally {
+                for (StorageDataset ds : blobDs.values()) ds.close();
+                for (StorageDataset ds : segDs.values()) ds.close();
+            }
+            for (String ch : channels) {
+                sig.deleteChild(ch);
+                sig.setAttribute(ch + "_algorithm", "aes-256-gcm");
+            }
+        }
+    }
+
+    private static void decryptBlocksV1RunInPlace(StorageGroup study,
+            StorageGroup gRuns, String runName, int datasetId,
+            byte[] key) {
+        try (StorageGroup runGroup = gRuns.openGroup(runName);
+             StorageGroup sig = runGroup.openGroup("signal_channels")) {
+            List<String> channels = new ArrayList<>();
+            for (String ch : BLOCKS_V1_CHANNELS) {
+                if (sig.hasChild(ch + "_segments")) channels.add(ch);
+            }
+            if (channels.isEmpty()) return;
+            BlockTable t = BlockTable.read(runGroup);
+            Map<String, Integer> chromMap = blocksV1ChromMap(sig);
+            List<String> chromNames;
+            try (StorageGroup idx = runGroup.openGroup("genomic_index")) {
+                chromNames = BlockView.readNames(idx, "chromosome_names");
+            }
+            List<String> mateChromNames = List.of();
+            if (sig.hasChild("mate_info")) {
+                try (StorageGroup mate = sig.openGroup("mate_info")) {
+                    mateChromNames = BlockView.readNames(mate, "chrom_names");
+                }
+            }
+            Set<String> skip = Set.copyOf(channels);
+
+            Map<String, StorageDataset> newDs = new LinkedHashMap<>();
+            Map<String, Long> written = new LinkedHashMap<>();
+            for (String ch : channels) written.put(ch, 0L);
+            int qualHint = -1;
+            byte[] refMd5 = null;
+            try {
+                for (int b = 0; b < t.count(); b++) {
+                    long r0 = t.readStartAt(b);
+                    int nn = t.nReadsAt(b);
+                    Map<String, byte[]> decrypted = new LinkedHashMap<>();
+                    for (String ch : channels) {
+                        List<ChannelSegment> segs =
+                            readChannelSegmentsSlice(sig, ch + "_segments",
+                                                     r0, nn);
+                        decrypted.put(ch,
+                            PerAUEncryption.decryptChannelFromSegments(
+                                segs, datasetId, ch, key, 1, (int) r0));
+                    }
+
+                    BlockView.Handle view = BlockView.materialise(
+                        runGroup, t, b, chromNames, mateChromNames, skip);
+                    BlockRun br;
+                    try {
+                        StorageGroup viewSig =
+                            view.group().openGroup("signal_channels");
+                        for (String ch : channels) {
+                            byte[] raw = decrypted.get(ch);
+                            try (StorageDataset ds = viewSig.createDataset(
+                                    ch, Precision.UINT8, raw.length, 0,
+                                    Compression.NONE, 0)) {
+                                ds.writeAll(raw);
+                                ds.setAttribute("compression", 0);
+                            }
+                        }
+                        GenomicRun rd =
+                            GenomicRun.readFrom(view.group(), "block");
+                        br = blocksV1BlockRun(rd, runGroup, study, t, b, 0);
+                    } finally {
+                        view.discard();
+                    }
+                    if (refMd5 == null
+                            && br.run().referenceChromSeqs() != null) {
+                        refMd5 = SpectralDatasetGenomicWriter
+                            .referenceMd5ForRun(br.run());
+                    }
+                    GenomicWriteContext ctx =
+                        new GenomicWriteContext(chromMap, refMd5, qualHint);
+                    GenomicBlocks.BlockBlobs blobs =
+                        GenomicBlocks.encodeBlock(br.run(), ctx);
+                    qualHint = blocksV1DeriveQualHint(blobs, qualHint);
+
+                    for (String ch : channels) {
+                        byte[] got = blobs.blobs()
+                            .getOrDefault(ch, new byte[0]);
+                        long off = t.offsetOf(ch, b);
+                        long ln = t.lengthOf(ch, b);
+                        long pos = written.get(ch);
+                        if (got.length != ln || pos != off) {
+                            throw new IllegalStateException(
+                                "per-AU blocks_v1 restore: block " + b
+                                + " channel '" + ch + "' re-encoded to "
+                                + got.length + " bytes at position "
+                                + pos + ", the index records " + ln
+                                + " bytes at " + off + "; the file "
+                                + "cannot be restored consistently");
+                        }
+                        StorageDataset ds = newDs.get(ch);
+                        if (ds == null) {
+                            StorageGroup parent;
+                            String dsName;
+                            if (ch.equals("sequences")) {
+                                parent = sig.createGroup("sequences");
+                                dsName = "data";
+                            } else {
+                                parent = sig;
+                                dsName = ch;
+                            }
+                            int codec = blobs.codecs().getOrDefault(ch, 0);
+                            ds = parent.createDataset(dsName,
+                                Precision.UINT8, 0, 256 << 10,
+                                codec == 0 ? Compression.ZLIB
+                                           : Compression.NONE,
+                                6, true);
+                            ds.setAttribute("compression", codec);
+                            Map<String, Object> extra =
+                                blobs.extraAttrs().getOrDefault(ch, Map.of());
+                            for (Map.Entry<String, Object> e
+                                    : extra.entrySet()) {
+                                ds.setAttribute(e.getKey(), e.getValue());
+                            }
+                            newDs.put(ch, ds);
+                        }
+                        if (got.length > 0) {
+                            ds.append(got);
+                        }
+                        written.put(ch, pos + got.length);
+                    }
+                }
+            } finally {
+                for (StorageDataset ds : newDs.values()) ds.close();
+            }
+            for (String ch : channels) {
+                sig.deleteChild(ch + "_segments");
+                String algAttr = ch + "_algorithm";
+                if (sig.hasAttribute(algAttr)) sig.deleteAttribute(algAttr);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<ChannelSegment> readChannelSegmentsSlice(
+            StorageGroup parent, String name, long offset, int count) {
+        try (StorageDataset ds = parent.openDataset(name)) {
+            List<Object[]> rows = (List<Object[]>) ds.readSlice(offset, count);
+            List<ChannelSegment> out = new ArrayList<>(rows.size());
+            for (Object[] r : rows) {
+                out.add(new ChannelSegment(
+                    ((Number) r[0]).longValue(),
+                    ((Number) r[1]).intValue(),
+                    (byte[]) r[2], (byte[]) r[3], (byte[]) r[4]));
+            }
+            return out;
+        }
     }
 
     // ────────────────────────────────────────────── compound I/O helpers
