@@ -12,6 +12,30 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Added
+- **M99.1 `blocks_v1` restore hardening and transport carriage.**
+  The stream writers persist the writer policy that shapes the coded
+  blobs (`@ref_diff_slice_bytes`, `@opt_disable_qualities_v5`) and,
+  for REF_DIFF_V2 runs, the `@reference_md5s` chromosome map
+  carrying the reference-set digest, so a per-AU restore re-encodes
+  under the original policy and rebuilds the reference from
+  `/study/references/` or a `REF_PATH` FASTA through the reference
+  resolver (format-spec §9.1.1). The M99 encrypt-time re-encode and
+  byte-compare gate is removed in all 3 SDKs, and a run written with
+  `embed_reference=False` now encrypts and restores. When a
+  re-encoded blob still lands on different ranges — an older file
+  without the attrs — restore rewrites the block index to the ranges
+  actually written instead of refusing, keeping the file consistent
+  and readable. Transport-spec v0.12 adds the GenomicRunSidecar
+  (0x1C) and BlockSidecar (0x1D) packets and the required
+  `transport_blocks_v1` feature token, so the encrypted stream
+  carries `blocks_v1` runs and the M99 sender refusal is removed; a
+  received container decrypts in place byte-identically (binding
+  decisions 93–95 revised). The cross-language matrix grows a 3×3
+  send × receive plane: 27/27 cells byte-identical. The Java
+  transport receiver now always writes `study/ms_runs` like the
+  other receivers, and the Python per-AU decrypt no longer silently
+  no-ops on a container without it.
+
 - **M99 per-AU protection over `blocks_v1`.** Per-AU encryption
   raised on any genomic run in the default `blocks_v1` layout — the
   walkers only knew the legacy v1.8 whole-channel shape, so nothing
@@ -24,16 +48,12 @@ public API is stable from onward.
   channels encrypts with no measurable RSS growth over baseline.
   Decrypt-in-place restores the original layout byte-identically
   (per-block re-encode under the writer's sticky qualities
-  discipline; the block index is never rewritten); encrypt verifies
-  every block re-encodes byte-identically before deleting anything
-  and refuses runs it could not restore (binding decisions 93–95).
-  REF_DIFF_V2 runs need their reference embedded. The 3×3
-  encryptor × decryptor cross-language matrix is byte-identical in
-  every cell, on a cross-chromosome-mates fixture and an embedded-
-  reference REF_DIFF fixture. The v1.0 encrypted transport stream
-  does not carry the `blocks_v1` sidecars; all three senders now
-  refuse such runs instead of emitting a stream whose received
-  container could not be restored.
+  discipline). The 3×3 encryptor × decryptor cross-language matrix
+  is byte-identical in every cell, on a cross-chromosome-mates
+  fixture and an embedded-reference REF_DIFF fixture. At M99 the
+  restore contract was enforced by an encrypt-time re-encode and
+  byte-compare gate, an embedded-reference requirement and a
+  sender-side transport refusal; M99.1 (above) replaces all three.
 
 - **M98 AssemblyGraph.** One new container primitive: a GFA 1.x
   assembly graph at `/study/assembly_graphs/<name>/` (format-spec

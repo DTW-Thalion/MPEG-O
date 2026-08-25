@@ -1,4 +1,4 @@
-# HANDOFF — M99 streaming per-AU protection
+# HANDOFF — M99/M99.1 streaming per-AU protection
 
 **As of 2026-08-25.** M99 makes per-AU protection cover what the
 genomic write path actually produces: `encrypt_per_au` raised
@@ -9,7 +9,12 @@ The walkers in all 3 SDKs now stream `blocks_v1` runs block by block
 the whole-channel memory ceiling: peak RSS follows the block policy
 (64 MB default), not the channel size. Phase 0 proved per-block
 re-encode byte-determinism and the AU arithmetic on probes before
-any implementation. Branch: `m99-streaming-per-au`.
+any implementation. M99.1 hardens the restore contract — writer
+policy and the reference set persist as run attrs, the encrypt-time
+gate is gone, restore falls back to an index rewrite — and carries
+`blocks_v1` runs on the encrypted transport stream via the
+transport-spec v0.12 sidecar packets. Branch:
+`m99-streaming-per-au`.
 
 | Task | Scope | Status | Spec proof |
 |---|---|---|---|
@@ -18,27 +23,31 @@ any implementation. Branch: `m99-streaming-per-au`.
 | **B ObjC** | Mirror walkers in `TTIOPerAUFile`; `TTIOCompoundIO` extendable compounds gain VL fields + ranged reads; `TTIOPerAUEncryption` auBase/offsetBase; `TTIOBlockView` skipChannels | ✅ 58 M99 assertions incl. the send guard | — |
 | **C Java** | Mirror walkers in `PerAUFile`; `Hdf5CompoundIO` VL extendable append + `readCompoundFullRange` (explicit memory spaces — H5S_ALL with a hyperslab file selection overruns the compact buffer); `VlBytesFFM` memory-space overloads; compound adapter `readSlice` hyperslab; `BlockTable`/`BlockView` public walker surface | ✅ 6 tests | — |
 | **D Conformance** | 3×3 encryptor × decryptor matrix over stream-written blocks_v1 fixtures (cross-chromosome mates + zero-length reads; embedded-reference REF_DIFF_V2), byte-identical blobs + index in every cell (`tests/validation/test_m99_blocks_v1_matrix.py`) | ✅ 18/18 cells | — |
-| **E Transport guard** | A `.tis` stream of a blocks_v1 per-AU container receives to a file decrypt-in-place cannot restore (the stream does not carry the blocks_v1 sidecars); all three senders now refuse with a clear error | ✅ ×3 | wire extension deferred (own Phase 0) |
+| **E Transport guard** | A `.tis` stream of a blocks_v1 per-AU container receives to a file decrypt-in-place cannot restore (the stream does not carry the blocks_v1 sidecars); all three senders now refuse with a clear error | ✅ ×3, superseded by I | wire extension deferred (own Phase 0) |
 | **F Docs** | format-spec §9.1.1, binding decisions §93–§95, CHANGELOG, cross-language-matrix row, this file | ✅ | — |
+| **G M99.1 policy persist + fallback** | Writers persist `@ref_diff_slice_bytes` / `@opt_disable_qualities_v5` when non-default, walkers honour them, the encrypt-time re-encode/byte-compare gate is removed ×3 SDKs, and restore rewrites `blocks/index` when a re-encoded blob misses its recorded ranges instead of refusing | ✅ ×3 SDKs, policy + fallback tests each | — |
+| **H M99.1 reference_md5s** | Writers persist `@reference_md5s` (chromosome → hex reference-set digest) for REF_DIFF_V2 runs; restore rebuilds `reference_chrom_seqs` through the reference resolver (embedded or `REF_PATH`), so `embed_reference=False` runs encrypt and restore | ✅ ×3 SDKs, unembedded 2-chromosome REF_PATH round trips | digest = the blob-header md5 the resolver verifies |
+| **I M99.1 transport sidecars** | Transport-spec v0.12: `GenomicRunSidecar` (0x1C) + `BlockSidecar` (0x1D) + required `transport_blocks_v1` feature token; senders emit instead of refusing, receivers rebuild the blocks_v1 shape, decrypt-in-place on the received container is byte-identical | ✅ ×3 SDKs + 3×3 send × receive matrix (27/27 with the per-AU plane) | Phase 0 Python prototype + spec §4.24 before ObjC/Java |
 
-Restore contract: decrypt-in-place re-encodes each block through the
-block writer, replicating the stream writer's sticky qualities
-strategy (block 0 auto-tunes, the winner read back from the encoded
-stream pins the rest), and appends byte-identical blobs into
-recreated channel datasets — the block index is never rewritten.
-Encrypt refuses any run whose blobs are not byte-reproducible
-(unpersisted writer policy such as a non-default
-`ref_diff_slice_bytes`), and REF_DIFF_V2 runs must carry their
-reference embedded in `/study/references/`.
+Restore contract (M99.1): decrypt-in-place re-encodes each block
+through the block writer, replicating the stream writer's sticky
+qualities strategy (block 0 auto-tunes, the winner read back from
+the encoded stream pins the rest) and honouring the persisted policy
+attrs, and appends the blobs into recreated channel datasets. When
+every blob lands on the recorded ranges the index is untouched and
+the restore is byte-identical; otherwise the index is rewritten to
+the ranges actually written and the file stays consistent and
+readable. REF_DIFF_V2 references resolve from `/study/references/`
+or `REF_PATH` via `@reference_md5s`.
 
 Known limits, deliberate: the MS (codec-17) and assembly-graph
 per-AU paths stay whole-channel (FDZ1 per-block streaming and graph
 channel framing are separable follow-ups; the graph case is a wire
-change); the v1.0 encrypted transport cannot carry blocks_v1
-containers (senders refuse; carrying the sidecars is a
-transport-spec extension with its own Phase 0); external REF_PATH
-references are not accepted for restore (the md5 the file records
-lives in the deleted blob).
+change); the encrypted stream does not carry embedded reference
+bytes, so a received REF_DIFF container restores via `REF_PATH`;
+pre-v0.12 receivers skip the sidecar packets and rebuild an
+unrestorable legacy-shaped container, detectable only through the
+`transport_blocks_v1` feature token.
 
 Suite state at handoff: Python 2694 pass 0 fail; ObjC 5283 pass /
 3 known-environmental TestM90Final failures; Java 1637 tests 0
