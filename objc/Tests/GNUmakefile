@@ -137,6 +137,7 @@ TTIOTests_OBJC_FILES = \
 	TestFastaFastqTioRoundTrip.m \
 	TTIOReferencesAccessorTests.m \
 	TTIOReferenceImportWriteToDatasetTests.m \
+	TestSpectralDatasetWritableOpen.m \
 	TestMSImageMzAxis.m \
 	TestTransportPacketTypeV011.m \
 	TestTransportReaderSkipUnknown.m \

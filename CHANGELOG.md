@@ -12,6 +12,21 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Added
+- **M100 writable dataset open.** Objective-C and Java gain the
+  public writable reopen Python already has
+  (`SpectralDataset.open(path, writable=True)`):
+  `+[TTIOSpectralDataset readFromFilePath:writable:error:]` and
+  `SpectralDataset.open(pathOrUrl, writable)`. A dataset opened
+  writable surfaces a read-write provider, so in-place writers
+  such as `ReferenceImport.writeToDataset` work on a reopened
+  container instead of failing at `H5Gcreate2` for
+  `/study/references/`. Provider-URL opens route the same mode
+  through the provider registry; the file must exist in either
+  mode. The references cross-language writers now drive the
+  writable reopen in all three languages, so the 9-cell
+  writer x reader matrix exercises the new entry points
+  end-to-end.
+
 - **M99.1 `blocks_v1` restore hardening and transport carriage.**
   The stream writers persist the writer policy that shapes the coded
   blobs (`@ref_diff_slice_bytes`, `@opt_disable_qualities_v5`) and,

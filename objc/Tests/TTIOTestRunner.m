@@ -153,6 +153,7 @@ extern void testProgressSinkStageC(void);
 extern void testProgressSinkStageD(void);
 extern void testReferencesAccessor(void);
 extern void testReferenceImportWriteToDataset(void);
+extern void testSpectralDatasetWritableOpen(void);
 extern void testMSImageMzAxis(void);
 extern void testMSImageLegacyMzAxisAbsent(void);
 extern void testSpectralDatasetMsImageAccessor(void);
@@ -763,6 +764,10 @@ int main(int argc, const char *argv[])
         START_SET("1.1.0: ReferenceImport.writeToDataset round-trip (Phase 0 tio-browser)")
             testReferenceImportWriteToDataset();
         END_SET("1.1.0: ReferenceImport.writeToDataset round-trip (Phase 0 tio-browser)")
+
+        START_SET("M100: SpectralDataset writable open (readFromFilePath:writable:)")
+            testSpectralDatasetWritableOpen();
+        END_SET("M100: SpectralDataset writable open (readFromFilePath:writable:)")
 
         START_SET("1.2.0: TTIOMSImage.mzAxis property + persistence + pixelSpectra")
             testMSImageMzAxis();

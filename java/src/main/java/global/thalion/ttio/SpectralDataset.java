@@ -415,11 +415,26 @@ public class SpectralDataset implements
      *  stay on the HDF5 fast path for byte parity with pre-M64.5
      *  files and the cross-language smoke suite. */
     public static SpectralDataset open(String pathOrUrl) {
+        return open(pathOrUrl, false);
+    }
+
+    /** Open an existing .tio file, read-write when {@code writable}
+     *  is {@code true} so in-place writers such as
+     *  {@code ReferenceImport.writeToDataset} can reach a writable
+     *  provider through the open dataset. The file must exist in
+     *  either mode. Mirrors Python
+     *  {@code SpectralDataset.open(path, writable=True)} and
+     *  Objective-C {@code +readFromFilePath:writable:error:}.
+     *  @since 1.9.0 */
+    public static SpectralDataset open(String pathOrUrl, boolean writable) {
+        StorageProvider.Mode mode = writable
+                ? StorageProvider.Mode.READ_WRITE
+                : StorageProvider.Mode.READ;
         if (pathOrUrl != null && isNonHdf5Url(pathOrUrl)) {
-            return openViaProvider(pathOrUrl);
+            return openViaProvider(pathOrUrl, mode);
         }
         Hdf5Provider provider = (Hdf5Provider) new Hdf5Provider()
-                .open(pathOrUrl, StorageProvider.Mode.READ);
+                .open(pathOrUrl, mode);
         Hdf5File file = (Hdf5File) provider.nativeHandle();
         try (Hdf5Group root = file.rootGroup()) {
             FeatureFlags flags = FeatureFlags.readFrom(root);
@@ -554,9 +569,10 @@ public class SpectralDataset implements
 
     // ── Provider-aware read path () ───────────────────────
 
-    private static SpectralDataset openViaProvider(String url) {
+    private static SpectralDataset openViaProvider(String url,
+            StorageProvider.Mode mode) {
         StorageProvider provider = global.thalion.ttio.providers
-                .ProviderRegistry.open(url, StorageProvider.Mode.READ);
+                .ProviderRegistry.open(url, mode);
         try (global.thalion.ttio.providers.StorageGroup root =
                 provider.rootGroup()) {
             FeatureFlags flags = FeatureFlags.readFrom(root);
