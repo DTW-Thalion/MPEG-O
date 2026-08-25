@@ -107,6 +107,34 @@ public final class EncryptedTransport {
                                 genomicRunNames.add(n);
                             }
                         }
+                        // The v1.0 stream carries the legacy genomic
+                        // shape only: a receiver rebuilds bare uint8
+                        // channels plus the genomic_index arrays, not
+                        // the blocks_v1 sidecars (blocks/index, coded
+                        // read_names/cigars/mate blobs). Refuse rather
+                        // than emit a stream that reconstructs to a
+                        // container decrypt-in-place cannot restore
+                        // (M99).
+                        for (String n : genomicRunNames) {
+                            try (StorageGroup g = gRuns.openGroup(n)) {
+                                if (g.hasAttribute("layout")
+                                        && "blocks_v1".equals(
+                                            g.getAttribute("layout")
+                                             .toString())) {
+                                    throw new IllegalStateException(
+                                        "genomic run '" + n + "' uses "
+                                        + "the blocks_v1 layout; the "
+                                        + "v1.0 encrypted transport "
+                                        + "stream does not carry the "
+                                        + "blocks_v1 sidecars, so the "
+                                        + "received container could "
+                                        + "not be restored. "
+                                        + "Transporting blocks_v1 "
+                                        + "per-AU containers needs a "
+                                        + "transport-spec extension.");
+                                }
+                            }
+                        }
                     }
                 }
 

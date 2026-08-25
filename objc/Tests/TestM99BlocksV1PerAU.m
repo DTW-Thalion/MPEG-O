@@ -18,6 +18,8 @@
 #import "Genomics/TTIOAlignedRead.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Protection/TTIOPerAUFile.h"
+#import "Transport/TTIOEncryptedTransport.h"
+#import "Transport/TTIOTransportWriter.h"
 #import "Providers/TTIOHDF5Provider.h"
 #import "Providers/TTIOStorageProtocols.h"
 #import "HDF5/TTIOHDF5File.h"
@@ -407,9 +409,43 @@ static TTIOWrittenGenomicRun *m99MakeRefDiffRun(void)
     return run;
 }
 
+// The v1.0 encrypted transport stream does not carry the blocks_v1
+// sidecars; the sender must refuse.
+static void m99TransportRefusal(void)
+{
+    NSError *err = nil;
+    NSString *path = m99TmpPath(@"send");
+    TTIOWrittenGenomicRun *run = m99MakeRun(300, 11, 0, NO);
+    PASS(m99WriteBlocksFile(path, run, 100, &err),
+         "M99 send: blocks_v1 file written (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+    PASS([TTIOPerAUFile encryptFilePath:path key:m99Key()
+                          encryptHeaders:NO providerName:nil error:&err],
+         "M99 send: encrypt (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+    NSString *outPath = m99TmpPath(@"send-out");
+    m99Rm(outPath);
+    TTIOTransportWriter *tw =
+        [[TTIOTransportWriter alloc] initWithOutputPath:outPath];
+    err = nil;
+    BOOL ok = [TTIOEncryptedTransport writeEncryptedDataset:path
+                                                       writer:tw
+                                                 providerName:nil
+                                                        error:&err];
+    [tw close];
+    PASS(!ok, "M99 send: writeEncryptedDataset refuses blocks_v1");
+    PASS([err.localizedDescription rangeOfString:@"blocks_v1"].location
+             != NSNotFound,
+         "M99 send: refusal names blocks_v1 (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+    m99Rm(outPath);
+    m99Rm(path);
+}
+
 void testM99BlocksV1PerAU(void)
 {
     m99EncryptShape();
+    m99TransportRefusal();
     m99RoundTrip(@"plain", m99MakeRun(900, 7, 0, NO), 200);
     m99RoundTrip(@"zerolen", m99MakeRun(700, 9, 97, NO), 150);
     m99RoundTrip(@"xmates", m99MakeRun(600, 21, 0, YES), 150);

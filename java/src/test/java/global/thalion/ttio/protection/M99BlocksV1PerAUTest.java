@@ -321,4 +321,25 @@ class M99BlocksV1PerAUTest {
     void roundTripRefDiff() {
         roundTrip("refdiff", makeRefDiffRun(), 80);
     }
+
+    /** The v1.0 encrypted transport stream does not carry the
+     *  blocks_v1 sidecars; the sender must refuse. */
+    @Test
+    void sendRefusesBlocksV1Containers() throws Exception {
+        WrittenGenomicRun run = makeRun(300, 11, 0, false);
+        String path = writeBlocksFile("send.tio", run, 100);
+        PerAUFile.encryptFile(path, key(), false, "hdf5");
+        String out = tempDir.resolve("stream.tis").toString();
+        try (var fos = new java.io.BufferedOutputStream(
+                new java.io.FileOutputStream(out));
+             var tw = new global.thalion.ttio.transport
+                 .TransportWriter(fos)) {
+            IllegalStateException e = assertThrows(
+                IllegalStateException.class,
+                () -> EncryptedTransport.writeEncryptedDataset(
+                    path, tw, "hdf5"));
+            assertTrue(e.getMessage().contains("blocks_v1"),
+                "refusal names blocks_v1: " + e.getMessage());
+        }
+    }
 }

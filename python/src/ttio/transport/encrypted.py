@@ -101,6 +101,27 @@ def write_encrypted_dataset(
                                   for n in g_runs_group.child_names()
                                   if not n.startswith("_")
                                   and g_runs_group.has_child(n)]
+            # The v1.0 stream carries the legacy genomic shape only:
+            # a receiver rebuilds bare uint8 channels plus the
+            # genomic_index arrays, not the blocks_v1 sidecars
+            # (blocks/index, coded read_names/cigars/mate blobs).
+            # Refuse rather than emit a stream that reconstructs to
+            # a container decrypt-in-place cannot restore (M99).
+            for run_name, run_group in genomic_run_items:
+                layout = ""
+                if run_group.has_attribute("layout"):
+                    raw = run_group.get_attribute("layout")
+                    layout = (bytes(raw).decode("utf-8")
+                              if isinstance(raw, (bytes, bytearray))
+                              else str(raw))
+                if layout == "blocks_v1":
+                    raise ValueError(
+                        f"genomic run {run_name!r} uses the blocks_v1 "
+                        "layout; the v1.0 encrypted transport stream "
+                        "does not carry the blocks_v1 sidecars, so the "
+                        "received container could not be restored. "
+                        "Transporting blocks_v1 per-AU containers "
+                        "needs a transport-spec extension.")
         else:
             genomic_run_items = []
 

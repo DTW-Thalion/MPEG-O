@@ -403,6 +403,39 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
                 }
             }
         }
+        // The v1.0 stream carries the legacy genomic shape only: a
+        // receiver rebuilds bare uint8 channels plus the
+        // genomic_index arrays, not the blocks_v1 sidecars
+        // (blocks/index, coded read_names/cigars/mate blobs). Refuse
+        // rather than emit a stream that reconstructs to a container
+        // decrypt-in-place cannot restore (M99).
+        for (NSString *n in genomicRunNames) {
+            id<TTIOStorageGroup> g =
+                [genomicRunsGroup openGroupNamed:n error:NULL];
+            id layoutVal = (g && [g hasAttributeNamed:@"layout"])
+                ? [g attributeValueForName:@"layout" error:NULL] : nil;
+            NSString *layout = nil;
+            if ([layoutVal isKindOfClass:[NSData class]]) {
+                layout = [[NSString alloc] initWithData:layoutVal
+                                                encoding:NSUTF8StringEncoding];
+            } else if (layoutVal != nil) {
+                layout = [layoutVal description];
+            }
+            if ([layout isEqualToString:@"blocks_v1"]) {
+                if (error) *error = [NSError
+                    errorWithDomain:@"TTIOEncryptedTransport"
+                               code:12
+                           userInfo:@{NSLocalizedDescriptionKey:
+                    [NSString stringWithFormat:
+                        @"genomic run '%@' uses the blocks_v1 layout; "
+                        @"the v1.0 encrypted transport stream does not "
+                        @"carry the blocks_v1 sidecars, so the received "
+                        @"container could not be restored. Transporting "
+                        @"blocks_v1 per-AU containers needs a "
+                        @"transport-spec extension.", n]}];
+                return NO;
+            }
+        }
 
         // StreamHeader
         if (![writer writeStreamHeaderWithFormatVersion:@"1.2"

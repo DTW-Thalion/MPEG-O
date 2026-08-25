@@ -218,6 +218,25 @@ class TestBlocksV1RoundTrip:
         self._round_trip(tmp_path, run, block_reads=150)
 
 
+class TestBlocksV1Transport:
+
+    def test_send_refuses_blocks_v1_containers(self, tmp_path):
+        """The v1.0 encrypted transport stream does not carry the
+        blocks_v1 sidecars; the sender must refuse rather than emit a
+        stream whose received container cannot be restored."""
+        run = _make_run(n_reads=300, seed=11)
+        path = _stream_blocks_file(tmp_path / "b.tio", run)
+        encrypt_per_au(str(path), KEY)
+
+        from ttio.transport.codec import TransportWriter
+        from ttio.transport.encrypted import write_encrypted_dataset
+
+        out = tmp_path / "stream.tis"
+        with pytest.raises(ValueError, match="blocks_v1"):
+            with TransportWriter(str(out)) as writer:
+                write_encrypted_dataset(writer, str(path))
+
+
 class TestBlocksV1Memory:
 
     def test_encrypt_rss_bounded_by_block_size(self, tmp_path):
