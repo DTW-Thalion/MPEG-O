@@ -713,6 +713,46 @@ The legacy decryption code remains for migration; see the
 `--transcode` flow described in
 `docs/transport-encryption-design.md` §6.
 
+#### 9.1.1 Genomic runs under `blocks_v1` (M99)
+
+For a genomic run in the `blocks_v1` layout (§10.12), the walkers
+stream **block by block** instead of materialising the channel:
+each block's `sequences` / `qualities` blob is decoded with its
+per-block codec from the block index, sliced per read using the
+`genomic_index/lengths` slice, and encrypted as one AU per read
+with **global** AU numbering (`au_sequence` = the read's index-row
+ordinal; the stored segment `offset` is the read's global plaintext
+offset). The segments compounds are extendable and appended one
+block at a time, so peak memory follows the block policy, not the
+channel size. The on-disk `<channel>_segments` layout, the AAD, and
+the `dataset_id` ordering are identical to the whole-channel form
+above — a reader of the segments tables cannot tell which walker
+produced them.
+
+Decrypt-in-place restores the **original layout**: each block's AUs
+are decrypted, the block is re-encoded through the block writer
+(replicating the stream writer's sticky qualities strategy: block 0
+auto-tunes, the winner read back from the encoded stream pins the
+rest), and the byte-identical blobs are appended into recreated
+channel datasets. The block index is never rewritten. Because
+writer policy the file does not persist (a non-default
+`ref_diff_slice_bytes`, a qualities-V5 opt-out) would break that
+reproducibility, **encrypt re-encodes and byte-compares every block
+before deleting anything** and refuses the run when any blob is not
+reproducible. A run whose sequences code through `REF_DIFF_V2`
+additionally requires the reference **embedded** in
+`/study/references/` — restore re-encodes against it, and an
+external `REF_PATH` reference cannot be verified once the original
+blob is gone.
+
+The v1.0 encrypted transport stream (`transport-spec.md`) carries
+the legacy genomic shape only and does not carry the `blocks_v1`
+sidecars (the block index, the coded
+`read_names`/`cigars`/`mate_info` blobs); all three senders refuse
+a `blocks_v1` genomic run rather than emit a stream whose received
+container could not be restored. Carrying `blocks_v1` containers
+over the stream is a future transport-spec extension.
+
 ---
 
 ## 10. Digital signatures

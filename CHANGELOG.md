@@ -12,6 +12,29 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Added
+- **M99 per-AU protection over `blocks_v1`.** Per-AU encryption
+  raised on any genomic run in the default `blocks_v1` layout — the
+  walkers only knew the legacy v1.8 whole-channel shape, so nothing
+  the current genomic write path produces could be encrypted. The
+  walkers in all 3 SDKs now stream `blocks_v1` runs block by block
+  (format-spec §9.1.1): per-block codec decode, one AES-GCM AU per
+  read with global AU numbering, extendable segments tables appended
+  per block, so peak memory follows the block policy (64 MB default)
+  rather than the channel size — a run with 100 MB of decoded
+  channels encrypts with no measurable RSS growth over baseline.
+  Decrypt-in-place restores the original layout byte-identically
+  (per-block re-encode under the writer's sticky qualities
+  discipline; the block index is never rewritten); encrypt verifies
+  every block re-encodes byte-identically before deleting anything
+  and refuses runs it could not restore (binding decisions 93–95).
+  REF_DIFF_V2 runs need their reference embedded. The 3×3
+  encryptor × decryptor cross-language matrix is byte-identical in
+  every cell, on a cross-chromosome-mates fixture and an embedded-
+  reference REF_DIFF fixture. The v1.0 encrypted transport stream
+  does not carry the `blocks_v1` sidecars; all three senders now
+  refuse such runs instead of emitting a stream whose received
+  container could not be restored.
+
 - **M98 AssemblyGraph.** One new container primitive: a GFA 1.x
   assembly graph at `/study/assembly_graphs/<name>/` (format-spec
   §11a), parsed into `segments`/`links`/`paths`/`extras` tables plus
