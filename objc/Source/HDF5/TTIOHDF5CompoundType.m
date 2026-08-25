@@ -56,10 +56,20 @@
 - (BOOL)addVariableLengthStringFieldNamed:(NSString *)name
                                   atOffset:(size_t)offset
 {
+    return [self addVariableLengthStringFieldNamed:name
+                                          atOffset:offset
+                                              cset:H5T_CSET_ASCII];
+}
+
+- (BOOL)addVariableLengthStringFieldNamed:(NSString *)name
+                                  atOffset:(size_t)offset
+                                      cset:(H5T_cset_t)cset
+{
     if (_closed || _typeId < 0) return NO;
     hid_t strType = H5Tcopy(H5T_C_S1);
     if (strType < 0) return NO;
-    if (H5Tset_size(strType, H5T_VARIABLE) < 0) {
+    if (H5Tset_size(strType, H5T_VARIABLE) < 0
+        || H5Tset_cset(strType, cset) < 0) {
         H5Tclose(strType);
         return NO;
     }

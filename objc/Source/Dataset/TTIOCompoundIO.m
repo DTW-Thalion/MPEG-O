@@ -992,6 +992,16 @@ static BOOL ttioSchemaIsPrimitive(NSArray<TTIOCompoundField *> *fields)
         return nil;
     }
 
+    // The memory type's VL-string members must mirror the FILE
+    // member's character set: HDF5 has no ASCII<->UTF8 string
+    // conversion path, and h5py-written files carry UTF-8 where this
+    // library writes ASCII. (A warm conversion-path cache can mask
+    // the mismatch, so the refusal only surfaces on a cold first
+    // compound read.)
+    hid_t csetDset = H5Dopen2(hdf5Parent.groupId, [name UTF8String],
+                              H5P_DEFAULT);
+    hid_t csetFileType = csetDset >= 0 ? H5Dget_type(csetDset) : -1;
+
     TTIOHDF5CompoundType *t = [[TTIOHDF5CompoundType alloc] initWithSize:recSize];
     for (NSUInteger i = 0; i < fields.count; i++) {
         TTIOCompoundField *f = fields[i];
@@ -1005,12 +1015,33 @@ static BOOL ttioSchemaIsPrimitive(NSArray<TTIOCompoundField *> *fields)
                 [t addField:f.name type:H5T_NATIVE_UINT64 offset:off]; break;
             case TTIOCompoundFieldKindFloat64:
                 [t addField:f.name type:H5T_NATIVE_DOUBLE offset:off]; break;
-            case TTIOCompoundFieldKindVLString:
-                [t addVariableLengthStringFieldNamed:f.name atOffset:off]; break;
+            case TTIOCompoundFieldKindVLString: {
+                H5T_cset_t cset = H5T_CSET_ASCII;
+                if (csetFileType >= 0) {
+                    int mi = H5Tget_member_index(csetFileType,
+                                                 [f.name UTF8String]);
+                    if (mi >= 0) {
+                        hid_t mt = H5Tget_member_type(csetFileType,
+                                                      (unsigned)mi);
+                        if (mt >= 0) {
+                            if (H5Tget_cset(mt) == H5T_CSET_UTF8) {
+                                cset = H5T_CSET_UTF8;
+                            }
+                            H5Tclose(mt);
+                        }
+                    }
+                }
+                [t addVariableLengthStringFieldNamed:f.name
+                                            atOffset:off
+                                                cset:cset];
+                break;
+            }
             case TTIOCompoundFieldKindVLBytes:
                 [t addVariableLengthBytesFieldNamed:f.name atOffset:off]; break;
         }
     }
+    if (csetFileType >= 0) H5Tclose(csetFileType);
+    if (csetDset >= 0) H5Dclose(csetDset);
 
     NSUInteger n = 0;
     void *buf = NULL;

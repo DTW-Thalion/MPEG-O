@@ -842,17 +842,41 @@ public final class Hdf5CompoundIO {
                 }
             }
 
-            // Pass 2: VL_STRING columns via H5Dread_VLStrings
+            // Pass 2: VL_STRING columns via H5Dread_VLStrings. The
+            // memory string type must mirror the FILE member's
+            // character set: HDF5 has no ASCII<->UTF8 string
+            // conversion path, and h5py-written files carry UTF-8
+            // where this library writes ASCII. (A warm
+            // conversion-path cache can mask the mismatch, so the
+            // refusal only surfaces on a cold first read.)
+            long csetFileType = H5.H5Dget_type(dset);
+            try {
             for (int i = 0; i < schema.fields.size(); i++) {
                 Field f = schema.fields.get(i);
                 if (f.kind() != FieldKind.VL_STRING) continue;
 
                 Object[] colData = new Object[count];
-                long strMemType = -1;
+                long strMemType = -1, fieldStrType = -1;
                 try {
+                    fieldStrType = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+                    H5.H5Tset_size(fieldStrType, HDF5Constants.H5T_VARIABLE);
+                    try {
+                        int mi = H5.H5Tget_member_index(csetFileType, f.name());
+                        if (mi >= 0) {
+                            long mt = H5.H5Tget_member_type(csetFileType, mi);
+                            if (H5.H5Tget_cset(mt)
+                                    == HDF5Constants.H5T_CSET_UTF8) {
+                                H5.H5Tset_cset(fieldStrType,
+                                               HDF5Constants.H5T_CSET_UTF8);
+                            }
+                            H5.H5Tclose(mt);
+                        }
+                    } catch (HDF5LibraryException ignored) {
+                        // Member lookup failed: keep the ASCII default.
+                    }
                     strMemType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND,
                                               FieldKind.VL_STRING.byteSize);
-                    H5.H5Tinsert(strMemType, f.name(), 0, strType);
+                    H5.H5Tinsert(strMemType, f.name(), 0, fieldStrType);
                     int rc = H5.H5Dread_VLStrings(dset, strMemType,
                             HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
                             HDF5Constants.H5P_DEFAULT, colData);
@@ -862,10 +886,16 @@ public final class Hdf5CompoundIO {
                 } finally {
                     if (strMemType >= 0)
                         try { H5.H5Tclose(strMemType); } catch (Exception ig) {}
+                    if (fieldStrType >= 0)
+                        try { H5.H5Tclose(fieldStrType); } catch (Exception ig) {}
                 }
                 for (int row = 0; row < count; row++) {
                     result[row][i] = colData[row] instanceof String s ? s : "";
                 }
+            }
+            } finally {
+                if (csetFileType >= 0)
+                    try { H5.H5Tclose(csetFileType); } catch (Exception ig) {}
             }
 
             // Pass 3: VL_BYTES columns via FFM (bypass translate_rbuf)

@@ -69,6 +69,23 @@
                                  atOffset:(size_t)offset;
 
 /**
+ * Variant of the above with an explicit character set. A memory
+ * type whose cset differs from the file member's cset has no HDF5
+ * conversion path, so readers mirror the file's cset here (h5py
+ * writes UTF-8 strings, this library writes ASCII).
+ *
+ * @param name   Field name.
+ * @param offset Byte offset of the <code>char *</code> within the
+ *               record.
+ * @param cset   <code>H5T_CSET_ASCII</code> or
+ *               <code>H5T_CSET_UTF8</code>.
+ * @return <code>YES</code> on success.
+ */
+- (BOOL)addVariableLengthStringFieldNamed:(NSString *)name
+                                 atOffset:(size_t)offset
+                                     cset:(H5T_cset_t)cset;
+
+/**
  * Inserts a variable-length byte-buffer field
  * (<code>H5Tvlen_create</code> on
  * <code>H5T_NATIVE_UCHAR</code>). On the wire each row is an
