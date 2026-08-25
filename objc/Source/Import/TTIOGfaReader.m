@@ -123,10 +123,17 @@ static NSString *versionFromHeaderFields(NSArray<NSString *> *fields)
 + (TTIOWrittenAssemblyGraph *)graphFromPath:(NSString *)path
                                       error:(NSError **)error
 {
-    NSData *data = [NSData dataWithContentsOfFile:path
-                                          options:0
-                                            error:error];
-    if (!data) return nil;
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (!data) {
+        if (error) {
+            *error = [NSError errorWithDomain:TTIOGfaReaderErrorDomain
+                                         code:2
+                                     userInfo:@{NSLocalizedDescriptionKey:
+                [NSString stringWithFormat:@"cannot read GFA at %@",
+                                           path]}];
+        }
+        return nil;
+    }
     return [self graphFromData:data error:error];
 }
 
