@@ -36,6 +36,7 @@ from .packets import (
     PacketFlag,
     PacketHeader,
     PacketType,
+    TRANSPORT_BLOCKS_V1_FEATURE,
     now_ns,
     pack_string,
 )
@@ -95,18 +96,13 @@ def write_encrypted_dataset(
         # also walk genomic_runs after MS. dataset_id_counter
         # continues from MS so AAD reconstruction matches the
         # per-AU encrypt path (M90.1).
+        genomic_layouts: dict[str, str] = {}
         if study.has_child("genomic_runs"):
             g_runs_group = study.open_group("genomic_runs")
             genomic_run_items = [(n, g_runs_group.open_group(n))
                                   for n in g_runs_group.child_names()
                                   if not n.startswith("_")
                                   and g_runs_group.has_child(n)]
-            # The v1.0 stream carries the legacy genomic shape only:
-            # a receiver rebuilds bare uint8 channels plus the
-            # genomic_index arrays, not the blocks_v1 sidecars
-            # (blocks/index, coded read_names/cigars/mate blobs).
-            # Refuse rather than emit a stream that reconstructs to
-            # a container decrypt-in-place cannot restore (M99).
             for run_name, run_group in genomic_run_items:
                 layout = ""
                 if run_group.has_attribute("layout"):
@@ -114,22 +110,23 @@ def write_encrypted_dataset(
                     layout = (bytes(raw).decode("utf-8")
                               if isinstance(raw, (bytes, bytearray))
                               else str(raw))
-                if layout == "blocks_v1":
-                    raise ValueError(
-                        f"genomic run {run_name!r} uses the blocks_v1 "
-                        "layout; the v1.0 encrypted transport stream "
-                        "does not carry the blocks_v1 sidecars, so the "
-                        "received container could not be restored. "
-                        "Transporting blocks_v1 per-AU containers "
-                        "needs a transport-spec extension.")
+                genomic_layouts[run_name] = layout
         else:
             genomic_run_items = []
+
+        # blocks_v1 runs ride the same per-read AU stream plus the
+        # M99.1 sidecar packets (GenomicRunSidecar + one BlockSidecar
+        # per block); the StreamHeader announces them with a wire
+        # feature token so receivers know the stream needs them.
+        stream_features = list(features)
+        if any(v == "blocks_v1" for v in genomic_layouts.values()):
+            stream_features.append(TRANSPORT_BLOCKS_V1_FEATURE)
 
         writer.write_stream_header(
             format_version="1.2",
             title=title,
             isa_investigation=isa,
-            features=list(features),
+            features=stream_features,
             n_datasets=len(run_items) + len(genomic_run_items),
         )
 
@@ -358,6 +355,10 @@ def write_encrypted_dataset(
                 expected_au_count=n_reads,
             )
 
+            if genomic_layouts.get(g_run_name) == "blocks_v1":
+                _emit_blocks_v1_sidecars(writer, g_run_group, g_sig,
+                                          dataset_id=g_dataset_id)
+
             for i in range(n_reads):
                 # Build encrypted ChannelData list (UINT8 for genomic).
                 g_channels = []
@@ -402,6 +403,192 @@ def write_encrypted_dataset(
         writer.write_end_of_stream()
     finally:
         sp.close()
+
+
+#: blocks_v1 channels whose coded blobs stay plaintext under per-AU
+#: protection and ride in BlockSidecar packets as verbatim slices.
+_BLOCKS_V1_SIDECAR_BLOBS = ("read_names", "cigars", "mate_info")
+
+
+def _json_safe_attr(v):
+    if isinstance(v, bytes):
+        return v.decode("utf-8", "replace")
+    if isinstance(v, np.generic):
+        return v.item()
+    if isinstance(v, np.ndarray) and v.size == 1:
+        return _json_safe_attr(v.item())
+    return v
+
+
+def _pack_json(obj) -> bytes:
+    data = json.dumps(obj, sort_keys=True).encode("utf-8")
+    return struct.pack("<I", len(data)) + data
+
+
+def _unpack_json(payload: bytes, off: int):
+    (n,) = struct.unpack_from("<I", payload, off)
+    off += 4
+    return json.loads(payload[off:off + n].decode("utf-8")), off + n
+
+
+def _compound_names(group, name: str) -> list[str]:
+    out = []
+    for row in io.read_compound_dataset(group, name):
+        v = row["name"]
+        out.append(v.decode("utf-8") if isinstance(v, bytes) else v)
+    return out
+
+
+def _emit_blocks_v1_sidecars(writer, run_group, sig, *,
+                              dataset_id: int) -> None:
+    """One GenomicRunSidecar, then one BlockSidecar per block, for a
+    blocks_v1 per-AU-encrypted genomic run (transport-spec §4.24).
+
+    The run sidecar carries the run scalars (layout, block_policy,
+    read_count, base_count), the optional restore attrs
+    (ref_diff_slice_bytes, opt_disable_qualities_v5, reference_md5s)
+    the receiver writes back verbatim, the sidecar channels' dataset
+    attrs, and the chromosome_names and mate chrom_names tables in
+    row order. Each block sidecar carries that block's index row and
+    its verbatim slices of the plaintext channel blobs."""
+    from ..genomic._block_view import BlockTable
+    from ..genomic._blocks import BLOCK_CHANNELS
+
+    table = BlockTable.read(run_group)
+    attrs: dict = {}
+    for name in ("ref_diff_slice_bytes", "opt_disable_qualities_v5"):
+        v = io.read_int_attr(run_group, name, default=0)
+        if v:
+            attrs[name] = int(v)
+    md5s = io.read_string_attr(run_group, "reference_md5s")
+    if md5s:
+        attrs["reference_md5s"] = md5s
+
+    channels = []
+    blob_ds = {}
+    for ch in _BLOCKS_V1_SIDECAR_BLOBS:
+        ds = None
+        if ch == "mate_info":
+            if sig.has_child("mate_info"):
+                g = sig.open_group("mate_info")
+                if g.has_child("inline_v2"):
+                    ds = g.open_dataset("inline_v2")
+        elif sig.has_child(ch):
+            ds = sig.open_dataset(ch)
+        if ds is None:
+            continue
+        blob_ds[ch] = ds
+        centry = {"name": ch,
+                  "compression": (int(ds.get_attribute("compression"))
+                                   if ds.has_attribute("compression")
+                                   else 0)}
+        extra = {k: _json_safe_attr(ds.get_attribute(k))
+                 for k in ds.attribute_names() if k != "compression"}
+        if extra:
+            centry["extra_attrs"] = extra
+        channels.append(centry)
+
+    idx = run_group.open_group("genomic_index")
+    chrom_names = _compound_names(idx, "chromosome_names")
+    mate_names: list[str] = []
+    if sig.has_child("mate_info"):
+        mg = sig.open_group("mate_info")
+        if mg.has_child("chrom_names"):
+            mate_names = _compound_names(mg, "chrom_names")
+
+    payload = (
+        pack_string(io.read_string_attr(run_group, "layout") or "",
+                    width=2)
+        + pack_string(io.read_string_attr(run_group, "block_policy")
+                      or "", width=2)
+        + struct.pack("<QQ",
+                       int(io.read_int_attr(run_group, "read_count",
+                                              default=0) or 0),
+                       int(io.read_int_attr(run_group, "base_count",
+                                              default=0) or 0))
+        + _pack_json(attrs)
+        + _pack_json(channels)
+        + struct.pack("<I", len(chrom_names))
+        + b"".join(pack_string(n, width=2) for n in chrom_names)
+        + struct.pack("<I", len(mate_names))
+        + b"".join(pack_string(n, width=2) for n in mate_names)
+    )
+    writer._emit(PacketType.GENOMIC_RUN_SIDECAR, payload,
+                  dataset_id=dataset_id)
+
+    for b in range(table.count):
+        parts = [struct.pack("<IQIQQ", b,
+                              int(table.read_start[b]),
+                              int(table.n_reads[b]),
+                              int(table.base_start[b]),
+                              int(table.n_bases[b])),
+                 struct.pack("<B", len(BLOCK_CHANNELS))]
+        for ch in BLOCK_CHANNELS:
+            codec = int(table.codecs[ch][b]) if table.codecs else 0
+            parts.append(pack_string(ch, width=2)
+                         + struct.pack("<QQI",
+                                        int(table.ranges[ch][0][b]),
+                                        int(table.ranges[ch][1][b]),
+                                        codec))
+        parts.append(struct.pack("<B", len(blob_ds)))
+        for ch, ds in blob_ds.items():
+            off = int(table.ranges[ch][0][b])
+            ln = int(table.ranges[ch][1][b])
+            data = (bytes(np.asarray(ds.read(off, ln),
+                                      dtype=np.uint8).tobytes())
+                    if ln else b"")
+            parts.append(pack_string(ch, width=2)
+                         + struct.pack("<I", len(data)) + data)
+        writer._emit(PacketType.BLOCK_SIDECAR, b"".join(parts),
+                      dataset_id=dataset_id, au_sequence=b)
+
+
+def _decode_genomic_run_sidecar(payload: bytes) -> dict:
+    off = 0
+    layout, off = unpack_string(payload, off, width=2)
+    block_policy, off = unpack_string(payload, off, width=2)
+    read_count, base_count = struct.unpack_from("<QQ", payload, off)
+    off += 16
+    attrs, off = _unpack_json(payload, off)
+    channels, off = _unpack_json(payload, off)
+    (n,) = struct.unpack_from("<I", payload, off); off += 4
+    chrom_names = []
+    for _ in range(n):
+        s, off = unpack_string(payload, off, width=2)
+        chrom_names.append(s)
+    (n,) = struct.unpack_from("<I", payload, off); off += 4
+    mate_chrom_names = []
+    for _ in range(n):
+        s, off = unpack_string(payload, off, width=2)
+        mate_chrom_names.append(s)
+    return {"layout": layout, "block_policy": block_policy,
+            "read_count": int(read_count), "base_count": int(base_count),
+            "attrs": attrs, "channels": channels,
+            "chromosome_names": chrom_names,
+            "mate_chrom_names": mate_chrom_names}
+
+
+def _decode_block_sidecar(payload: bytes) -> dict:
+    b, read_start, n_reads, base_start, n_bases = struct.unpack_from(
+        "<IQIQQ", payload, 0)
+    off = 32
+    (nch,) = struct.unpack_from("<B", payload, off); off += 1
+    channels: dict = {}
+    for _ in range(nch):
+        name, off = unpack_string(payload, off, width=2)
+        c_off, c_len, codec = struct.unpack_from("<QQI", payload, off)
+        off += 20
+        channels[name] = (int(c_off), int(c_len), int(codec))
+    (nb,) = struct.unpack_from("<B", payload, off); off += 1
+    blobs: dict = {}
+    for _ in range(nb):
+        name, off = unpack_string(payload, off, width=2)
+        (ln,) = struct.unpack_from("<I", payload, off); off += 4
+        blobs[name] = bytes(payload[off:off + ln]); off += ln
+    return {"block_index": int(b), "read_start": int(read_start),
+            "n_reads": int(n_reads), "base_start": int(base_start),
+            "n_bases": int(n_bases), "channels": channels,
+            "blobs": blobs}
 
 
 def _read_chromosomes_compound(idx_group) -> list[str]:
@@ -654,10 +841,28 @@ def read_encrypted_to_file(
                 "genomic_positions": [],
                 "genomic_mapqs": [],
                 "genomic_flags": [],
+                # M99.1 blocks_v1 sidecars; run_sidecar stays None for
+                # legacy-shaped genomic runs.
+                "run_sidecar": None,
+                "block_sidecars": [],
             }
         elif ptype == int(PacketType.PROTECTION_METADATA):
             pm = _decode_protection_metadata(payload)
             protection[header.dataset_id] = pm
+        elif ptype == int(PacketType.GENOMIC_RUN_SIDECAR):
+            did = header.dataset_id
+            if did not in datasets:
+                raise ValueError(
+                    f"GenomicRunSidecar for unknown dataset_id {did}")
+            datasets[did]["run_sidecar"] = _decode_genomic_run_sidecar(
+                payload)
+        elif ptype == int(PacketType.BLOCK_SIDECAR):
+            did = header.dataset_id
+            if did not in datasets:
+                raise ValueError(
+                    f"BlockSidecar for unknown dataset_id {did}")
+            datasets[did]["block_sidecars"].append(
+                _decode_block_sidecar(payload))
         elif ptype == int(PacketType.ACCESS_UNIT):
             did = header.dataset_id
             if did not in datasets:
@@ -673,8 +878,10 @@ def read_encrypted_to_file(
             break
         # EndOfDataset / Annotation / Provenance / Chromatogram: skip for now.
 
-    # Emit the .tio with encrypted compounds.
+    # Emit the .tio with encrypted compounds. The blocks_v1 wire
+    # token is transport-scoped and never a container feature flag.
     features = set(stream_meta.get("features", []))
+    features.discard(TRANSPORT_BLOCKS_V1_FEATURE)
     features.add(OPT_PER_AU_ENCRYPTION)
     any_encrypted_headers = any(d["used_encrypted_headers"] for d in datasets.values())
     if any_encrypted_headers:
@@ -776,6 +983,10 @@ def read_encrypted_to_file(
                                  for _, d in sorted(genomic_datasets.items()))
             io.write_fixed_string_attr(g_runs_group, "_run_names", g_names)
             for did, d in sorted(genomic_datasets.items()):
+                if d.get("run_sidecar"):
+                    _write_blocks_v1_genomic_run(
+                        g_runs_group, d, protection.get(did))
+                    continue
                 meta = d["meta"]
                 g_metadata = json.loads(meta.get("instrument_json") or "{}")
                 g_run_group = g_runs_group.create_group(meta["name"])
@@ -913,6 +1124,136 @@ def _decode_protection_metadata(payload: bytes) -> dict:
         "recipients": recipients,
         "server_kek_id": server_kek_id,
     }
+
+
+def _write_blocks_v1_genomic_run(g_runs_group, d: dict,
+                                   pm: dict | None) -> None:
+    """Materialise one blocks_v1 per-AU-encrypted genomic run from
+    its sidecar packets and AU stream, in the shape the stream
+    writer creates it, so decrypt-in-place restores it."""
+    from ..enums import Compression
+    from ..genomic.stream_writer import (CHANNEL_CHUNK, INDEX_FIELDS,
+                                           _INDEX_ARRAYS)
+
+    meta = d["meta"]
+    sc = d["run_sidecar"]
+    g_metadata = json.loads(meta.get("instrument_json") or "{}")
+    rg = g_runs_group.create_group(meta["name"])
+    io.write_int_attr(rg, "acquisition_mode", meta["acquisition_mode"])
+    io.write_fixed_string_attr(rg, "modality",
+                                 g_metadata.get("modality", ""))
+    io.write_int_attr(rg, "spectrum_class", 5)
+    io.write_fixed_string_attr(rg, "reference_uri",
+                                 g_metadata.get("reference_uri", ""))
+    io.write_fixed_string_attr(rg, "platform",
+                                 g_metadata.get("platform", ""))
+    if g_metadata.get("read_role"):
+        io.write_fixed_string_attr(rg, "read_role",
+                                     g_metadata["read_role"])
+    io.write_fixed_string_attr(rg, "sample_name",
+                                 g_metadata.get("sample_name", ""))
+    io.write_int_attr(rg, "read_count", sc["read_count"])
+    io.write_int_attr(rg, "base_count", sc["base_count"])
+    io.write_fixed_string_attr(rg, "layout", sc["layout"])
+    io.write_fixed_string_attr(rg, "block_policy", sc["block_policy"])
+    attrs = sc.get("attrs") or {}
+    if attrs.get("ref_diff_slice_bytes"):
+        io.write_int_attr(rg, "ref_diff_slice_bytes",
+                            int(attrs["ref_diff_slice_bytes"]),
+                            dtype="<u8")
+    if attrs.get("opt_disable_qualities_v5"):
+        io.write_int_attr(rg, "opt_disable_qualities_v5", 1)
+    if attrs.get("reference_md5s"):
+        io.write_fixed_string_attr(rg, "reference_md5s",
+                                     attrs["reference_md5s"])
+
+    sidecars = sorted(d["block_sidecars"],
+                       key=lambda x: x["block_index"])
+    blocks = rg.create_group("blocks")
+    idx_ds = blocks.create_compound_dataset(
+        "index", INDEX_FIELDS, 0, extendable=True, chunk_rows=1024)
+    rows = []
+    for bs in sidecars:
+        row = {"read_start": bs["read_start"],
+               "n_reads": bs["n_reads"],
+               "base_start": bs["base_start"],
+               "n_bases": bs["n_bases"]}
+        for ch, (c_off, c_len, codec) in bs["channels"].items():
+            row[f"{ch}_off"] = c_off
+            row[f"{ch}_len"] = c_len
+            row[f"{ch}_codec"] = codec
+        rows.append(row)
+    if rows:
+        idx_ds.append(rows)
+
+    idx_group = rg.create_group("genomic_index")
+    first_segs = next(iter(d["channel_segments"].values()))
+    chrom_table = sc["chromosome_names"]
+    name_to_id = {n: i for i, n in enumerate(chrom_table)}
+    arrays = {
+        "lengths": np.array([s.length for s in first_segs],
+                             dtype=np.uint32),
+        "positions": np.array(d["genomic_positions"], dtype=np.int64),
+        "mapping_qualities": np.array(d["genomic_mapqs"],
+                                       dtype=np.uint8),
+        "flags": np.array(d["genomic_flags"], dtype=np.uint32),
+        "chromosome_ids": np.array(
+            [name_to_id[c] for c in d["genomic_chromosomes"]],
+            dtype=np.uint16),
+    }
+    for name, prec, dt in _INDEX_ARRAYS:
+        ds = idx_group.create_dataset(
+            name, prec, 0, chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+            compression=Compression.ZLIB, compression_level=6,
+            extendable=True)
+        ds.append(arrays[name].astype(dt))
+    io.write_compound_dataset(
+        idx_group, "chromosome_names",
+        [{"name": n} for n in chrom_table], [("name", io.vl_str())])
+
+    sig = rg.create_group("signal_channels")
+    for cname in meta["channel_names"]:
+        segs = d["channel_segments"][cname]
+        io.write_channel_segments(sig, f"{cname}_segments", segs)
+        sig.set_attribute(f"{cname}_algorithm", "aes-256-gcm")
+        if pm and pm.get("wrapped_dek"):
+            sig.set_attribute(
+                f"{cname}_wrapped_dek",
+                np.frombuffer(pm["wrapped_dek"], dtype=np.uint8))
+            sig.set_attribute(f"{cname}_kek_algorithm",
+                                 pm["kek_algorithm"])
+            _stamp_additional_recipients_attr(sig, cname, pm)
+
+    mate_group = None
+    for centry in sc.get("channels") or []:
+        ch = centry["name"]
+        if ch == "mate_info":
+            mate_group = sig.create_group("mate_info")
+            parent, ds_name = mate_group, "inline_v2"
+        else:
+            parent, ds_name = sig, ch
+        codec = int(centry.get("compression", 0))
+        ds = parent.create_dataset(
+            ds_name, Precision.UINT8, 0, chunk_size=CHANNEL_CHUNK,
+            compression=(Compression.ZLIB if codec == 0
+                         else Compression.NONE),
+            compression_level=6, extendable=True)
+        io.write_int_attr(ds, "compression", codec, dtype="<u1")
+        for k, v in (centry.get("extra_attrs") or {}).items():
+            ds.set_attribute(k, v)
+        for bs in sidecars:
+            data = bs["blobs"].get(ch)
+            if data:
+                ds.append(np.frombuffer(data, dtype=np.uint8))
+    # The stream writer creates mate_info and its chrom_names table
+    # at close even when no mate blob was written; mirror that.
+    if sc.get("mate_chrom_names"):
+        if mate_group is None:
+            mate_group = sig.create_group("mate_info")
+        io.write_compound_dataset(
+            mate_group, "chrom_names",
+            [{"name": n} for n in sc["mate_chrom_names"]],
+            [("name", io.vl_str())])
 
 
 def _ingest_encrypted_au(d: dict, *, header, payload: bytes,

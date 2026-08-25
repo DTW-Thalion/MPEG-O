@@ -426,23 +426,159 @@ class TestBlocksV1RestoreFallback:
             block_reads=6000, opt_disable_qualities_v5=True)
 
 
-class TestBlocksV1Transport:
+def _sidecar_state(path):
+    """Everything of a blocks_v1 run the AU stream alone cannot carry:
+    run attrs, plaintext channel blobs and their attrs, genomic_index
+    arrays and the name tables."""
+    with h5py.File(path, "r") as f:
+        rg = f["study/genomic_runs/run"]
+        state = {"attrs": {
+            k: (v.decode() if isinstance(v, bytes) else
+                v.item() if hasattr(v, "item") else v)
+            for k, v in rg.attrs.items()}}
+        sig = rg["signal_channels"]
+        for ch in ("read_names", "cigars"):
+            if ch in sig:
+                ds = sig[ch]
+                state[ch] = (bytes(ds[...]),
+                             {k: (v.item() if hasattr(v, "item") else v)
+                              for k, v in ds.attrs.items()})
+        if "mate_info" in sig:
+            mi = sig["mate_info"]
+            if "inline_v2" in mi:
+                state["mate_info"] = (
+                    bytes(mi["inline_v2"][...]),
+                    {k: (v.item() if hasattr(v, "item") else v)
+                     for k, v in mi["inline_v2"].attrs.items()})
+            state["mate_chrom_names"] = (
+                [n.decode() if isinstance(n, bytes) else n
+                 for (n,) in mi["chrom_names"][...]]
+                if "chrom_names" in mi else [])
+        gi = rg["genomic_index"]
+        for name in ("lengths", "positions", "mapping_qualities",
+                     "flags", "chromosome_ids"):
+            state[f"gi_{name}"] = bytes(gi[name][...].tobytes())
+        state["chromosome_names"] = [
+            n.decode() if isinstance(n, bytes) else n
+            for (n,) in gi["chromosome_names"][...]]
+        return state
 
-    def test_send_refuses_blocks_v1_containers(self, tmp_path):
-        """The v1.0 encrypted transport stream does not carry the
-        blocks_v1 sidecars; the sender must refuse rather than emit a
-        stream whose received container cannot be restored."""
-        run = _make_run(n_reads=300, seed=11)
-        path = _stream_blocks_file(tmp_path / "b.tio", run)
+
+class TestBlocksV1Transport:
+    """The encrypted transport stream carries blocks_v1 runs via the
+    M99.1 sidecar packets; decrypt-in-place on the received container
+    restores it byte-identically."""
+
+    def _transport_round_trip(self, tmp_path, run, **writer_kw):
+        path = _stream_blocks_file(tmp_path / "b.tio", run, **writer_kw)
+        pristine = tmp_path / "pristine.tio"
+        shutil.copyfile(path, pristine)
+        before = _blob_state(path)
+        want = _sidecar_state(pristine)
         encrypt_per_au(str(path), KEY)
 
         from ttio.transport.codec import TransportWriter
-        from ttio.transport.encrypted import write_encrypted_dataset
+        from ttio.transport.encrypted import (read_encrypted_to_file,
+                                               write_encrypted_dataset)
+        stream = tmp_path / "stream.tis"
+        with TransportWriter(str(stream)) as writer:
+            write_encrypted_dataset(writer, str(path))
+        received = tmp_path / "received.tio"
+        read_encrypted_to_file(str(stream), str(received))
 
-        out = tmp_path / "stream.tis"
-        with pytest.raises(ValueError, match="blocks_v1"):
-            with TransportWriter(str(out)) as writer:
-                write_encrypted_dataset(writer, str(path))
+        decrypt_per_au_in_place(str(received), KEY)
+        got_blob = _blob_state(received)
+        assert got_blob[0] == before[0], "block index byte-identical"
+        assert got_blob[1] == before[1], "sequences blob byte-identical"
+        assert got_blob[2] == before[2], "qualities blob byte-identical"
+        got = _sidecar_state(received)
+        for key in want:
+            if key == "attrs":
+                continue
+            assert got[key] == want[key], f"{key} carried verbatim"
+        for name in ("layout", "block_policy", "read_count",
+                     "base_count", "ref_diff_slice_bytes",
+                     "opt_disable_qualities_v5", "reference_md5s"):
+            assert got["attrs"].get(name) == want["attrs"].get(name), (
+                f"run attr {name} carried")
+
+        ds = SpectralDataset.open(str(received))
+        gr = ds.genomic_runs["run"]
+        n = len(run.lengths)
+        for i in (0, n // 2, n - 1):
+            rd = gr[i]
+            lo = int(np.asarray(run.offsets)[i])
+            ln = int(np.asarray(run.lengths)[i])
+            assert rd.sequence.encode("ascii") == bytes(
+                np.asarray(run.sequences[lo:lo + ln], dtype=np.uint8)
+                .tobytes())
+            assert rd.read_name == run.read_names[i]
+
+    def test_round_trip_plain(self, tmp_path):
+        self._transport_round_trip(tmp_path, _make_run(seed=11),
+                                   block_reads=200)
+
+    def test_round_trip_cross_chromosome_mates(self, tmp_path):
+        rng = np.random.default_rng(23)
+        n = 600
+        lengths = rng.integers(60, 150, n).astype(np.uint32)
+        offsets = np.zeros(n, dtype=np.uint64)
+        offsets[1:] = np.cumsum(lengths[:-1])
+        total = int(lengths.sum())
+        run = WrittenGenomicRun(
+            acquisition_mode=7, reference_uri="", platform="ILLUMINA",
+            sample_name="M99",
+            positions=np.arange(n, dtype=np.int64) * 40,
+            mapping_qualities=np.full(n, 60, dtype=np.uint8),
+            flags=np.full(n, 0x1, dtype=np.uint32),
+            sequences=rng.choice(
+                np.frombuffer(b"ACGT", dtype=np.uint8), total),
+            qualities=rng.integers(33, 73, total).astype(np.uint8),
+            offsets=offsets, lengths=lengths,
+            cigars=[f"{int(l)}M" for l in lengths],
+            read_names=[f"r{i}" for i in range(n)],
+            mate_chromosomes=(["chr2"] * 300) + (["chr1"] * 300),
+            mate_positions=rng.integers(0, 10_000, n).astype(np.int64),
+            template_lengths=rng.integers(-500, 500, n).astype(np.int32),
+            chromosomes=(["chr1"] * 300) + (["chr2"] * 300),
+        )
+        self._transport_round_trip(tmp_path, run, block_reads=150)
+
+    def test_round_trip_zero_length_reads(self, tmp_path):
+        self._transport_round_trip(
+            tmp_path, _make_run(seed=25, zero_lengths=(30, 31, 400)),
+            block_reads=150)
+
+    def test_round_trip_policy_attrs(self, tmp_path, monkeypatch):
+        """Policy attrs cross the wire. The stream does not carry the
+        embedded reference bytes, so the received container's restore
+        resolves the reference through @reference_md5s and REF_PATH."""
+        run = make_written_genomic_run(n_reads=300, read_len=120,
+                                       with_reference=True)
+        fasta = tmp_path / "ref.fa"
+        with open(fasta, "wb") as f:
+            for c in sorted(run.reference_chrom_seqs):
+                f.write(b">" + c.encode() + b"\n")
+                f.write(bytes(run.reference_chrom_seqs[c]) + b"\n")
+        monkeypatch.setenv("REF_PATH", str(fasta))
+        self._transport_round_trip(tmp_path, run, block_reads=80,
+                                   ref_diff_slice_bytes=4096)
+
+    def test_round_trip_ref_path_restore(self, tmp_path, monkeypatch):
+        """An unembedded REF_DIFF run crosses the wire; the receiver's
+        container restores through @reference_md5s and REF_PATH (the
+        stream does not carry the reference bytes)."""
+        run = make_written_genomic_run(
+            n_reads=300, read_len=120, with_reference=True,
+            chromosomes=(["chr1"] * 150) + (["chr2"] * 150))
+        fasta = tmp_path / "ref.fa"
+        with open(fasta, "wb") as f:
+            for c in sorted(run.reference_chrom_seqs):
+                f.write(b">" + c.encode() + b"\n")
+                f.write(bytes(run.reference_chrom_seqs[c]) + b"\n")
+        monkeypatch.setenv("REF_PATH", str(fasta))
+        self._transport_round_trip(tmp_path, run, block_reads=80,
+                                   embed_reference=False)
 
 
 class TestBlocksV1Memory:

@@ -56,6 +56,13 @@ class PacketType(IntEnum):
     SUBJECT_METADATA       = 0x19
     SAMPLE_METADATA        = 0x1A
     ENCRYPTION_ALGORITHM   = 0x1B
+    # ---- M99.1 blocks_v1 per-AU carriage (transport-spec §4.24) ----
+    # Emitted only for genomic runs with layout blocks_v1 in an
+    # encrypted stream, announced by the StreamHeader feature token
+    # "transport_blocks_v1". One GenomicRunSidecar per run after its
+    # DatasetHeader, then one BlockSidecar per block before the AUs.
+    GENOMIC_RUN_SIDECAR    = 0x1C
+    BLOCK_SIDECAR          = 0x1D
     END_OF_STREAM = 0xFF
 
 
@@ -82,6 +89,14 @@ BULK_MODE_V2_BLOBS_FEATURE = "bulk_mode_v2_blobs"
 # the 0x10-0x1B packet types ride on the wire. Receivers without
 # v0.11 support MUST refuse the stream (no opt_ prefix → required).
 TRANSPORT_V0_11_FEATURE = "transport_v0_11"
+
+# M99.1 feature token — appears in StreamHeader.features when any
+# genomic run in the stream uses the blocks_v1 layout, so its
+# GenomicRunSidecar (0x1C) and BlockSidecar (0x1D) packets ride on
+# the wire. Wire-scoped: receivers strip it before writing container
+# feature flags. Receivers without sidecar support cannot rebuild a
+# restorable container from such a stream (no opt_ prefix → required).
+TRANSPORT_BLOCKS_V1_FEATURE = "transport_blocks_v1"
 
 
 class PacketFlag(IntFlag):
