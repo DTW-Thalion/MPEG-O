@@ -32,6 +32,7 @@
 #import "Genomics/TTIOAlignedRead.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOGenomicWriteContext.h"
+#import "Genomics/TTIOGenomicStreamWriter.h"  // indexFields for the restore fallback
 #import "Genomics/TTIOPackedReference.h"
 #import "Codecs/TTIOFqzcompNx16Z.h"
 #import "Dataset/TTIOSpectralDataset+GenomicWrite.h"
@@ -803,6 +804,11 @@ ttioBlocksV1BlockRun(TTIOGenomicRun *rd,
     if (refSeqs != nil) block.referenceChromSeqs = refSeqs;
     NSString *role = readStringAttr(runGroup, @"read_role");
     if (role.length > 0) block.readRole = role;
+    int64_t slice = readIntAttr(runGroup, @"ref_diff_slice_bytes", 0);
+    if (slice > 0) block.refDiffSliceBytes = (unsigned long long)slice;
+    if (readIntAttr(runGroup, @"opt_disable_qualities_v5", 0) != 0) {
+        block.optDisableQualitiesV5 = YES;
+    }
     if (outSeq) *outSeq = seq;
     if (outQual) *outQual = qual;
     return block;
@@ -847,25 +853,11 @@ static BOOL ttioEncryptBlocksV1Run(id<TTIOStorageGroup> study,
     }
     TTIOHDF5Group *hdf5Sig = [(id)sig performSelector:@selector(unwrap)];
 
-    NSMutableDictionary *blobDs = [NSMutableDictionary dictionary];
-    for (NSString *ch in channels) {
-        id<TTIOStorageDataset> ds;
-        if ([ch isEqualToString:@"sequences"]) {
-            id<TTIOStorageGroup> g = [sig openGroupNamed:@"sequences" error:error];
-            ds = g ? [g openDatasetNamed:@"data" error:error] : nil;
-        } else {
-            ds = [sig openDatasetNamed:ch error:error];
-        }
-        if (!ds) return NO;
-        blobDs[ch] = ds;
-    }
-
     TTIOGenomicRun *rd = [TTIOGenomicRun openFromGroup:runGroup
                                                   name:runName
                                                  error:error];
     if (!rd) return NO;
 
-    NSMutableDictionary *chromMap = ttioBlocksV1ChromMap(sig);
     for (NSString *ch in channels) {
         NSString *segName = [NSString stringWithFormat:@"%@_segments", ch];
         if ([sig hasChildNamed:segName]
@@ -878,8 +870,6 @@ static BOOL ttioEncryptBlocksV1Run(id<TTIOStorageGroup> study,
     }
 
     BOOL ok = YES;
-    NSInteger qualHint = -1;
-    NSData *refMD5 = nil;
     for (NSUInteger b = 0; ok && b < table.count; b++) {
         @autoreleasepool {
             NSData *seq = nil, *qual = nil;
@@ -887,17 +877,6 @@ static BOOL ttioEncryptBlocksV1Run(id<TTIOStorageGroup> study,
                 rd, runGroup, study, table, b,
                 [table readStartAt:b], &seq, &qual, error);
             if (!block) { ok = NO; break; }
-            if (refMD5 == nil && block.referenceChromSeqs != nil) {
-                refMD5 = [TTIOSpectralDataset referenceMD5ForRun:block];
-            }
-            TTIOGenomicWriteContext *ctx = [TTIOGenomicWriteContext
-                contextWithChromNameToId:chromMap referenceMD5:refMD5];
-            ctx.qualStrategyHint = qualHint;
-            TTIOBlockBlobs *blobs = [TTIOGenomicBlocks encodeBlock:block
-                                                           context:ctx
-                                                             error:error];
-            if (!blobs) { ok = NO; break; }
-            qualHint = ttioBlocksV1DeriveQualHint(blobs, qualHint);
 
             unsigned long long r0 = [table readStartAt:b];
             NSUInteger nn = [table nReadsAt:b];
@@ -908,27 +887,6 @@ static BOOL ttioEncryptBlocksV1Run(id<TTIOStorageGroup> study,
             NSDictionary *plain = @{@"sequences": seq ?: [NSData data],
                                     @"qualities": qual ?: [NSData data]};
             for (NSString *ch in channels) {
-                unsigned long long off = [table offsetOf:ch at:b];
-                unsigned long long ln = [table lengthOf:ch at:b];
-                NSData *stored = ln > 0
-                    ? [blobDs[ch] readSliceAtOffset:(NSUInteger)off
-                                              count:(NSUInteger)ln
-                                              error:error]
-                    : [NSData data];
-                if (!stored) { ok = NO; break; }
-                NSData *reenc = blobs.blobs[ch] ?: [NSData data];
-                if (![reenc isEqualToData:stored]) {
-                    if (error) *error = makeErr(4,
-                        @"per-AU blocks_v1: block %lu channel '%@' does "
-                        @"not re-encode byte-identically, so a decrypt "
-                        @"could not restore this file. The run was "
-                        @"likely written with writer policy the file "
-                        @"does not persist (for example a non-default "
-                        @"ref_diff_slice_bytes); per-AU in-place "
-                        @"protection is unsupported for it.",
-                        (unsigned long)b, ch);
-                    ok = NO; break;
-                }
                 NSArray<TTIOChannelSegment *> *segs =
                     [TTIOPerAUEncryption
                         encryptChannelToSegments:plain[ch]
@@ -978,6 +936,48 @@ static BOOL ttioEncryptBlocksV1Run(id<TTIOStorageGroup> study,
     return YES;
 }
 
+// Fallback when a re-encoded blob does not land on the ranges the
+// block index records: patch off/len/codec for the re-encoded
+// channels and recreate blocks/index; the other columns and
+// channels are carried over unchanged.
+static BOOL ttioBlocksV1RewriteIndex(id<TTIOStorageGroup> runGroup,
+                                     NSArray<NSString *> *channels,
+                                     NSDictionary *newOff,
+                                     NSDictionary *newLen,
+                                     NSDictionary *newCodec,
+                                     NSError **error)
+{
+    id<TTIOStorageGroup> blocks =
+        [runGroup openGroupNamed:@"blocks" error:error];
+    if (!blocks) return NO;
+    id<TTIOStorageDataset> ds =
+        [blocks openDatasetNamed:@"index" error:error];
+    if (!ds) return NO;
+    NSArray<NSDictionary *> *rows = [ds readRows:error];
+    if (!rows) return NO;
+    NSMutableArray *patched =
+        [NSMutableArray arrayWithCapacity:rows.count];
+    for (NSUInteger b = 0; b < rows.count; b++) {
+        NSMutableDictionary *row = [rows[b] mutableCopy];
+        for (NSString *ch in channels) {
+            row[[ch stringByAppendingString:@"_off"]] = newOff[ch][b];
+            row[[ch stringByAppendingString:@"_len"]] = newLen[ch][b];
+            row[[ch stringByAppendingString:@"_codec"]] = newCodec[ch][b];
+        }
+        [patched addObject:row];
+    }
+    if (![blocks deleteChildNamed:@"index" error:error]) return NO;
+    id<TTIOStorageDataset> out = [blocks
+        createCompoundDatasetNamed:@"index"
+                            fields:[TTIOGenomicStreamWriter indexFields]
+                             count:0
+                        extendable:YES
+                         chunkRows:1024
+                             error:error];
+    if (!out) return NO;
+    return patched.count == 0 || [out appendData:patched error:error];
+}
+
 static BOOL ttioDecryptBlocksV1RunInPlace(id<TTIOStorageGroup> study,
                                           id<TTIOStorageGroup> runGroup,
                                           uint16_t datasetId,
@@ -1021,7 +1021,16 @@ static BOOL ttioDecryptBlocksV1RunInPlace(id<TTIOStorageGroup> study,
 
     NSMutableDictionary *newDs = [NSMutableDictionary dictionary];
     NSMutableDictionary *written = [NSMutableDictionary dictionary];
-    for (NSString *ch in channels) written[ch] = @(0ULL);
+    NSMutableDictionary *newOff = [NSMutableDictionary dictionary];
+    NSMutableDictionary *newLen = [NSMutableDictionary dictionary];
+    NSMutableDictionary *newCodec = [NSMutableDictionary dictionary];
+    for (NSString *ch in channels) {
+        written[ch] = @(0ULL);
+        newOff[ch] = [NSMutableArray array];
+        newLen[ch] = [NSMutableArray array];
+        newCodec[ch] = [NSMutableArray array];
+    }
+    BOOL mismatch = NO;
     NSInteger qualHint = -1;
     NSData *refMD5 = nil;
     for (NSUInteger b = 0; b < table.count; b++) {
@@ -1120,15 +1129,11 @@ static BOOL ttioDecryptBlocksV1RunInPlace(id<TTIOStorageGroup> study,
                 unsigned long long pos =
                     [written[ch] unsignedLongLongValue];
                 if (got.length != (NSUInteger)ln || pos != off) {
-                    if (error) *error = makeErr(4,
-                        @"per-AU blocks_v1 restore: block %lu channel "
-                        @"'%@' re-encoded to %lu bytes at position "
-                        @"%llu, the index records %llu bytes at %llu; "
-                        @"the file cannot be restored consistently",
-                        (unsigned long)b, ch,
-                        (unsigned long)got.length, pos, ln, off);
-                    return NO;
+                    mismatch = YES;
                 }
+                [newOff[ch] addObject:@(pos)];
+                [newLen[ch] addObject:@((unsigned long long)got.length)];
+                [newCodec[ch] addObject:blobs.codecs[ch] ?: @0];
                 id<TTIOStorageDataset> ds = newDs[ch];
                 if (ds == nil) {
                     id<TTIOStorageGroup> parent;
@@ -1173,6 +1178,9 @@ static BOOL ttioDecryptBlocksV1RunInPlace(id<TTIOStorageGroup> study,
             }
         }
     }
+    if (mismatch
+        && !ttioBlocksV1RewriteIndex(runGroup, channels, newOff, newLen,
+                                     newCodec, error)) return NO;
     for (NSString *ch in channels) {
         NSString *segName = [NSString stringWithFormat:@"%@_segments", ch];
         if (![sig deleteChildNamed:segName error:error]) return NO;

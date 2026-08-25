@@ -218,6 +218,163 @@ class TestBlocksV1RoundTrip:
         self._round_trip(tmp_path, run, block_reads=150)
 
 
+def _correlated_qual_run(n_reads=12_000, seed=17):
+    """Qualities conditioned on the base at each position, so the
+    sequence-conditioned FQZ V5 strategy wins when it is allowed and
+    the V4 family wins when it is not. Sized so each 6000-read block
+    carries >= 1 MiB of qualities, the auto-tune floor below which
+    V5 is never raced (TTIO_M94Z_V5_MIN_QUALITIES)."""
+    rng = np.random.default_rng(seed)
+    lengths = np.full(n_reads, 200, dtype=np.uint32)
+    offsets = np.zeros(n_reads, dtype=np.uint64)
+    offsets[1:] = np.cumsum(lengths[:-1])
+    total = int(lengths.sum())
+    sequences = rng.choice(np.frombuffer(b"ACGT", dtype=np.uint8), total)
+    base_q = np.zeros(256, dtype=np.uint8)
+    for b_, q_ in zip(b"ACGT", (38, 52, 60, 45)):
+        base_q[b_] = q_
+    qualities = (base_q[sequences]
+                 + rng.integers(0, 3, total).astype(np.uint8))
+    return WrittenGenomicRun(
+        acquisition_mode=7, reference_uri="", platform="ILLUMINA",
+        sample_name="M99",
+        positions=np.arange(n_reads, dtype=np.int64) * 40,
+        mapping_qualities=np.full(n_reads, 60, dtype=np.uint8),
+        flags=np.zeros(n_reads, dtype=np.uint32),
+        sequences=sequences, qualities=qualities,
+        offsets=offsets, lengths=lengths,
+        cigars=[f"{int(l)}M" for l in lengths],
+        read_names=[f"m99c{i:06d}" for i in range(n_reads)],
+        mate_chromosomes=[""] * n_reads,
+        mate_positions=np.full(n_reads, -1, dtype=np.int64),
+        template_lengths=np.zeros(n_reads, dtype=np.int32),
+        chromosomes=["chr1"] * n_reads,
+    )
+
+
+def _strip_run_attr(path, name):
+    with h5py.File(path, "r+") as f:
+        del f["study/genomic_runs/run"].attrs[name]
+
+
+class TestBlocksV1WriterPolicy:
+    """The writer persists the policy that shapes the coded blobs;
+    restore honours it, so the round trip stays byte-identical for
+    non-default policy too."""
+
+    def test_ref_diff_slice_bytes_persisted_and_honoured(self, tmp_path):
+        run = make_written_genomic_run(n_reads=300, read_len=120,
+                                       with_reference=True)
+        path = _stream_blocks_file(tmp_path / "b.tio", run,
+                                   block_reads=80,
+                                   ref_diff_slice_bytes=4096)
+        default = _stream_blocks_file(tmp_path / "default.tio", run,
+                                      block_reads=80)
+        assert _blob_state(path)[1] != _blob_state(default)[1], (
+            "slice_bytes=4096 must shape the sequences blob, or this "
+            "test proves nothing")
+        before = _blob_state(path)
+        assert int(before[3]["ref_diff_slice_bytes"]) == 4096
+
+        encrypt_per_au(str(path), KEY)
+        decrypt_per_au_in_place(str(path), KEY)
+
+        after = _blob_state(path)
+        assert after[0] == before[0], "block index byte-identical"
+        assert after[1] == before[1], "sequences blob byte-identical"
+        assert after[2] == before[2], "qualities blob byte-identical"
+
+    def test_disable_qualities_v5_persisted_and_honoured(self, tmp_path):
+        run = _correlated_qual_run()
+        path = _stream_blocks_file(tmp_path / "b.tio", run,
+                                   block_reads=6000,
+                                   opt_disable_qualities_v5=True)
+        default = _stream_blocks_file(tmp_path / "default.tio", run,
+                                      block_reads=6000)
+        assert _blob_state(path)[2] != _blob_state(default)[2], (
+            "disabling V5 must shape the qualities blob, or this "
+            "test proves nothing")
+        before = _blob_state(path)
+        assert int(before[3]["opt_disable_qualities_v5"]) == 1
+
+        encrypt_per_au(str(path), KEY)
+        decrypt_per_au_in_place(str(path), KEY)
+
+        after = _blob_state(path)
+        assert after[0] == before[0], "block index byte-identical"
+        assert after[2] == before[2], "qualities blob byte-identical"
+
+    def test_default_policy_writes_no_attrs(self, tmp_path):
+        path = _stream_blocks_file(tmp_path / "b.tio", _make_run())
+        attrs = _blob_state(path)[3]
+        assert "ref_diff_slice_bytes" not in attrs
+        assert "opt_disable_qualities_v5" not in attrs
+
+
+class TestBlocksV1RestoreFallback:
+    """When the persisted policy is absent (older files) and the
+    re-encode lands on different blob lengths, restore rewrites the
+    block index instead of refusing; the file stays readable."""
+
+    def _restore_with_stripped_attr(self, tmp_path, run, attr,
+                                    **writer_kw):
+        path = _stream_blocks_file(tmp_path / "b.tio", run, **writer_kw)
+        _strip_run_attr(path, attr)
+        before = _blob_state(path)
+
+        encrypt_per_au(str(path), KEY)
+        decrypt_per_au_in_place(str(path), KEY)
+
+        after = _blob_state(path)
+        assert after[0] != before[0], (
+            "the fallback must rewrite the block index, or this test "
+            "exercised the normal path")
+        with h5py.File(path, "r") as f:
+            rg = f["study/genomic_runs/run"]
+            rows = rg["blocks/index"][...]
+            for ch, blob in (("sequences",
+                              rg["signal_channels/sequences/data"]),
+                             ("qualities",
+                              rg["signal_channels/qualities"])):
+                lens = rows[f"{ch}_len"].astype(np.uint64)
+                offs = rows[f"{ch}_off"].astype(np.uint64)
+                want = np.zeros(len(lens), dtype=np.uint64)
+                want[1:] = np.cumsum(lens[:-1])
+                assert np.array_equal(offs, want), (
+                    f"{ch} offsets must be the cumulative sum of the "
+                    "rewritten lengths")
+                assert int(lens.sum()) == len(blob), (
+                    f"{ch} index must cover the rewritten blob")
+
+        ds = SpectralDataset.open(str(path))
+        gr = ds.genomic_runs["run"]
+        n = len(run.lengths)
+        for i in (0, 1, n // 2, n - 1):
+            rd = gr[i]
+            lo = int(np.asarray(run.offsets)[i])
+            ln = int(np.asarray(run.lengths)[i])
+            assert rd.sequence.encode("ascii") == bytes(
+                np.asarray(run.sequences[lo:lo + ln], dtype=np.uint8)
+                .tobytes())
+            assert bytes(rd.qualities) == bytes(
+                np.asarray(run.qualities[lo:lo + ln], dtype=np.uint8)
+                .tobytes())
+            assert rd.read_name == run.read_names[i]
+
+    def test_fallback_ref_diff_slice_bytes(self, tmp_path):
+        run = make_written_genomic_run(n_reads=300, read_len=120,
+                                       with_reference=True)
+        self._restore_with_stripped_attr(
+            tmp_path, run, "ref_diff_slice_bytes",
+            block_reads=80, ref_diff_slice_bytes=4096)
+
+    def test_fallback_disable_qualities_v5(self, tmp_path):
+        self._restore_with_stripped_attr(
+            tmp_path, _correlated_qual_run(),
+            "opt_disable_qualities_v5",
+            block_reads=6000, opt_disable_qualities_v5=True)
+
+
 class TestBlocksV1Transport:
 
     def test_send_refuses_blocks_v1_containers(self, tmp_path):

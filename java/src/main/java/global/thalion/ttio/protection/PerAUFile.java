@@ -20,6 +20,7 @@ import global.thalion.ttio.genomics.BlockTable;
 import global.thalion.ttio.genomics.BlockView;
 import global.thalion.ttio.genomics.GenomicBlocks;
 import global.thalion.ttio.genomics.GenomicRun;
+import global.thalion.ttio.genomics.GenomicStreamWriter;
 import global.thalion.ttio.genomics.GenomicWriteContext;
 import global.thalion.ttio.genomics.PackedReference;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
@@ -1168,11 +1169,12 @@ public final class PerAUFile {
     // so the walkers stream block by block: decode one block, slice
     // its reads, encrypt one AU per read with GLOBAL AU numbering,
     // append to extendable segments tables. Restore re-encodes each
-    // block with the stream writer's machinery; because writer policy
-    // the file does not persist would break that reproducibility,
-    // ENCRYPT re-encodes and byte-compares every block BEFORE
-    // deleting anything, and refuses the run when a blob is not
-    // reproducible.
+    // block with the stream writer's machinery, honouring the writer
+    // policy the run group persists (opt_disable_qualities_v5,
+    // ref_diff_slice_bytes); when a re-encoded blob still lands on
+    // different ranges (older files without the attrs), the block
+    // index is rewritten to the ranges actually written instead of
+    // refusing, keeping the file consistent and readable.
 
     private static final List<String> BLOCKS_V1_CHANNELS =
         List.of("sequences", "qualities");
@@ -1287,14 +1289,23 @@ public final class PerAUFile {
 
         byte[] seqBytes = seq.toByteArray();
         byte[] qualBytes = qual.toByteArray();
+        boolean disableV5 =
+            readLongRunAttr(runGroup, "opt_disable_qualities_v5") != 0;
+        long sliceBytes = readLongRunAttr(runGroup, "ref_diff_slice_bytes");
         WrittenGenomicRun block = new WrittenGenomicRun(
             rd.acquisitionMode(), refUri, rd.platform(), rd.sampleName(),
             positions, mapqs, flags, seqBytes, qualBytes,
             offsets, lengths, cigars, names, mateChroms, matePos, tlens,
             chroms, Compression.ZLIB, overrides,
             List.of(), false, refSeqs, null, null,
-            false, false, rd.getReadRole(), 0);
+            disableV5, false, rd.getReadRole(), sliceBytes);
         return new BlockRun(block, seqBytes, qualBytes);
+    }
+
+    private static long readLongRunAttr(StorageGroup g, String name) {
+        if (!g.hasAttribute(name)) return 0L;
+        Object v = g.getAttribute(name);
+        return v instanceof Number n ? n.longValue() : 0L;
     }
 
     /** The stream writer's sticky qualities discipline: after the
@@ -1326,36 +1337,18 @@ public final class PerAUFile {
             if (channels.isEmpty()) return;
             BlockTable t = BlockTable.read(runGroup);
             GenomicRun rd = GenomicRun.readFrom(runGroup, runName);
-            Map<String, Integer> chromMap = blocksV1ChromMap(sig);
 
-            Map<String, StorageDataset> blobDs = new LinkedHashMap<>();
             Map<String, StorageDataset> segDs = new LinkedHashMap<>();
             try {
                 for (String ch : channels) {
-                    blobDs.put(ch, ch.equals("sequences")
-                        ? sig.openGroup("sequences").openDataset("data")
-                        : sig.openDataset(ch));
                     String segName = ch + "_segments";
                     if (sig.hasChild(segName)) sig.deleteChild(segName);
                     segDs.put(ch, sig.createCompoundDataset(
                         segName, CHANNEL_SEG_FIELDS, 0, true, 1024));
                 }
-                int qualHint = -1;
-                byte[] refMd5 = null;
                 for (int b = 0; b < t.count(); b++) {
                     BlockRun br = blocksV1BlockRun(rd, runGroup, study,
                                                    t, b, t.readStartAt(b));
-                    if (refMd5 == null
-                            && br.run().referenceChromSeqs() != null) {
-                        refMd5 = SpectralDatasetGenomicWriter
-                            .referenceMd5ForRun(br.run());
-                    }
-                    GenomicWriteContext ctx =
-                        new GenomicWriteContext(chromMap, refMd5, qualHint);
-                    GenomicBlocks.BlockBlobs blobs =
-                        GenomicBlocks.encodeBlock(br.run(), ctx);
-                    qualHint = blocksV1DeriveQualHint(blobs, qualHint);
-
                     long[] local = new long[t.nReadsAt(b)];
                     int[] blkLens = br.run().lengths();
                     long cum = 0;
@@ -1364,26 +1357,6 @@ public final class PerAUFile {
                         cum += blkLens[i];
                     }
                     for (String ch : channels) {
-                        long off = t.offsetOf(ch, b);
-                        long ln = t.lengthOf(ch, b);
-                        byte[] stored = ln > 0
-                            ? (byte[]) blobDs.get(ch).readSlice(off, ln)
-                            : new byte[0];
-                        byte[] reenc = blobs.blobs()
-                            .getOrDefault(ch, new byte[0]);
-                        if (!Arrays.equals(reenc, stored)) {
-                            throw new IllegalStateException(
-                                "per-AU blocks_v1: block " + b
-                                + " channel '" + ch + "' does not "
-                                + "re-encode byte-identically, so a "
-                                + "decrypt could not restore this file. "
-                                + "The run was likely written with "
-                                + "writer policy the file does not "
-                                + "persist (for example a non-default "
-                                + "ref_diff_slice_bytes); per-AU "
-                                + "in-place protection is unsupported "
-                                + "for it.");
-                        }
                         byte[] plain = ch.equals("sequences")
                             ? br.seq() : br.qual();
                         List<ChannelSegment> segs =
@@ -1407,7 +1380,6 @@ public final class PerAUFile {
                 }
                 throw e;
             } finally {
-                for (StorageDataset ds : blobDs.values()) ds.close();
                 for (StorageDataset ds : segDs.values()) ds.close();
             }
             for (String ch : channels) {
@@ -1443,7 +1415,12 @@ public final class PerAUFile {
 
             Map<String, StorageDataset> newDs = new LinkedHashMap<>();
             Map<String, Long> written = new LinkedHashMap<>();
-            for (String ch : channels) written.put(ch, 0L);
+            Map<String, List<long[]>> newRanges = new LinkedHashMap<>();
+            for (String ch : channels) {
+                written.put(ch, 0L);
+                newRanges.put(ch, new ArrayList<>());
+            }
+            boolean mismatch = false;
             int qualHint = -1;
             byte[] refMd5 = null;
             try {
@@ -1499,14 +1476,11 @@ public final class PerAUFile {
                         long ln = t.lengthOf(ch, b);
                         long pos = written.get(ch);
                         if (got.length != ln || pos != off) {
-                            throw new IllegalStateException(
-                                "per-AU blocks_v1 restore: block " + b
-                                + " channel '" + ch + "' re-encoded to "
-                                + got.length + " bytes at position "
-                                + pos + ", the index records " + ln
-                                + " bytes at " + off + "; the file "
-                                + "cannot be restored consistently");
+                            mismatch = true;
                         }
+                        newRanges.get(ch).add(new long[]{
+                            pos, got.length,
+                            blobs.codecs().getOrDefault(ch, 0) });
                         StorageDataset ds = newDs.get(ch);
                         if (ds == null) {
                             StorageGroup parent;
@@ -1542,10 +1516,46 @@ public final class PerAUFile {
             } finally {
                 for (StorageDataset ds : newDs.values()) ds.close();
             }
+            if (mismatch) {
+                rewriteBlocksIndex(runGroup, channels, newRanges);
+            }
             for (String ch : channels) {
                 sig.deleteChild(ch + "_segments");
                 String algAttr = ch + "_algorithm";
                 if (sig.hasAttribute(algAttr)) sig.deleteAttribute(algAttr);
+            }
+        }
+    }
+
+    /** Fallback when a re-encoded blob does not land on the ranges the
+     *  block index records: patch off/len/codec for the re-encoded
+     *  channels and recreate {@code blocks/index}; the other columns
+     *  and channels are carried over unchanged. */
+    @SuppressWarnings("unchecked")
+    private static void rewriteBlocksIndex(StorageGroup runGroup,
+            List<String> channels, Map<String, List<long[]>> newRanges) {
+        List<String> order = GenomicBlocks.BLOCK_CHANNELS;
+        int codecBase = 4 + 2 * order.size();
+        try (StorageGroup blocks = runGroup.openGroup("blocks")) {
+            List<Object[]> rows;
+            try (StorageDataset ds = blocks.openDataset("index")) {
+                rows = (List<Object[]>) ds.readAll();
+            }
+            for (int b = 0; b < rows.size(); b++) {
+                Object[] row = rows.get(b);
+                for (String ch : channels) {
+                    int ci = order.indexOf(ch);
+                    long[] r = newRanges.get(ch).get(b);
+                    row[4 + 2 * ci] = r[0];
+                    row[4 + 2 * ci + 1] = r[1];
+                    row[codecBase + ci] = (int) r[2];
+                }
+            }
+            blocks.deleteChild("index");
+            try (StorageDataset out = blocks.createCompoundDataset(
+                    "index", GenomicStreamWriter.INDEX_FIELDS, 0,
+                    true, 1024)) {
+                if (!rows.isEmpty()) out.append(rows);
             }
         }
     }

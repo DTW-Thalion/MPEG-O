@@ -526,6 +526,15 @@ public final class GenomicStreamWriter implements AutoCloseable {
         run.setAttribute("base_count", 0L);
         run.setAttribute("layout", LAYOUT);
         run.setAttribute("block_policy", "reads=" + opt.blockReads() + ",bytes=" + opt.blockBytes());
+        // Non-default writer policy shapes the coded blobs; a per-AU
+        // restore re-encodes with it, so it is persisted on the run
+        // (format-spec 9.1.1).
+        if (opt.refDiffSliceBytes() != 0) {
+            run.setAttribute("ref_diff_slice_bytes", opt.refDiffSliceBytes());
+        }
+        if (opt.optDisableQualitiesV5()) {
+            run.setAttribute("opt_disable_qualities_v5", 1L);
+        }
         StorageGroup blocks = run.createGroup("blocks");
         indexDs = blocks.createCompoundDataset("index", INDEX_FIELDS, 0, true, 1024);
         StorageGroup idx = run.createGroup("genomic_index");

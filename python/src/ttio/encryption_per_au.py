@@ -466,6 +466,10 @@ def _blocks_v1_block_run(run_group, table, b: int, references_group, *,
         chromosomes=[r.chromosome for r in reads],
         reference_chrom_seqs=ref_seqs,
         signal_codec_overrides=overrides,
+        opt_disable_qualities_v5=bool(
+            _get_int_attr(run_group, "opt_disable_qualities_v5", 0)),
+        ref_diff_slice_bytes=int(
+            _get_int_attr(run_group, "ref_diff_slice_bytes", 0) or 0),
     )
     return block, seq_bytes, qual_bytes
 
@@ -487,10 +491,15 @@ def _blocks_v1_derive_qual_hint(blobs, current: int) -> int:
 
 def _encrypt_blocks_v1_run(study, run_group, dataset_id: int,
                             key: bytes) -> None:
-    """Per-AU encrypt one blocks_v1 genomic run, block by block."""
+    """Per-AU encrypt one blocks_v1 genomic run, block by block.
+
+    Encrypt only decodes each block to plaintext and encrypts it;
+    restore re-encodes, honouring the writer policy the run group
+    persists (``opt_disable_qualities_v5``, ``ref_diff_slice_bytes``)
+    and falling back to an index rewrite when a re-encoded blob's
+    length still differs."""
     from . import _hdf5_io as io
     from .genomic._block_view import BlockTable
-    from .genomic._blocks import encode_block
 
     table = BlockTable.read(run_group)
     sig = run_group.open_group("signal_channels")
@@ -499,36 +508,16 @@ def _encrypt_blocks_v1_run(study, run_group, dataset_id: int,
         return
     refs = (study.open_group("references")
             if study.has_child("references") else None)
-    blob_ds = {}
-    for ch in channels:
-        blob_ds[ch] = (sig.open_group("sequences").open_dataset("data")
-                       if ch == "sequences" else sig.open_dataset(ch))
 
     seg_ds = {ch: io.create_channel_segments_extendable(
         sig, f"{ch}_segments") for ch in channels}
     try:
-        qual_hint = -1
         for b in range(table.count):
             r0 = int(table.read_start[b])
             block, seq_bytes, qual_bytes = _blocks_v1_block_run(
                 run_group, table, b, refs)
-            blobs = encode_block(block, qual_strategy_hint=qual_hint)
-            qual_hint = _blocks_v1_derive_qual_hint(blobs, qual_hint)
             plain = {"sequences": seq_bytes, "qualities": qual_bytes}
             for ch in channels:
-                off = int(table.ranges[ch][0][b])
-                ln = int(table.ranges[ch][1][b])
-                stored = bytes(np.asarray(
-                    blob_ds[ch].read(off, ln), dtype=np.uint8).tobytes())
-                if blobs.blobs.get(ch, b"") != stored:
-                    raise ValueError(
-                        f"per-AU blocks_v1: block {b} channel {ch!r} "
-                        "does not re-encode byte-identically, so a "
-                        "decrypt could not restore this file. The run "
-                        "was likely written with writer policy the "
-                        "file does not persist (for example a "
-                        "non-default ref_diff_slice_bytes); per-AU "
-                        "in-place protection is unsupported for it.")
                 blk_lengths = np.asarray(block.lengths, dtype=np.uint32)
                 local = np.zeros(len(blk_lengths), dtype=np.uint64)
                 if len(blk_lengths) > 1:
@@ -558,9 +547,12 @@ def _encrypt_blocks_v1_run(study, run_group, dataset_id: int,
 def _decrypt_blocks_v1_run_in_place(study, run_group, dataset_id: int,
                                      key: bytes) -> None:
     """Restore one blocks_v1 genomic run, block by block. Re-encoded
-    blobs are appended into recreated channel datasets; the block
-    index is left untouched, which is sound because every blob is
-    verified byte-reproducible at encrypt time."""
+    blobs are appended into recreated channel datasets. When every
+    blob lands on the ranges the block index records the index is
+    left untouched and the restore is byte-identical; when any blob
+    differs (the writer policy attrs were not honoured, or an older
+    file does not carry them) the index is rewritten to the ranges
+    actually written, keeping the file consistent and readable."""
     from . import _hdf5_io as io
     from .enums import Compression, Precision
     from .genomic._block_view import BlockTable
@@ -578,6 +570,8 @@ def _decrypt_blocks_v1_run_in_place(study, run_group, dataset_id: int,
 
     new_ds: dict = {}
     written: dict = {ch: 0 for ch in channels}
+    new_ranges: dict = {ch: [] for ch in channels}
+    mismatch = False
     qual_hint = -1
     for b in range(table.count):
         r0 = int(table.read_start[b])
@@ -598,12 +592,10 @@ def _decrypt_blocks_v1_run_in_place(study, run_group, dataset_id: int,
             off = int(table.ranges[ch][0][b])
             ln = int(table.ranges[ch][1][b])
             if len(got) != ln or written[ch] != off:
-                raise ValueError(
-                    f"per-AU blocks_v1 restore: block {b} channel "
-                    f"{ch!r} re-encoded to {len(got)} bytes at "
-                    f"position {written[ch]}, the index records "
-                    f"{ln} bytes at {off}; the file cannot be "
-                    "restored consistently")
+                mismatch = True
+            new_ranges[ch].append(
+                (written[ch], len(got),
+                 int(blobs.compression.get(ch, 0))))
             if ch not in new_ds:
                 if ch == "sequences":
                     parent = sig.create_group("sequences")
@@ -624,11 +616,36 @@ def _decrypt_blocks_v1_run_in_place(study, run_group, dataset_id: int,
             new_ds[ch].append(np.frombuffer(got, dtype=np.uint8))
             written[ch] += len(got)
 
+    if mismatch:
+        _rewrite_blocks_index(run_group, channels, new_ranges)
+
     for ch in channels:
         sig.delete_child(f"{ch}_segments")
         alg_attr = f"{ch}_algorithm"
         if sig.has_attribute(alg_attr):
             sig.delete_attribute(alg_attr)
+
+
+def _rewrite_blocks_index(run_group, channels, new_ranges) -> None:
+    """Rewrite ``blocks/index`` with the ranges the restore actually
+    wrote for ``channels``. Only reached when a re-encoded blob did
+    not land on the recorded ranges; the other columns and channels
+    are carried over unchanged."""
+    from .genomic.stream_writer import INDEX_FIELDS
+
+    blocks = run_group.open_group("blocks")
+    rows = blocks.open_dataset("index").read_rows()
+    for b, row in enumerate(rows):
+        for ch in channels:
+            off, ln, codec = new_ranges[ch][b]
+            row[f"{ch}_off"] = off
+            row[f"{ch}_len"] = ln
+            row[f"{ch}_codec"] = codec
+    blocks.delete_child("index")
+    ds = blocks.create_compound_dataset(
+        "index", INDEX_FIELDS, 0, extendable=True, chunk_rows=1024)
+    if rows:
+        ds.append(rows)
 
 
 def encrypt_per_au(

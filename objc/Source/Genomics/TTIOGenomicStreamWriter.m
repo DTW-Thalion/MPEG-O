@@ -664,6 +664,15 @@ static unsigned long long ppEstimateBlockBytes(TTIOWrittenGenomicRun *b)
     NSString *policy = [NSString stringWithFormat:@"reads=%lu,bytes=%llu",
                         (unsigned long)_opt.blockReads, _opt.blockBytes];
     if (![run setAttributeValue:policy forName:@"block_policy" error:error]) return NO;
+    /* Non-default writer policy shapes the coded blobs; a per-AU
+     * restore re-encodes with it, so it is persisted on the run
+     * (format-spec 9.1.1). */
+    if (_opt.refDiffSliceBytes != 0
+        && ![run setAttributeValue:@((int64_t)_opt.refDiffSliceBytes)
+                           forName:@"ref_diff_slice_bytes" error:error]) return NO;
+    if (_opt.optDisableQualitiesV5
+        && ![run setAttributeValue:@((int64_t)1)
+                           forName:@"opt_disable_qualities_v5" error:error]) return NO;
     id<TTIOStorageGroup> blocks = [run createGroupNamed:@"blocks" error:error];
     if (!blocks) return NO;
     _indexDs = [blocks createCompoundDatasetNamed:@"index" fields:[[self class] indexFields]

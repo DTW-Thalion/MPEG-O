@@ -427,6 +427,14 @@ class GenomicStreamWriter:
         io.write_fixed_string_attr(rg, "layout", LAYOUT)
         io.write_fixed_string_attr(
             rg, "block_policy", f"reads={self._block_reads},bytes={self._block_bytes}")
+        # Persist non-default writer policy that shapes the coded
+        # blobs, so a per-AU restore re-encodes with the same policy
+        # (format-spec 9.1.1).
+        if m["ref_diff_slice_bytes"]:
+            io.write_int_attr(rg, "ref_diff_slice_bytes",
+                              m["ref_diff_slice_bytes"], dtype="<u8")
+        if m["opt_disable_qualities_v5"]:
+            io.write_int_attr(rg, "opt_disable_qualities_v5", 1)
         blocks = rg.create_group("blocks")
         self._index = blocks.create_compound_dataset(
             "index", INDEX_FIELDS, 0, extendable=True, chunk_rows=1024)

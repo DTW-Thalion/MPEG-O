@@ -442,6 +442,276 @@ static void m99TransportRefusal(void)
     m99Rm(path);
 }
 
+// Qualities conditioned on the base at each position, so the
+// sequence-conditioned FQZ V5 strategy wins when it is allowed and
+// the V4 family wins when it is not. Sized so each 6000-read block
+// carries >= 1 MiB of qualities, the auto-tune floor below which V5
+// is never raced (TTIO_M94Z_V5_MIN_QUALITIES).
+static TTIOWrittenGenomicRun *m99MakeCorrelatedRun(void)
+{
+    NSUInteger n = 12000, L = 200;
+    uint32_t s = 17;
+    NSUInteger total = n * L;
+    NSMutableData *seq = [NSMutableData dataWithLength:total];
+    NSMutableData *qual = [NSMutableData dataWithLength:total];
+    uint8_t *seqP = seq.mutableBytes, *qualP = qual.mutableBytes;
+    static const char bases[4] = "ACGT";
+    uint8_t baseQ[256] = {0};
+    baseQ['A'] = 38; baseQ['C'] = 52; baseQ['G'] = 60; baseQ['T'] = 45;
+    for (NSUInteger i = 0; i < total; i++) {
+        seqP[i] = (uint8_t)bases[m99Next(&s) % 4];
+        qualP[i] = (uint8_t)(baseQ[seqP[i]] + (m99Next(&s) % 3));
+    }
+    NSMutableData *lengths = [NSMutableData dataWithLength:n * 4];
+    NSMutableData *offsets = [NSMutableData dataWithLength:n * 8];
+    NSMutableData *positions = [NSMutableData dataWithLength:n * 8];
+    NSMutableData *mapqs = [NSMutableData dataWithLength:n];
+    NSMutableData *flags = [NSMutableData dataWithLength:n * 4];
+    NSMutableData *matePos = [NSMutableData dataWithLength:n * 8];
+    NSMutableData *tlens = [NSMutableData dataWithLength:n * 4];
+    uint32_t *lenP = lengths.mutableBytes;
+    uint64_t *offP = offsets.mutableBytes;
+    int64_t *posP = positions.mutableBytes;
+    uint8_t *mapqP = mapqs.mutableBytes;
+    int64_t *mposP = matePos.mutableBytes;
+    NSMutableArray *cigars = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray *names = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray *mateChroms = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray *chroms = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) {
+        lenP[i] = (uint32_t)L;
+        offP[i] = i * L;
+        posP[i] = (int64_t)(i * 40);
+        mapqP[i] = 60;
+        mposP[i] = -1;
+        [cigars addObject:@"200M"];
+        [names addObject:[NSString stringWithFormat:@"m99c%06lu",
+            (unsigned long)i]];
+        [mateChroms addObject:@""];
+        [chroms addObject:@"chr1"];
+    }
+    return [([[TTIOWrittenGenomicRun alloc]
+        initWithAcquisitionMode:(TTIOAcquisitionMode)7
+                   referenceUri:@""
+                       platform:@"ILLUMINA"
+                     sampleName:@"M99"
+                      positions:positions
+               mappingQualities:mapqs
+                          flags:flags
+                      sequences:seq
+                      qualities:qual
+                        offsets:offsets
+                        lengths:lengths
+                         cigars:cigars
+                      readNames:names
+                mateChromosomes:mateChroms
+                  matePositions:matePos
+                templateLengths:tlens
+                    chromosomes:chroms
+              signalCompression:TTIOCompressionZlib])
+        copyWithOptLegacyWholeChannel:NO];
+}
+
+static id<TTIOStorageGroup> m99RunAdapter(TTIOHDF5File *f)
+{
+    TTIOHDF5Group *rg = [[[f.rootGroup openGroupNamed:@"study" error:NULL]
+        openGroupNamed:@"genomic_runs" error:NULL]
+        openGroupNamed:@"run" error:NULL];
+    return rg ? [TTIOHDF5Provider adapterForGroup:rg] : nil;
+}
+
+static BOOL m99RunAttrInt(NSString *path, NSString *name, int64_t *out)
+{
+    TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:NULL];
+    if (!f) return NO;
+    id<TTIOStorageGroup> a = m99RunAdapter(f);
+    BOOL has = a != nil && [a hasAttributeNamed:name];
+    if (has && out) {
+        *out = [[a attributeValueForName:name error:NULL] longLongValue];
+    }
+    [f close];
+    return has;
+}
+
+static BOOL m99StripRunAttr(NSString *path, NSString *name)
+{
+    TTIOHDF5File *f = [TTIOHDF5File openAtPath:path error:NULL];
+    if (!f) return NO;
+    id<TTIOStorageGroup> a = m99RunAdapter(f);
+    BOOL ok = a != nil && [a deleteAttributeNamed:name error:NULL];
+    [f close];
+    return ok;
+}
+
+// Reads of the restored file decode to the plaintext the run was
+// written with (sequences, qualities, names; first/middle/last).
+static BOOL m99ReadsDecode(NSString *path, TTIOWrittenGenomicRun *run)
+{
+    NSError *err = nil;
+    TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+    if (!f) return NO;
+    id<TTIOStorageGroup> a = m99RunAdapter(f);
+    TTIOGenomicRun *rd = a
+        ? [TTIOGenomicRun openFromGroup:a name:@"run" error:&err] : nil;
+    BOOL ok = rd != nil;
+    if (ok) {
+        NSUInteger n = run.readCount;
+        const uint64_t *offs = (const uint64_t *)run.offsetsData.bytes;
+        const uint32_t *lens = (const uint32_t *)run.lengthsData.bytes;
+        const uint8_t *seqAll = (const uint8_t *)run.sequencesData.bytes;
+        const uint8_t *qualAll = (const uint8_t *)run.qualitiesData.bytes;
+        NSUInteger picks[3] = {0, n / 2, n - 1};
+        for (int k = 0; k < 3 && ok; k++) {
+            NSUInteger i = picks[k];
+            TTIOAlignedRead *r = [rd readAtIndex:i error:&err];
+            if (!r) { ok = NO; break; }
+            NSData *wantSeq = [NSData dataWithBytes:seqAll + offs[i]
+                                             length:lens[i]];
+            NSData *wantQual = [NSData dataWithBytes:qualAll + offs[i]
+                                              length:lens[i]];
+            ok = [[r.sequence dataUsingEncoding:NSASCIIStringEncoding]
+                     isEqualToData:wantSeq]
+                && [r.qualities isEqualToData:wantQual]
+                && [r.readName isEqualToString:run.readNames[i]];
+        }
+    }
+    [f close];
+    return ok;
+}
+
+// Offsets in blocks/index are cumulative sums of the lengths and
+// cover the whole channel blob, per channel.
+static BOOL m99IndexConsistent(NSString *path)
+{
+    TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:NULL];
+    if (!f) return NO;
+    id<TTIOStorageGroup> a = m99RunAdapter(f);
+    NSArray *rows = [[[a openGroupNamed:@"blocks" error:NULL]
+        openDatasetNamed:@"index" error:NULL] readRows:NULL];
+    id<TTIOStorageGroup> sig =
+        [a openGroupNamed:@"signal_channels" error:NULL];
+    BOOL ok = rows != nil && sig != nil;
+    for (NSString *ch in @[@"sequences", @"qualities"]) {
+        if (!ok) break;
+        NSData *blob = [ch isEqualToString:@"sequences"]
+            ? [[[sig openGroupNamed:@"sequences" error:NULL]
+                openDatasetNamed:@"data" error:NULL] readAll:NULL]
+            : [[sig openDatasetNamed:ch error:NULL] readAll:NULL];
+        uint64_t cum = 0;
+        for (NSDictionary *r in rows) {
+            if ([r[[ch stringByAppendingString:@"_off"]]
+                    unsignedLongLongValue] != cum) { ok = NO; break; }
+            cum += [r[[ch stringByAppendingString:@"_len"]]
+                       unsignedLongLongValue];
+        }
+        ok = ok && blob != nil && cum == (uint64_t)blob.length;
+    }
+    [f close];
+    return ok;
+}
+
+// The writer persists non-default policy; restore honours it, so the
+// round trip stays byte-identical for non-default policy too.
+static void m99PolicyRoundTrip(NSString *tag,
+                               TTIOWrittenGenomicRun *runPolicy,
+                               TTIOWrittenGenomicRun *runDefault,
+                               NSString *attrName,
+                               int64_t attrWant,
+                               NSUInteger blockReads,
+                               NSUInteger blobIdx)
+{
+    NSError *err = nil;
+    NSString *path = m99TmpPath(tag);
+    NSString *defPath =
+        m99TmpPath([tag stringByAppendingString:@"-default"]);
+    PASS(m99WriteBlocksFile(path, runPolicy, blockReads, &err),
+         "M99 %s: policy file written (%s)", tag.UTF8String,
+         [[err localizedDescription] UTF8String] ?: "");
+    PASS(m99WriteBlocksFile(defPath, runDefault, blockReads, &err),
+         "M99 %s: default file written (%s)", tag.UTF8String,
+         [[err localizedDescription] UTF8String] ?: "");
+    NSArray<NSData *> *before = m99Snapshot(path);
+    NSArray<NSData *> *defSnap = m99Snapshot(defPath);
+    PASS(before != nil && defSnap != nil
+             && ![before[blobIdx] isEqualToData:defSnap[blobIdx]],
+         "M99 %s: the policy shapes the blob, else this proves nothing",
+         tag.UTF8String);
+    int64_t got = 0;
+    PASS(m99RunAttrInt(path, attrName, &got) && got == attrWant,
+         "M99 %s: @%s persisted (%lld)", tag.UTF8String,
+         attrName.UTF8String, (long long)got);
+
+    PASS([TTIOPerAUFile encryptFilePath:path key:m99Key()
+                          encryptHeaders:NO providerName:nil error:&err],
+         "M99 %s: encrypt (%s)", tag.UTF8String,
+         [[err localizedDescription] UTF8String] ?: "");
+    PASS([TTIOPerAUFile decryptFilePathInPlace:path key:m99Key()
+                                  providerName:nil error:&err],
+         "M99 %s: decrypt in place (%s)", tag.UTF8String,
+         [[err localizedDescription] UTF8String] ?: "");
+    NSArray<NSData *> *after = m99Snapshot(path);
+    PASS(before != nil && after != nil
+             && [after[0] isEqualToData:before[0]]
+             && [after[1] isEqualToData:before[1]]
+             && [after[2] isEqualToData:before[2]],
+         "M99 %s: round trip byte-identical under the policy",
+         tag.UTF8String);
+    m99Rm(defPath);
+    m99Rm(path);
+}
+
+// The persisted policy attr is stripped, so restore re-encodes with
+// the default policy, the blob lengths differ, and the fallback
+// rewrites the block index; the file stays readable.
+static void m99FallbackRoundTrip(NSString *tag,
+                                 TTIOWrittenGenomicRun *run,
+                                 NSString *attrName,
+                                 NSUInteger blockReads)
+{
+    NSError *err = nil;
+    NSString *path = m99TmpPath(tag);
+    PASS(m99WriteBlocksFile(path, run, blockReads, &err),
+         "M99 %s: file written (%s)", tag.UTF8String,
+         [[err localizedDescription] UTF8String] ?: "");
+    PASS(m99StripRunAttr(path, attrName),
+         "M99 %s: @%s stripped", tag.UTF8String, attrName.UTF8String);
+    NSArray<NSData *> *before = m99Snapshot(path);
+    PASS(before != nil, "M99 %s: pre-encrypt snapshot", tag.UTF8String);
+
+    PASS([TTIOPerAUFile encryptFilePath:path key:m99Key()
+                          encryptHeaders:NO providerName:nil error:&err],
+         "M99 %s: encrypt (%s)", tag.UTF8String,
+         [[err localizedDescription] UTF8String] ?: "");
+    PASS([TTIOPerAUFile decryptFilePathInPlace:path key:m99Key()
+                                  providerName:nil error:&err],
+         "M99 %s: decrypt in place succeeds (%s)", tag.UTF8String,
+         [[err localizedDescription] UTF8String] ?: "");
+
+    NSArray<NSData *> *after = m99Snapshot(path);
+    PASS(before != nil && after != nil
+             && ![after[0] isEqualToData:before[0]],
+         "M99 %s: the fallback rewrote the block index, else this "
+         "exercised the normal path", tag.UTF8String);
+    PASS(m99IndexConsistent(path),
+         "M99 %s: rewritten index covers the blobs", tag.UTF8String);
+    PASS(m99ReadsDecode(path, run),
+         "M99 %s: restored reads decode identically", tag.UTF8String);
+    m99Rm(path);
+}
+
+static void m99DefaultPolicyNoAttrs(void)
+{
+    NSError *err = nil;
+    NSString *path = m99TmpPath(@"noattrs");
+    PASS(m99WriteBlocksFile(path, m99MakeRun(300, 5, 0, NO), 100, &err),
+         "M99 noattrs: file written (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+    PASS(!m99RunAttrInt(path, @"ref_diff_slice_bytes", NULL)
+             && !m99RunAttrInt(path, @"opt_disable_qualities_v5", NULL),
+         "M99 noattrs: default policy writes no policy attrs");
+    m99Rm(path);
+}
+
 void testM99BlocksV1PerAU(void)
 {
     m99EncryptShape();
@@ -450,4 +720,23 @@ void testM99BlocksV1PerAU(void)
     m99RoundTrip(@"zerolen", m99MakeRun(700, 9, 97, NO), 150);
     m99RoundTrip(@"xmates", m99MakeRun(600, 21, 0, YES), 150);
     m99RoundTrip(@"refdiff", m99MakeRefDiffRun(), 80);
+    m99DefaultPolicyNoAttrs();
+
+    TTIOWrittenGenomicRun *slicePolicy = m99MakeRefDiffRun();
+    slicePolicy.refDiffSliceBytes = 4096;
+    m99PolicyRoundTrip(@"slicepol", slicePolicy, m99MakeRefDiffRun(),
+                       @"ref_diff_slice_bytes", 4096, 80, 1);
+    TTIOWrittenGenomicRun *v5Policy = m99MakeCorrelatedRun();
+    v5Policy.optDisableQualitiesV5 = YES;
+    m99PolicyRoundTrip(@"v5pol", v5Policy, m99MakeCorrelatedRun(),
+                       @"opt_disable_qualities_v5", 1, 6000, 2);
+
+    TTIOWrittenGenomicRun *sliceFb = m99MakeRefDiffRun();
+    sliceFb.refDiffSliceBytes = 4096;
+    m99FallbackRoundTrip(@"slicefb", sliceFb,
+                         @"ref_diff_slice_bytes", 80);
+    TTIOWrittenGenomicRun *v5Fb = m99MakeCorrelatedRun();
+    v5Fb.optDisableQualitiesV5 = YES;
+    m99FallbackRoundTrip(@"v5fb", v5Fb,
+                         @"opt_disable_qualities_v5", 6000);
 }

@@ -322,6 +322,220 @@ class M99BlocksV1PerAUTest {
         roundTrip("refdiff", makeRefDiffRun(), 80);
     }
 
+    /** An aligned run over an embedded reference with a non-default
+     *  REF_DIFF slice budget. */
+    private static WrittenGenomicRun makeRefDiffRun(long sliceBytes) {
+        WrittenGenomicRun r = makeRefDiffRun();
+        return new WrittenGenomicRun(
+            r.acquisitionMode(), r.referenceUri(), r.platform(),
+            r.sampleName(), r.positions(), r.mappingQualities(),
+            r.flags(), r.sequences(), r.qualities(), r.offsets(),
+            r.lengths(), r.cigars(), r.readNames(),
+            r.mateChromosomes(), r.matePositions(),
+            r.templateLengths(), r.chromosomes(),
+            r.signalCompression(), r.signalCodecOverrides(),
+            r.provenanceRecords(), r.embedReference(),
+            r.referenceChromSeqs(), null, null,
+            false, false, null, sliceBytes);
+    }
+
+    /** Qualities conditioned on the base at each position, so the
+     *  sequence-conditioned FQZ V5 strategy wins when it is allowed
+     *  and the V4 family wins when it is not. Sized so each
+     *  6000-read block carries >= 1 MiB of qualities, the auto-tune
+     *  floor below which V5 is never raced
+     *  (TTIO_M94Z_V5_MIN_QUALITIES). */
+    private static WrittenGenomicRun makeCorrelatedRun(
+            boolean disableV5) {
+        int n = 12000, len = 200;
+        Lcg rng = new Lcg(17);
+        int total = n * len;
+        byte[] seq = new byte[total];
+        byte[] qual = new byte[total];
+        byte[] bases = "ACGT".getBytes(StandardCharsets.US_ASCII);
+        int[] baseQ = new int[256];
+        baseQ['A'] = 38; baseQ['C'] = 52; baseQ['G'] = 60; baseQ['T'] = 45;
+        for (int i = 0; i < total; i++) {
+            seq[i] = bases[rng.next() % 4];
+            qual[i] = (byte) (baseQ[seq[i]] + (rng.next() % 3));
+        }
+        long[] positions = new long[n];
+        byte[] mapqs = new byte[n];
+        int[] flags = new int[n];
+        long[] offsets = new long[n];
+        int[] lengths = new int[n];
+        long[] matePos = new long[n];
+        int[] tlens = new int[n];
+        List<String> cigars = new ArrayList<>(n);
+        List<String> names = new ArrayList<>(n);
+        List<String> mateChroms = new ArrayList<>(n);
+        List<String> chroms = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            positions[i] = (long) i * 40;
+            mapqs[i] = 60;
+            offsets[i] = (long) i * len;
+            lengths[i] = len;
+            matePos[i] = -1;
+            cigars.add("200M");
+            names.add(String.format("m99c%06d", i));
+            mateChroms.add("");
+            chroms.add("chr1");
+        }
+        return new WrittenGenomicRun(
+            AcquisitionMode.GENOMIC_WGS, "", "ILLUMINA", "M99",
+            positions, mapqs, flags, seq, qual, offsets, lengths,
+            cigars, names, mateChroms, matePos, tlens, chroms,
+            Compression.ZLIB, Map.of(), List.of(), false, null, null,
+            null, disableV5, false, null, 0);
+    }
+
+    private static Long runAttr(String path, String name) {
+        try (StorageProvider sp = ProviderRegistry.open(path,
+                StorageProvider.Mode.READ, "hdf5");
+             StorageGroup root = sp.rootGroup();
+             StorageGroup study = root.openGroup("study");
+             StorageGroup gRuns = study.openGroup("genomic_runs");
+             StorageGroup rg = gRuns.openGroup("run")) {
+            if (!rg.hasAttribute(name)) return null;
+            Object v = rg.getAttribute(name);
+            return v instanceof Number num ? num.longValue() : null;
+        }
+    }
+
+    private static void stripRunAttr(String path, String name) {
+        try (StorageProvider sp = ProviderRegistry.open(path,
+                StorageProvider.Mode.READ_WRITE, "hdf5");
+             StorageGroup root = sp.rootGroup();
+             StorageGroup study = root.openGroup("study");
+             StorageGroup gRuns = study.openGroup("genomic_runs");
+             StorageGroup rg = gRuns.openGroup("run")) {
+            rg.deleteAttribute(name);
+        }
+    }
+
+    private void assertReadsDecode(String tag, String path,
+                                   WrittenGenomicRun run) {
+        try (StorageProvider sp = ProviderRegistry.open(path,
+                StorageProvider.Mode.READ, "hdf5");
+             StorageGroup root = sp.rootGroup();
+             StorageGroup study = root.openGroup("study");
+             StorageGroup gRuns = study.openGroup("genomic_runs");
+             StorageGroup rg = gRuns.openGroup("run")) {
+            GenomicRun rd = GenomicRun.readFrom(rg, "run");
+            int n = run.readCount();
+            for (int i : new int[]{0, n / 2, n - 1}) {
+                AlignedRead r = rd.readAt(i);
+                int o = (int) run.offsets()[i];
+                int l = run.lengths()[i];
+                assertEquals(new String(run.sequences(), o, l,
+                        StandardCharsets.US_ASCII), r.sequence(),
+                    tag + ": restored read " + i + " sequence");
+                assertArrayEquals(
+                    Arrays.copyOfRange(run.qualities(), o, o + l),
+                    r.qualities(),
+                    tag + ": restored read " + i + " qualities");
+                assertEquals(run.readNames().get(i), r.readName());
+            }
+        }
+    }
+
+    @Test
+    void defaultPolicyWritesNoAttrs() {
+        String path = writeBlocksFile("noattrs.tio",
+            makeRun(300, 5, 0, false), 100);
+        assertNull(runAttr(path, "ref_diff_slice_bytes"));
+        assertNull(runAttr(path, "opt_disable_qualities_v5"));
+    }
+
+    /** The writer persists non-default policy; restore honours it, so
+     *  the round trip stays byte-identical for non-default policy. */
+    private void policyRoundTrip(String tag, WrittenGenomicRun policy,
+                                 WrittenGenomicRun dflt, String attr,
+                                 long attrWant, int blockReads,
+                                 boolean compareQual) {
+        String path = writeBlocksFile(tag + ".tio", policy, blockReads);
+        String defPath = writeBlocksFile(tag + "-default.tio", dflt,
+                                         blockReads);
+        Snapshot before = snapshot(path);
+        Snapshot defSnap = snapshot(defPath);
+        assertFalse(Arrays.equals(
+                compareQual ? before.qualBlob() : before.seqBlob(),
+                compareQual ? defSnap.qualBlob() : defSnap.seqBlob()),
+            tag + ": the policy shapes the blob, else this proves "
+            + "nothing");
+        assertEquals(attrWant, runAttr(path, attr),
+            tag + ": @" + attr + " persisted");
+
+        PerAUFile.encryptFile(path, key(), false, "hdf5");
+        PerAUFile.decryptFileInPlace(path, key(), "hdf5");
+
+        Snapshot after = snapshot(path);
+        assertEquals(before.index(), after.index(),
+            tag + ": block index byte-identical");
+        assertArrayEquals(before.seqBlob(), after.seqBlob(),
+            tag + ": sequences blob byte-identical");
+        assertArrayEquals(before.qualBlob(), after.qualBlob(),
+            tag + ": qualities blob byte-identical");
+    }
+
+    @Test
+    void refDiffSliceBytesPersistedAndHonoured() {
+        policyRoundTrip("slicepol", makeRefDiffRun(4096),
+            makeRefDiffRun(), "ref_diff_slice_bytes", 4096, 80, false);
+    }
+
+    @Test
+    void disableQualitiesV5PersistedAndHonoured() {
+        policyRoundTrip("v5pol", makeCorrelatedRun(true),
+            makeCorrelatedRun(false), "opt_disable_qualities_v5", 1,
+            6000, true);
+    }
+
+    /** The persisted policy attr is stripped, so restore re-encodes
+     *  with the default policy, the blob lengths differ, and the
+     *  fallback rewrites the block index; the file stays readable. */
+    private void fallbackRoundTrip(String tag, WrittenGenomicRun run,
+                                   String attr, int blockReads) {
+        String path = writeBlocksFile(tag + ".tio", run, blockReads);
+        stripRunAttr(path, attr);
+        Snapshot before = snapshot(path);
+
+        PerAUFile.encryptFile(path, key(), false, "hdf5");
+        PerAUFile.decryptFileInPlace(path, key(), "hdf5");
+
+        Snapshot after = snapshot(path);
+        assertNotEquals(before.index(), after.index(),
+            tag + ": the fallback rewrote the block index, else this "
+            + "exercised the normal path");
+        for (String ch : List.of("sequences", "qualities")) {
+            long cum = 0;
+            for (Map<String, Object> row : after.index()) {
+                assertEquals(cum,
+                    ((Number) row.get(ch + "_off")).longValue(),
+                    tag + ": " + ch + " offsets are the cumulative "
+                    + "sum of the rewritten lengths");
+                cum += ((Number) row.get(ch + "_len")).longValue();
+            }
+            long blobLen = ch.equals("sequences")
+                ? after.seqBlob().length : after.qualBlob().length;
+            assertEquals(blobLen, cum,
+                tag + ": " + ch + " index covers the rewritten blob");
+        }
+        assertReadsDecode(tag, path, run);
+    }
+
+    @Test
+    void fallbackRefDiffSliceBytes() {
+        fallbackRoundTrip("slicefb", makeRefDiffRun(4096),
+            "ref_diff_slice_bytes", 80);
+    }
+
+    @Test
+    void fallbackDisableQualitiesV5() {
+        fallbackRoundTrip("v5fb", makeCorrelatedRun(true),
+            "opt_disable_qualities_v5", 6000);
+    }
+
     /** The v1.0 encrypted transport stream does not carry the
      *  blocks_v1 sidecars; the sender must refuse. */
     @Test
