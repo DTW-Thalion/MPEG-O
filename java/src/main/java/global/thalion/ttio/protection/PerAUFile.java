@@ -1224,6 +1224,56 @@ public final class PerAUFile {
         return map;
     }
 
+    /** {@code {chromosome: bytes}} for re-encoding a run's REF_DIFF
+     *  blocks. With the {@code @reference_md5s} run attribute the
+     *  reference is rebuilt through the resolver (embedded or
+     *  {@code REF_PATH}); older files without the attribute fall back
+     *  to the embedded-directory walk. Null when neither works. */
+    private static Map<String, byte[]> blocksV1ReferenceSeqs(
+            StorageGroup runGroup, StorageGroup study, String uri) {
+        String raw = null;
+        if (runGroup.hasAttribute("reference_md5s")) {
+            Object v = runGroup.getAttribute("reference_md5s");
+            raw = v == null ? null
+                : v instanceof byte[] b
+                    ? new String(b, java.nio.charset.StandardCharsets.UTF_8)
+                    : v.toString();
+        }
+        if (raw != null && !raw.isEmpty()) {
+            Map<String, String> md5s;
+            try {
+                md5s = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readValue(raw,
+                        new com.fasterxml.jackson.core.type
+                            .TypeReference<Map<String, String>>() {});
+            } catch (com.fasterxml.jackson.core.JacksonException e) {
+                throw new IllegalStateException(
+                    "per-AU blocks_v1: run attribute reference_md5s "
+                    + "is not a JSON object of chromosome to md5 hex: "
+                    + raw, e);
+            }
+            global.thalion.ttio.hdf5.Hdf5Group h5g =
+                global.thalion.ttio.providers.Hdf5Provider
+                    .tryUnwrapHdf5Group(runGroup);
+            if (h5g == null) return null;
+            var resolver = new global.thalion.ttio.codecs
+                .ReferenceResolver(h5g.owningFile());
+            Map<String, byte[]> out = new LinkedHashMap<>();
+            for (Map.Entry<String, String> e : md5s.entrySet()) {
+                byte[] md5 = new byte[16];
+                String hex = e.getValue();
+                for (int i = 0; i < 16; i++) {
+                    md5[i] = (byte) Integer.parseInt(
+                        hex.substring(i * 2, i * 2 + 2), 16);
+                }
+                out.put(e.getKey(),
+                        resolver.resolve(uri, md5, e.getKey()));
+            }
+            return out;
+        }
+        return embeddedReferenceSeqs(study, uri);
+    }
+
     private record BlockRun(WrittenGenomicRun run, byte[] seq, byte[] qual) {}
 
     /** Collect reads {@code [indexBase, indexBase+nn)} from an open
@@ -1272,13 +1322,14 @@ public final class PerAUFile {
         Map<String, byte[]> refSeqs = null;
         Map<String, Compression> overrides = new LinkedHashMap<>();
         if (seqCodec == Compression.REF_DIFF_V2.ordinal()) {
-            refSeqs = embeddedReferenceSeqs(study, refUri);
+            refSeqs = blocksV1ReferenceSeqs(runGroup, study, refUri);
             if (refSeqs == null) {
                 throw new IllegalStateException(
                     "per-AU blocks_v1: block " + b + " codes sequences "
                     + "with REF_DIFF_V2 but reference '" + refUri
-                    + "' is not embedded in /study/references; restoring "
-                    + "the blob needs the reference bytes");
+                    + "' is not embedded in /study/references and not "
+                    + "resolvable via REF_PATH; restoring the blob "
+                    + "needs the reference bytes");
             }
         } else if (seqCodec != 0) {
             overrides.put("sequences", Compression.values()[seqCodec]);

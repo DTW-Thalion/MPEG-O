@@ -333,7 +333,9 @@ static void m99RoundTrip(NSString *tag, TTIOWrittenGenomicRun *run,
 
 // An aligned run over an embedded reference: sequences go through
 // REF_DIFF_V2 and restore must re-encode against the reference.
-static TTIOWrittenGenomicRun *m99MakeRefDiffRun(void)
+// With twoChroms the reads split across chr1/chr2 (same bytes), so
+// the reference-set md5 differs from any per-chromosome md5.
+static TTIOWrittenGenomicRun *m99MakeRefDiffRunEx(BOOL twoChroms)
 {
     NSUInteger n = 300, L = 120;
     uint32_t s = 33;
@@ -382,7 +384,7 @@ static TTIOWrittenGenomicRun *m99MakeRefDiffRun(void)
         [cigars addObject:@"120M"];
         [names addObject:[NSString stringWithFormat:@"rd%lu", (unsigned long)i]];
         [mateChroms addObject:@""];
-        [chroms addObject:@"chr1"];
+        [chroms addObject:(twoChroms && i >= n / 2) ? @"chr2" : @"chr1"];
     }
     TTIOWrittenGenomicRun *run = [([[TTIOWrittenGenomicRun alloc]
         initWithAcquisitionMode:(TTIOAcquisitionMode)7
@@ -404,9 +406,16 @@ static TTIOWrittenGenomicRun *m99MakeRefDiffRun(void)
                     chromosomes:chroms
               signalCompression:TTIOCompressionZlib])
         copyWithOptLegacyWholeChannel:NO];
-    run.referenceChromSeqs = @{ @"chr1": ref };
+    run.referenceChromSeqs = twoChroms
+        ? @{ @"chr1": ref, @"chr2": ref }
+        : @{ @"chr1": ref };
     run.embedReference = YES;
     return run;
+}
+
+static TTIOWrittenGenomicRun *m99MakeRefDiffRun(void)
+{
+    return m99MakeRefDiffRunEx(NO);
 }
 
 // The v1.0 encrypted transport stream does not carry the blocks_v1
@@ -699,6 +708,80 @@ static void m99FallbackRoundTrip(NSString *tag,
     m99Rm(path);
 }
 
+// A REF_DIFF run written with embedReference:NO restores through the
+// @reference_md5s attr and a REF_PATH FASTA.
+static void m99RefPathRestore(void)
+{
+    NSError *err = nil;
+    NSString *path = m99TmpPath(@"refpath");
+    TTIOWrittenGenomicRun *run = m99MakeRefDiffRunEx(YES);
+    run.embedReference = NO;
+    PASS(m99WriteBlocksFile(path, run, 80, &err),
+         "M99 refpath: unembedded file written (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+
+    TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+    TTIOHDF5Group *studyG = [f.rootGroup openGroupNamed:@"study"
+                                                  error:NULL];
+    id<TTIOStorageGroup> study = [TTIOHDF5Provider adapterForGroup:studyG];
+    PASS(![study hasChildNamed:@"references"],
+         "M99 refpath: the reference is not embedded, else this "
+         "proves nothing");
+    id<TTIOStorageGroup> a = m99RunAdapter(f);
+    NSString *md5s = [[a attributeValueForName:@"reference_md5s"
+                                         error:NULL] description];
+    PASS(md5s != nil
+             && [md5s rangeOfString:@"\"chr1\""].location != NSNotFound
+             && [md5s rangeOfString:@"\"chr2\""].location != NSNotFound,
+         "M99 refpath: @reference_md5s carries both chromosomes (%s)",
+         md5s.UTF8String ?: "");
+    [f close];
+
+    // Without a resolvable reference the encrypt refuses.
+    unsetenv("REF_PATH");
+    err = nil;
+    PASS(![TTIOPerAUFile encryptFilePath:path key:m99Key()
+                           encryptHeaders:NO providerName:nil error:&err],
+         "M99 refpath: encrypt refuses without REF_PATH");
+
+    // With REF_PATH at a FASTA of the reference the round trip is
+    // byte-identical.
+    NSString *fasta = [NSTemporaryDirectory()
+        stringByAppendingPathComponent:
+            [NSString stringWithFormat:@"ttio-m99-ref-%d.fa", (int)getpid()]];
+    NSData *ref = run.referenceChromSeqs[@"chr1"];
+    NSMutableData *fa = [NSMutableData data];
+    [fa appendData:[@">chr1\n" dataUsingEncoding:NSASCIIStringEncoding]];
+    [fa appendData:ref];
+    [fa appendData:[@"\n>chr2\n" dataUsingEncoding:NSASCIIStringEncoding]];
+    [fa appendData:ref];
+    [fa appendData:[@"\n" dataUsingEncoding:NSASCIIStringEncoding]];
+    PASS([fa writeToFile:fasta atomically:YES],
+         "M99 refpath: FASTA written");
+    setenv("REF_PATH", fasta.UTF8String, 1);
+
+    NSArray<NSData *> *before = m99Snapshot(path);
+    PASS(before != nil, "M99 refpath: pre-encrypt snapshot");
+    err = nil;
+    PASS([TTIOPerAUFile encryptFilePath:path key:m99Key()
+                          encryptHeaders:NO providerName:nil error:&err],
+         "M99 refpath: encrypt via REF_PATH (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+    PASS([TTIOPerAUFile decryptFilePathInPlace:path key:m99Key()
+                                  providerName:nil error:&err],
+         "M99 refpath: decrypt via REF_PATH (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+    NSArray<NSData *> *after = m99Snapshot(path);
+    PASS(before != nil && after != nil
+             && [after[0] isEqualToData:before[0]]
+             && [after[1] isEqualToData:before[1]]
+             && [after[2] isEqualToData:before[2]],
+         "M99 refpath: round trip byte-identical via REF_PATH");
+    unsetenv("REF_PATH");
+    m99Rm(fasta);
+    m99Rm(path);
+}
+
 static void m99DefaultPolicyNoAttrs(void)
 {
     NSError *err = nil;
@@ -721,6 +804,7 @@ void testM99BlocksV1PerAU(void)
     m99RoundTrip(@"xmates", m99MakeRun(600, 21, 0, YES), 150);
     m99RoundTrip(@"refdiff", m99MakeRefDiffRun(), 80);
     m99DefaultPolicyNoAttrs();
+    m99RefPathRestore();
 
     TTIOWrittenGenomicRun *slicePolicy = m99MakeRefDiffRun();
     slicePolicy.refDiffSliceBytes = 4096;

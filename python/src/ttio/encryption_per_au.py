@@ -378,6 +378,23 @@ def _embedded_reference_seqs(references_group, uri: str):
     }
 
 
+def _blocks_v1_reference_seqs(run_group, references_group, uri: str):
+    """``{chromosome: bytes}`` for re-encoding a run's REF_DIFF
+    blocks. With the ``@reference_md5s`` run attribute the reference
+    is rebuilt through :class:`ReferenceResolver` (embedded or
+    ``REF_PATH``); older files without the attribute fall back to the
+    embedded-directory walk. Returns None when neither works."""
+    raw = _get_str_attr(run_group, "reference_md5s")
+    if raw:
+        import json
+        from .genomic.reference_resolver import ReferenceResolver
+        md5s = json.loads(raw)
+        resolver = ReferenceResolver(references_group)
+        return {c: resolver.resolve(uri, bytes.fromhex(m), c)
+                for c, m in md5s.items()}
+    return _embedded_reference_seqs(references_group, uri)
+
+
 def _blocks_v1_block_run(run_group, table, b: int, references_group, *,
                           decrypted: dict | None = None):
     """Reconstruct block ``b`` as a per-block ``WrittenGenomicRun``.
@@ -429,13 +446,14 @@ def _blocks_v1_block_run(run_group, table, b: int, references_group, *,
     ref_seqs = None
     overrides: dict = {}
     if seq_codec == int(Compression.REF_DIFF_V2):
-        ref_seqs = _embedded_reference_seqs(references_group, ref_uri)
+        ref_seqs = _blocks_v1_reference_seqs(
+            run_group, references_group, ref_uri)
         if ref_seqs is None:
             raise ValueError(
                 f"per-AU blocks_v1: block {b} codes sequences with "
                 f"REF_DIFF_V2 but reference {ref_uri!r} is not embedded "
-                "in /study/references; restoring the blob needs the "
-                "reference bytes")
+                "in /study/references and not resolvable via REF_PATH; "
+                "restoring the blob needs the reference bytes")
     elif seq_codec:
         overrides["sequences"] = Compression(seq_codec)
     if qual_codec:

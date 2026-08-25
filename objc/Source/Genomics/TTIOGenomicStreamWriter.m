@@ -18,8 +18,10 @@
 #import "Dataset/TTIOCompoundIO.h"
 #import "Codecs/TTIOFqzcompNx16Z.h"
 #import "Codecs/TTIOQuality.h"
+#import "Genomics/TTIOLazyReference.h"
 #import <pthread.h>
 #include <string.h>
+#include <openssl/md5.h>  // reference-set digest for @reference_md5s
 
 static NSString *const kLayout = @"blocks_v1";
 static const NSUInteger kDefaultBlockReads = 1000000;
@@ -673,6 +675,46 @@ static unsigned long long ppEstimateBlockBytes(TTIOWrittenGenomicRun *b)
     if (_opt.optDisableQualitiesV5
         && ![run setAttributeValue:@((int64_t)1)
                            forName:@"opt_disable_qualities_v5" error:error]) return NO;
+    if (_opt.referenceChromSeqs != nil) {
+        /* The chromosome set and the reference-set digest (the md5
+         * the REF_DIFF blob headers carry and the resolver verifies),
+         * so a restore can rebuild the reference from
+         * /study/references or REF_PATH (format-spec 9.1.1). */
+        NSData *md5 = _referenceMD5;
+        if (md5 == nil) {
+            if ([_opt.referenceChromSeqs
+                    isKindOfClass:[TTIOLazyReference class]]) {
+                md5 = [(TTIOLazyReference *)_opt.referenceChromSeqs setMD5];
+            } else {
+                NSArray *sortedNames = [[_opt.referenceChromSeqs allKeys]
+                    sortedArrayUsingSelector:@selector(compare:)];
+                uint8_t digest[16];
+                MD5_CTX c; MD5_Init(&c);
+                for (NSString *nm in sortedNames) {
+                    NSData *sq = _opt.referenceChromSeqs[nm];
+                    MD5_Update(&c, sq.bytes, sq.length);
+                }
+                MD5_Final(digest, &c);
+                md5 = [NSData dataWithBytes:digest length:16];
+            }
+            _referenceMD5 = md5;
+        }
+        NSMutableString *hex = [NSMutableString stringWithCapacity:32];
+        const uint8_t *mb = md5.bytes;
+        for (NSUInteger i = 0; i < md5.length; i++) {
+            [hex appendFormat:@"%02x", mb[i]];
+        }
+        NSArray *names = [[_opt.referenceChromSeqs allKeys]
+            sortedArrayUsingSelector:@selector(compare:)];
+        NSMutableString *jsonStr = [NSMutableString stringWithString:@"{"];
+        for (NSUInteger i = 0; i < names.count; i++) {
+            if (i) [jsonStr appendString:@","];
+            [jsonStr appendFormat:@"\"%@\":\"%@\"", names[i], hex];
+        }
+        [jsonStr appendString:@"}"];
+        if (![run setAttributeValue:jsonStr
+                            forName:@"reference_md5s" error:error]) return NO;
+    }
     id<TTIOStorageGroup> blocks = [run createGroupNamed:@"blocks" error:error];
     if (!blocks) return NO;
     _indexDs = [blocks createCompoundDatasetNamed:@"index" fields:[[self class] indexFields]

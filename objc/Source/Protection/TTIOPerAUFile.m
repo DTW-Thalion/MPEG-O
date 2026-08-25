@@ -35,6 +35,7 @@
 #import "Genomics/TTIOGenomicStreamWriter.h"  // indexFields for the restore fallback
 #import "Genomics/TTIOPackedReference.h"
 #import "Codecs/TTIOFqzcompNx16Z.h"
+#import "Codecs/TTIOReferenceResolver.h"  // @reference_md5s restore path
 #import "Dataset/TTIOSpectralDataset+GenomicWrite.h"
 
 #include <string.h>
@@ -700,6 +701,64 @@ ttioBlocksV1ChromMap(id<TTIOStorageGroup> sig)
     return map;
 }
 
+// {chromosome: bytes} for re-encoding a run's REF_DIFF blocks. With
+// the @reference_md5s run attribute the reference is rebuilt through
+// TTIOReferenceResolver (embedded or REF_PATH); older files without
+// the attribute fall back to the embedded-directory walk. Returns
+// nil when neither works.
+static NSDictionary<NSString *, NSData *> *
+ttioBlocksV1ReferenceSeqs(id<TTIOStorageGroup> runGroup,
+                          id<TTIOStorageGroup> study,
+                          NSString *uri,
+                          NSError **error)
+{
+    NSString *raw = readStringAttr(runGroup, @"reference_md5s");
+    if (raw.length > 0) {
+        NSDictionary *md5s = [NSJSONSerialization
+            JSONObjectWithData:[raw dataUsingEncoding:NSUTF8StringEncoding]
+                       options:0
+                         error:error];
+        if (![md5s isKindOfClass:[NSDictionary class]]) return nil;
+        if (![runGroup respondsToSelector:@selector(unwrap)]) return nil;
+        TTIOHDF5Group *runG = [(id)runGroup performSelector:@selector(unwrap)];
+        hid_t fid = H5Iget_file_id([runG groupId]);
+        if (fid < 0) return nil;
+        TTIOHDF5Group *rootHDF5 = nil;
+        hid_t rootId = H5Gopen2(fid, "/", H5P_DEFAULT);
+        if (rootId >= 0) {
+            rootHDF5 = [[TTIOHDF5Group alloc] initWithGroupId:rootId
+                                                     retainer:nil];
+        }
+        H5Idec_ref(fid);
+        if (rootHDF5 == nil) return nil;
+        TTIOReferenceResolver *resolver = [[TTIOReferenceResolver alloc]
+            initWithRootGroup:rootHDF5 externalReferencePath:nil];
+        NSMutableDictionary *out =
+            [NSMutableDictionary dictionaryWithCapacity:md5s.count];
+        for (NSString *chrom in md5s) {
+            NSString *hex = md5s[chrom];
+            if (![hex isKindOfClass:[NSString class]]
+                || hex.length != 32) return nil;
+            uint8_t md5[16];
+            for (NSUInteger i = 0; i < 16; i++) {
+                unsigned v = 0;
+                if (sscanf([[hex substringWithRange:NSMakeRange(i * 2, 2)]
+                               UTF8String], "%02x", &v) != 1) return nil;
+                md5[i] = (uint8_t)v;
+            }
+            NSData *seq = [resolver
+                resolveURI:uri
+               expectedMD5:[NSData dataWithBytes:md5 length:16]
+                chromosome:chrom
+                     error:error];
+            if (!seq) return nil;
+            out[chrom] = seq;
+        }
+        return out;
+    }
+    return ttioEmbeddedReferenceSeqs(study, uri);
+}
+
 // Collect reads [indexBase, indexBase+nn) from an open reader into a
 // per-block TTIOWrittenGenomicRun; outSeq/outQual receive the block's
 // decoded plaintext channel bytes. The encrypt walker reads block b
@@ -767,13 +826,14 @@ ttioBlocksV1BlockRun(TTIOGenomicRun *rd,
     NSDictionary<NSString *, NSData *> *refSeqs = nil;
     NSMutableDictionary *overrides = [NSMutableDictionary dictionary];
     if (seqCodec == TTIOCompressionRefDiffV2) {
-        refSeqs = ttioEmbeddedReferenceSeqs(study, refUri);
+        refSeqs = ttioBlocksV1ReferenceSeqs(runGroup, study, refUri, error);
         if (refSeqs == nil) {
-            if (error) *error = makeErr(4,
+            if (error && *error == nil) *error = makeErr(4,
                 @"per-AU blocks_v1: block %lu codes sequences with "
                 @"REF_DIFF_V2 but reference '%@' is not embedded in "
-                @"/study/references; restoring the blob needs the "
-                @"reference bytes", (unsigned long)b, refUri);
+                @"/study/references and not resolvable via REF_PATH; "
+                @"restoring the blob needs the reference bytes",
+                (unsigned long)b, refUri);
             return nil;
         }
     } else if (seqCodec != 0) {

@@ -491,6 +491,123 @@ class M99BlocksV1PerAUTest {
             6000, true);
     }
 
+    /** A REF_DIFF run split across chr1/chr2 (same bytes), written
+     *  with embedReference=false: the reference-set md5 differs from
+     *  any per-chromosome md5, and the reference is only reachable
+     *  through {@code @reference_md5s} plus {@code REF_PATH}. */
+    private static WrittenGenomicRun makeUnembeddedRefDiffRun() {
+        WrittenGenomicRun r = makeRefDiffRun();
+        int n = r.readCount();
+        List<String> chroms = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            chroms.add(i < n / 2 ? "chr1" : "chr2");
+        }
+        Map<String, byte[]> refSeqs = new LinkedHashMap<>();
+        byte[] ref = r.referenceChromSeqs().get("chr1");
+        refSeqs.put("chr1", ref);
+        refSeqs.put("chr2", ref);
+        return new WrittenGenomicRun(
+            r.acquisitionMode(), r.referenceUri(), r.platform(),
+            r.sampleName(), r.positions(), r.mappingQualities(),
+            r.flags(), r.sequences(), r.qualities(), r.offsets(),
+            r.lengths(), r.cigars(), r.readNames(),
+            r.mateChromosomes(), r.matePositions(),
+            r.templateLengths(), chroms,
+            r.signalCompression(), r.signalCodecOverrides(),
+            r.provenanceRecords(), false, refSeqs, null, null,
+            false, false, null, 0);
+    }
+
+    @Test
+    void refPathRestoreRoundTrip() throws Exception {
+        WrittenGenomicRun run = makeUnembeddedRefDiffRun();
+        String path = writeBlocksFile("refpath.tio", run, 80);
+        try (StorageProvider sp = ProviderRegistry.open(path,
+                StorageProvider.Mode.READ, "hdf5");
+             StorageGroup root = sp.rootGroup();
+             StorageGroup study = root.openGroup("study")) {
+            assertFalse(study.hasChild("references"),
+                "the reference must not be embedded, or this test "
+                + "proves nothing");
+        }
+        try (StorageProvider sp = ProviderRegistry.open(path,
+                StorageProvider.Mode.READ, "hdf5");
+             StorageGroup root = sp.rootGroup();
+             StorageGroup study = root.openGroup("study");
+             StorageGroup gRuns = study.openGroup("genomic_runs");
+             StorageGroup rg = gRuns.openGroup("run")) {
+            Object v = rg.getAttribute("reference_md5s");
+            String raw = v instanceof byte[] b
+                ? new String(b, StandardCharsets.UTF_8) : v.toString();
+            assertTrue(raw.contains("\"chr1\"") && raw.contains("\"chr2\""),
+                "@reference_md5s carries both chromosomes: " + raw);
+        }
+
+        // With REF_PATH at a FASTA of the reference the round trip is
+        // byte-identical. REF_PATH cannot be set on a running JVM, so
+        // the encrypt and decrypt run in a forked JVM with the
+        // variable in its environment.
+        Path fasta = tempDir.resolve("ref.fa");
+        byte[] ref = run.referenceChromSeqs().get("chr1");
+        try (var out = java.nio.file.Files.newOutputStream(fasta)) {
+            out.write(">chr1\n".getBytes(StandardCharsets.US_ASCII));
+            out.write(ref);
+            out.write("\n>chr2\n".getBytes(StandardCharsets.US_ASCII));
+            out.write(ref);
+            out.write("\n".getBytes(StandardCharsets.US_ASCII));
+        }
+        Snapshot before = snapshot(path);
+        runWithRefPath(fasta.toString(), path, "encrypt");
+        runWithRefPath(fasta.toString(), path, "decrypt");
+        Snapshot after = snapshot(path);
+        assertEquals(before.index(), after.index(),
+            "block index byte-identical via REF_PATH");
+        assertArrayEquals(before.seqBlob(), after.seqBlob(),
+            "sequences blob byte-identical via REF_PATH");
+        assertArrayEquals(before.qualBlob(), after.qualBlob(),
+            "qualities blob byte-identical via REF_PATH");
+
+        // Without a resolvable reference the encrypt refuses. Last,
+        // because the aborted encrypt's reader handles keep the HDF5
+        // file lock until this JVM exits.
+        assertThrows(RuntimeException.class,
+            () -> PerAUFile.encryptFile(path, key(), false, "hdf5"),
+            "encrypt must refuse without REF_PATH");
+    }
+
+    /** Run this test class's {@link #main} in a forked JVM with
+     *  REF_PATH set, inheriting the classpath and library path. */
+    private static void runWithRefPath(String fasta, String path,
+                                       String op) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder(
+            System.getProperty("java.home") + "/bin/java",
+            "-cp", System.getProperty("java.class.path"),
+            "-Djava.library.path="
+                + System.getProperty("java.library.path", ""),
+            M99BlocksV1PerAUTest.class.getName(), op, path);
+        pb.environment().put("REF_PATH", fasta);
+        // The parent JVM's HDF5 keeps an advisory lock on files it
+        // has opened during this test run; the fork only ever opens
+        // this test's private file.
+        pb.environment().put("HDF5_USE_FILE_LOCKING", "FALSE");
+        pb.redirectErrorStream(true);
+        Process p = pb.start();
+        String outText = new String(p.getInputStream().readAllBytes(),
+                                    StandardCharsets.UTF_8);
+        int rc = p.waitFor();
+        assertEquals(0, rc, op + " in forked JVM with REF_PATH: "
+            + outText.substring(Math.max(0, outText.length() - 800)));
+    }
+
+    /** Forked-JVM entry point for {@link #refPathRestoreRoundTrip}. */
+    public static void main(String[] args) {
+        if ("encrypt".equals(args[0])) {
+            PerAUFile.encryptFile(args[1], key(), false, "hdf5");
+        } else {
+            PerAUFile.decryptFileInPlace(args[1], key(), "hdf5");
+        }
+    }
+
     /** The persisted policy attr is stripped, so restore re-encodes
      *  with the default policy, the blob lengths differ, and the
      *  fallback rewrites the block index; the file stays readable. */

@@ -67,14 +67,14 @@ def _stream_blocks_file(path, run, *, block_reads=200, **writer_kw):
                                   isa_investigation_id="i", runs={})
     ds = SpectralDataset.open(str(path), writable=True)
     n = len(run.lengths)
+    writer_kw.setdefault("embed_reference",
+                         run.reference_chrom_seqs is not None)
     w = GenomicStreamWriter(ds.study_group, "run",
                             acquisition_mode=run.acquisition_mode,
                             reference_uri=run.reference_uri,
                             platform=run.platform,
                             sample_name=run.sample_name,
                             reference_chrom_seqs=run.reference_chrom_seqs,
-                            embed_reference=(
-                                run.reference_chrom_seqs is not None),
                             block_reads=block_reads, **writer_kw)
     with ds, w:
         for s in range(0, n, 100):
@@ -309,6 +309,57 @@ class TestBlocksV1WriterPolicy:
         attrs = _blob_state(path)[3]
         assert "ref_diff_slice_bytes" not in attrs
         assert "opt_disable_qualities_v5" not in attrs
+
+
+class TestBlocksV1RefPathRestore:
+    """A REF_DIFF run written with embed_reference=False restores
+    through the @reference_md5s attr and a REF_PATH FASTA."""
+
+    def _external_ref_file(self, tmp_path, run):
+        fasta = tmp_path / "ref.fa"
+        with open(fasta, "wb") as f:
+            for c in sorted(run.reference_chrom_seqs):
+                f.write(b">" + c.encode() + b"\n")
+                f.write(bytes(run.reference_chrom_seqs[c]) + b"\n")
+        return fasta
+
+    def _unembedded_file(self, tmp_path):
+        run = make_written_genomic_run(
+            n_reads=300, read_len=120, with_reference=True,
+            chromosomes=(["chr1"] * 150) + (["chr2"] * 150))
+        path = _stream_blocks_file(tmp_path / "b.tio", run,
+                                   block_reads=80,
+                                   embed_reference=False)
+        with h5py.File(path, "r") as f:
+            assert "references" not in f["study"], (
+                "the reference must not be embedded, or this test "
+                "proves nothing")
+            import json
+            md5s = json.loads(f["study/genomic_runs/run"]
+                              .attrs["reference_md5s"])
+            assert sorted(md5s) == ["chr1", "chr2"]
+        return run, path
+
+    def test_round_trip_via_ref_path(self, tmp_path, monkeypatch):
+        run, path = self._unembedded_file(tmp_path)
+        monkeypatch.setenv("REF_PATH",
+                           str(self._external_ref_file(tmp_path, run)))
+        before = _blob_state(path)
+
+        encrypt_per_au(str(path), KEY)
+        decrypt_per_au_in_place(str(path), KEY)
+
+        after = _blob_state(path)
+        assert after[0] == before[0], "block index byte-identical"
+        assert after[1] == before[1], "sequences blob byte-identical"
+        assert after[2] == before[2], "qualities blob byte-identical"
+
+    def test_unresolvable_reference_refuses(self, tmp_path, monkeypatch):
+        _, path = self._unembedded_file(tmp_path)
+        monkeypatch.delenv("REF_PATH", raising=False)
+        with pytest.raises(Exception,
+                           match="not found|not resolvable|REF_PATH"):
+            encrypt_per_au(str(path), KEY)
 
 
 class TestBlocksV1RestoreFallback:
