@@ -25,6 +25,16 @@
 #import "ValueClasses/TTIOEnums.h"
 #import "Codecs/TTIOFloatDeltaZstd.h"  // codec id 17, Phase 2 MS default
 #import "Codecs/Registry/TTIOCodecRegistry.h"  // M98 assembly sequences
+#import "Genomics/TTIOBlockTable.h"            // M99 blocks_v1 walkers
+#import "Genomics/TTIOBlockView.h"
+#import "Genomics/TTIOGenomicBlocks.h"
+#import "Genomics/TTIOGenomicRun.h"
+#import "Genomics/TTIOAlignedRead.h"
+#import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Genomics/TTIOGenomicWriteContext.h"
+#import "Genomics/TTIOPackedReference.h"
+#import "Codecs/TTIOFqzcompNx16Z.h"
+#import "Dataset/TTIOSpectralDataset+GenomicWrite.h"
 
 #include <string.h>
 
@@ -635,6 +645,546 @@ static NSData *decryptChannelWithDispatch(
 }
 
 
+// ---------------------------------------------------------------- M99:
+// blocks_v1 per-AU walkers. The default genomic layout stores
+// codec-coded per-block blobs, so the walkers stream block by block:
+// decode one block, slice its reads, encrypt one AU per read with
+// GLOBAL AU numbering, append to extendable segments tables. Restore
+// re-encodes each block with the stream writer's machinery; because
+// writer policy the file does not persist would break that
+// reproducibility, ENCRYPT re-encodes and byte-compares every block
+// BEFORE deleting anything, and refuses the run when a blob is not
+// reproducible.
+
+static BOOL ttioIsBlocksV1(id<TTIOStorageGroup> runGroup)
+{
+    NSString *layout = readStringAttr(runGroup, @"layout");
+    return layout != nil && [layout isEqualToString:@"blocks_v1"];
+}
+
+// {chromosome: bytes} of an embedded reference; nil when absent.
+static NSDictionary<NSString *, NSData *> *
+ttioEmbeddedReferenceSeqs(id<TTIOStorageGroup> study, NSString *uri)
+{
+    if (uri.length == 0 || ![study hasChildNamed:@"references"]) return nil;
+    id<TTIOStorageGroup> refs = [study openGroupNamed:@"references" error:NULL];
+    if (!refs || ![refs hasChildNamed:uri]) return nil;
+    id<TTIOStorageGroup> ref = [refs openGroupNamed:uri error:NULL];
+    if (!ref || ![ref hasChildNamed:@"chromosomes"]) return nil;
+    id<TTIOStorageGroup> chroms = [ref openGroupNamed:@"chromosomes" error:NULL];
+    if (!chroms) return nil;
+    NSMutableDictionary *out = [NSMutableDictionary dictionary];
+    for (NSString *cname in [chroms childNames]) {
+        id<TTIOStorageGroup> cg = [chroms openGroupNamed:cname error:NULL];
+        NSData *seq = cg
+            ? [TTIOPackedReference readChromosomeBytes:cg error:NULL] : nil;
+        if (!seq) return nil;
+        out[cname] = seq;
+    }
+    return out;
+}
+
+// The run-wide chromosome-id map the writer accumulated: the
+// mate_info/chrom_names table dumped in row order (row index = id).
+static NSMutableDictionary<NSString *, NSNumber *> *
+ttioBlocksV1ChromMap(id<TTIOStorageGroup> sig)
+{
+    NSMutableDictionary *map = [NSMutableDictionary dictionary];
+    if ([sig hasChildNamed:@"mate_info"]) {
+        id<TTIOStorageGroup> mate = [sig openGroupNamed:@"mate_info" error:NULL];
+        NSArray<NSString *> *names = mate
+            ? [TTIOBlockView readNamesIn:mate named:@"chrom_names"] : @[];
+        for (NSUInteger i = 0; i < names.count; i++) map[names[i]] = @(i);
+    }
+    return map;
+}
+
+// Collect reads [indexBase, indexBase+nn) from an open reader into a
+// per-block TTIOWrittenGenomicRun; outSeq/outQual receive the block's
+// decoded plaintext channel bytes. The encrypt walker reads block b
+// through the run's own reader (indexBase = read_start[b]); the
+// decrypt walker reads a materialised one-block view (indexBase = 0).
+static TTIOWrittenGenomicRun *
+ttioBlocksV1BlockRun(TTIOGenomicRun *rd,
+                     id<TTIOStorageGroup> runGroup,
+                     id<TTIOStorageGroup> study,
+                     TTIOBlockTable *table,
+                     NSUInteger b,
+                     unsigned long long indexBase,
+                     NSData **outSeq,
+                     NSData **outQual,
+                     NSError **error)
+{
+    unsigned long long r0 = indexBase;
+    NSUInteger nn = [table nReadsAt:b];
+    NSMutableData *positions = [NSMutableData dataWithLength:nn * 8];
+    NSMutableData *mapqs = [NSMutableData dataWithLength:nn];
+    NSMutableData *flags = [NSMutableData dataWithLength:nn * 4];
+    NSMutableData *offsets = [NSMutableData dataWithLength:nn * 8];
+    NSMutableData *lengths = [NSMutableData dataWithLength:nn * 4];
+    NSMutableData *matePos = [NSMutableData dataWithLength:nn * 8];
+    NSMutableData *tlens = [NSMutableData dataWithLength:nn * 4];
+    int64_t  *posP  = positions.mutableBytes;
+    uint8_t  *mapqP = mapqs.mutableBytes;
+    uint32_t *flagP = flags.mutableBytes;
+    uint64_t *offP  = offsets.mutableBytes;
+    uint32_t *lenP  = lengths.mutableBytes;
+    int64_t  *mposP = matePos.mutableBytes;
+    int32_t  *tlenP = tlens.mutableBytes;
+    NSMutableArray *cigars = [NSMutableArray arrayWithCapacity:nn];
+    NSMutableArray *readNames = [NSMutableArray arrayWithCapacity:nn];
+    NSMutableArray *mateChroms = [NSMutableArray arrayWithCapacity:nn];
+    NSMutableArray *chroms = [NSMutableArray arrayWithCapacity:nn];
+    NSMutableData *seq = [NSMutableData data];
+    NSMutableData *qual = [NSMutableData data];
+    for (NSUInteger i = 0; i < nn; i++) {
+        @autoreleasepool {
+            TTIOAlignedRead *r =
+                [rd readAtIndex:(NSUInteger)(r0 + i) error:error];
+            if (!r) return nil;
+            offP[i] = (uint64_t)seq.length;
+            NSData *sBytes =
+                [r.sequence dataUsingEncoding:NSASCIIStringEncoding];
+            [seq appendData:sBytes ?: [NSData data]];
+            [qual appendData:r.qualities ?: [NSData data]];
+            lenP[i] = (uint32_t)(sBytes ? sBytes.length : 0);
+            posP[i] = r.position;
+            mapqP[i] = r.mappingQuality;
+            flagP[i] = r.flags;
+            mposP[i] = r.matePosition;
+            tlenP[i] = r.templateLength;
+            [cigars addObject:r.cigar ?: @""];
+            [readNames addObject:r.readName ?: @""];
+            [mateChroms addObject:r.mateChromosome ?: @""];
+            [chroms addObject:r.chromosome ?: @""];
+        }
+    }
+
+    NSString *refUri = readStringAttr(runGroup, @"reference_uri") ?: @"";
+    NSUInteger seqCodec = table.hasCodecs ? [table codecOf:@"sequences" at:b] : 0;
+    NSUInteger qualCodec = table.hasCodecs ? [table codecOf:@"qualities" at:b] : 0;
+    NSDictionary<NSString *, NSData *> *refSeqs = nil;
+    NSMutableDictionary *overrides = [NSMutableDictionary dictionary];
+    if (seqCodec == TTIOCompressionRefDiffV2) {
+        refSeqs = ttioEmbeddedReferenceSeqs(study, refUri);
+        if (refSeqs == nil) {
+            if (error) *error = makeErr(4,
+                @"per-AU blocks_v1: block %lu codes sequences with "
+                @"REF_DIFF_V2 but reference '%@' is not embedded in "
+                @"/study/references; restoring the blob needs the "
+                @"reference bytes", (unsigned long)b, refUri);
+            return nil;
+        }
+    } else if (seqCodec != 0) {
+        overrides[@"sequences"] = @(seqCodec);
+    }
+    if (qualCodec != 0) overrides[@"qualities"] = @(qualCodec);
+
+    TTIOWrittenGenomicRun *block = [[TTIOWrittenGenomicRun alloc]
+        initWithAcquisitionMode:(TTIOAcquisitionMode)readIntAttr(runGroup, @"acquisition_mode", 0)
+                   referenceUri:refUri
+                       platform:readStringAttr(runGroup, @"platform") ?: @""
+                     sampleName:readStringAttr(runGroup, @"sample_name") ?: @""
+                      positions:positions
+               mappingQualities:mapqs
+                          flags:flags
+                      sequences:seq
+                      qualities:qual
+                        offsets:offsets
+                        lengths:lengths
+                         cigars:cigars
+                      readNames:readNames
+                mateChromosomes:mateChroms
+                  matePositions:matePos
+                templateLengths:tlens
+                    chromosomes:chroms
+              signalCompression:TTIOCompressionZlib
+           signalCodecOverrides:overrides];
+    if (refSeqs != nil) block.referenceChromSeqs = refSeqs;
+    NSString *role = readStringAttr(runGroup, @"read_role");
+    if (role.length > 0) block.readRole = role;
+    if (outSeq) *outSeq = seq;
+    if (outQual) *outQual = qual;
+    return block;
+}
+
+// The stream writer's sticky qualities discipline: after the first
+// FQZCOMP_NX16_Z block, read the winning strategy back from the
+// encoded stream and pin it for the rest of the run.
+static NSInteger ttioBlocksV1DeriveQualHint(TTIOBlockBlobs *blobs,
+                                            NSInteger current)
+{
+    if (current != -1) return current;
+    if ([blobs.codecs[@"qualities"] unsignedIntegerValue]
+            != TTIOCompressionFqzcompNx16Z) return current;
+    NSInteger strat =
+        [TTIOFqzcompNx16Z strategyOfEncodedStream:blobs.blobs[@"qualities"]];
+    if (strat <= 0) return current;
+    return strat == 4 ? TTIOM94ZHintV4Auto : strat;
+}
+
+static BOOL ttioEncryptBlocksV1Run(id<TTIOStorageGroup> study,
+                                   id<TTIOStorageGroup> runGroup,
+                                   NSString *runName,
+                                   uint16_t datasetId,
+                                   NSData *key,
+                                   NSError **error)
+{
+    TTIOBlockTable *table = [TTIOBlockTable readFromRunGroup:runGroup
+                                                       error:error];
+    if (!table) return NO;
+    id<TTIOStorageGroup> sig =
+        [runGroup openGroupNamed:@"signal_channels" error:error];
+    if (!sig) return NO;
+    NSMutableArray<NSString *> *channels = [NSMutableArray array];
+    if ([sig hasChildNamed:@"sequences"]) [channels addObject:@"sequences"];
+    if ([sig hasChildNamed:@"qualities"]) [channels addObject:@"qualities"];
+    if (channels.count == 0) return YES;
+    if (![sig respondsToSelector:@selector(unwrap)]) {
+        if (error) *error = makeErr(3,
+            @"per-AU blocks_v1 requires the HDF5 provider");
+        return NO;
+    }
+    TTIOHDF5Group *hdf5Sig = [(id)sig performSelector:@selector(unwrap)];
+
+    NSMutableDictionary *blobDs = [NSMutableDictionary dictionary];
+    for (NSString *ch in channels) {
+        id<TTIOStorageDataset> ds;
+        if ([ch isEqualToString:@"sequences"]) {
+            id<TTIOStorageGroup> g = [sig openGroupNamed:@"sequences" error:error];
+            ds = g ? [g openDatasetNamed:@"data" error:error] : nil;
+        } else {
+            ds = [sig openDatasetNamed:ch error:error];
+        }
+        if (!ds) return NO;
+        blobDs[ch] = ds;
+    }
+
+    TTIOGenomicRun *rd = [TTIOGenomicRun openFromGroup:runGroup
+                                                  name:runName
+                                                 error:error];
+    if (!rd) return NO;
+
+    NSMutableDictionary *chromMap = ttioBlocksV1ChromMap(sig);
+    for (NSString *ch in channels) {
+        NSString *segName = [NSString stringWithFormat:@"%@_segments", ch];
+        if ([sig hasChildNamed:segName]
+            && ![sig deleteChildNamed:segName error:error]) return NO;
+        if (![TTIOCompoundIO createExtendableCompoundInGroup:hdf5Sig
+                                                        name:segName
+                                                      fields:channelSegmentsFields()
+                                                   chunkRows:1024
+                                                       error:error]) return NO;
+    }
+
+    BOOL ok = YES;
+    NSInteger qualHint = -1;
+    NSData *refMD5 = nil;
+    for (NSUInteger b = 0; ok && b < table.count; b++) {
+        @autoreleasepool {
+            NSData *seq = nil, *qual = nil;
+            TTIOWrittenGenomicRun *block = ttioBlocksV1BlockRun(
+                rd, runGroup, study, table, b,
+                [table readStartAt:b], &seq, &qual, error);
+            if (!block) { ok = NO; break; }
+            if (refMD5 == nil && block.referenceChromSeqs != nil) {
+                refMD5 = [TTIOSpectralDataset referenceMD5ForRun:block];
+            }
+            TTIOGenomicWriteContext *ctx = [TTIOGenomicWriteContext
+                contextWithChromNameToId:chromMap referenceMD5:refMD5];
+            ctx.qualStrategyHint = qualHint;
+            TTIOBlockBlobs *blobs = [TTIOGenomicBlocks encodeBlock:block
+                                                           context:ctx
+                                                             error:error];
+            if (!blobs) { ok = NO; break; }
+            qualHint = ttioBlocksV1DeriveQualHint(blobs, qualHint);
+
+            unsigned long long r0 = [table readStartAt:b];
+            NSUInteger nn = [table nReadsAt:b];
+            const uint64_t *localOff =
+                (const uint64_t *)block.offsetsData.bytes;
+            const uint32_t *localLen =
+                (const uint32_t *)block.lengthsData.bytes;
+            NSDictionary *plain = @{@"sequences": seq ?: [NSData data],
+                                    @"qualities": qual ?: [NSData data]};
+            for (NSString *ch in channels) {
+                unsigned long long off = [table offsetOf:ch at:b];
+                unsigned long long ln = [table lengthOf:ch at:b];
+                NSData *stored = ln > 0
+                    ? [blobDs[ch] readSliceAtOffset:(NSUInteger)off
+                                              count:(NSUInteger)ln
+                                              error:error]
+                    : [NSData data];
+                if (!stored) { ok = NO; break; }
+                NSData *reenc = blobs.blobs[ch] ?: [NSData data];
+                if (![reenc isEqualToData:stored]) {
+                    if (error) *error = makeErr(4,
+                        @"per-AU blocks_v1: block %lu channel '%@' does "
+                        @"not re-encode byte-identically, so a decrypt "
+                        @"could not restore this file. The run was "
+                        @"likely written with writer policy the file "
+                        @"does not persist (for example a non-default "
+                        @"ref_diff_slice_bytes); per-AU in-place "
+                        @"protection is unsupported for it.",
+                        (unsigned long)b, ch);
+                    ok = NO; break;
+                }
+                NSArray<TTIOChannelSegment *> *segs =
+                    [TTIOPerAUEncryption
+                        encryptChannelToSegments:plain[ch]
+                                          offsets:localOff
+                                          lengths:localLen
+                                         nSpectra:nn
+                                  bytesPerElement:1
+                                        datasetId:datasetId
+                                      channelName:ch
+                                              key:key
+                                           auBase:(uint32_t)r0
+                                       offsetBase:[table baseStartAt:b]
+                                            error:error];
+                if (!segs) { ok = NO; break; }
+                NSMutableArray *rows =
+                    [NSMutableArray arrayWithCapacity:segs.count];
+                for (TTIOChannelSegment *s in segs) {
+                    [rows addObject:@{@"offset": @((int64_t)s.offset),
+                                      @"length": @(s.length),
+                                      @"iv": s.iv,
+                                      @"tag": s.tag,
+                                      @"ciphertext": s.ciphertext}];
+                }
+                NSString *segName =
+                    [NSString stringWithFormat:@"%@_segments", ch];
+                if (![TTIOCompoundIO appendRows:rows
+                                         toGroup:hdf5Sig
+                                            name:segName
+                                          fields:channelSegmentsFields()
+                                           error:error]) { ok = NO; break; }
+            }
+        }
+    }
+    if (!ok) {
+        for (NSString *ch in channels) {
+            NSString *segName = [NSString stringWithFormat:@"%@_segments", ch];
+            [sig deleteChildNamed:segName error:NULL];
+        }
+        return NO;
+    }
+    for (NSString *ch in channels) {
+        if (![sig deleteChildNamed:ch error:error]) return NO;
+        if (![sig setAttributeValue:@"aes-256-gcm"
+                             forName:[NSString stringWithFormat:@"%@_algorithm", ch]
+                               error:error]) return NO;
+    }
+    return YES;
+}
+
+static BOOL ttioDecryptBlocksV1RunInPlace(id<TTIOStorageGroup> study,
+                                          id<TTIOStorageGroup> runGroup,
+                                          uint16_t datasetId,
+                                          NSData *key,
+                                          NSError **error)
+{
+    TTIOBlockTable *table = [TTIOBlockTable readFromRunGroup:runGroup
+                                                       error:error];
+    if (!table) return NO;
+    id<TTIOStorageGroup> sig =
+        [runGroup openGroupNamed:@"signal_channels" error:error];
+    if (!sig) return NO;
+    NSMutableArray<NSString *> *channels = [NSMutableArray array];
+    for (NSString *ch in @[@"sequences", @"qualities"]) {
+        if ([sig hasChildNamed:
+                [NSString stringWithFormat:@"%@_segments", ch]]) {
+            [channels addObject:ch];
+        }
+    }
+    if (channels.count == 0) return YES;
+    if (![sig respondsToSelector:@selector(unwrap)]) {
+        if (error) *error = makeErr(3,
+            @"per-AU blocks_v1 requires the HDF5 provider");
+        return NO;
+    }
+    TTIOHDF5Group *hdf5Sig = [(id)sig performSelector:@selector(unwrap)];
+
+    id<TTIOStorageGroup> idxGroup =
+        [runGroup openGroupNamed:@"genomic_index" error:error];
+    if (!idxGroup) return NO;
+    NSArray<NSString *> *chromNames =
+        [TTIOBlockView readNamesIn:idxGroup named:@"chromosome_names"];
+    NSArray<NSString *> *mateChromNames = @[];
+    if ([sig hasChildNamed:@"mate_info"]) {
+        id<TTIOStorageGroup> mate = [sig openGroupNamed:@"mate_info" error:NULL];
+        if (mate) mateChromNames =
+            [TTIOBlockView readNamesIn:mate named:@"chrom_names"];
+    }
+    NSMutableDictionary *chromMap = ttioBlocksV1ChromMap(sig);
+    NSSet *skip = [NSSet setWithArray:channels];
+
+    NSMutableDictionary *newDs = [NSMutableDictionary dictionary];
+    NSMutableDictionary *written = [NSMutableDictionary dictionary];
+    for (NSString *ch in channels) written[ch] = @(0ULL);
+    NSInteger qualHint = -1;
+    NSData *refMD5 = nil;
+    for (NSUInteger b = 0; b < table.count; b++) {
+        @autoreleasepool {
+            unsigned long long r0 = [table readStartAt:b];
+            NSUInteger nn = [table nReadsAt:b];
+            NSMutableDictionary *decrypted = [NSMutableDictionary dictionary];
+            for (NSString *ch in channels) {
+                NSString *segName =
+                    [NSString stringWithFormat:@"%@_segments", ch];
+                NSArray<NSDictionary *> *rows =
+                    [TTIOCompoundIO readGenericFromGroup:hdf5Sig
+                                             datasetNamed:segName
+                                                   fields:channelSegmentsFields()
+                                                   offset:(NSUInteger)r0
+                                                    count:nn
+                                                    error:error];
+                if (!rows) return NO;
+                NSMutableArray *segs =
+                    [NSMutableArray arrayWithCapacity:rows.count];
+                for (NSDictionary *r in rows) {
+                    [segs addObject:[[TTIOChannelSegment alloc]
+                        initWithOffset:[r[@"offset"] unsignedLongLongValue]
+                                 length:[r[@"length"] unsignedIntValue]
+                                     iv:r[@"iv"]
+                                    tag:r[@"tag"]
+                             ciphertext:r[@"ciphertext"]]];
+                }
+                NSData *plain = [TTIOPerAUEncryption
+                    decryptChannelFromSegments:segs
+                                bytesPerElement:1
+                                      datasetId:datasetId
+                                    channelName:ch
+                                            key:key
+                                         auBase:(uint32_t)r0
+                                          error:error];
+                if (!plain) return NO;
+                decrypted[ch] = plain;
+            }
+
+            TTIOBlockView *view =
+                [TTIOBlockView materialiseBlock:b
+                                          ofRun:runGroup
+                                          table:table
+                                     chromNames:chromNames
+                                 mateChromNames:mateChromNames
+                                   skipChannels:skip
+                                          error:error];
+            if (!view) return NO;
+            id<TTIOStorageGroup> viewSig =
+                [view.group openGroupNamed:@"signal_channels" error:error];
+            if (!viewSig) { [view discard]; return NO; }
+            for (NSString *ch in channels) {
+                NSData *raw = decrypted[ch];
+                id<TTIOStorageDataset> ds =
+                    [viewSig createDatasetNamed:ch
+                                      precision:TTIOPrecisionUInt8
+                                         length:raw.length
+                                      chunkSize:65536
+                                    compression:TTIOCompressionNone
+                               compressionLevel:0
+                                          error:error];
+                if (!ds || ![ds writeAll:raw error:error]
+                    || ![ds setAttributeValue:@((int64_t)0)
+                                       forName:@"compression"
+                                         error:error]) {
+                    [view discard]; return NO;
+                }
+            }
+            TTIOGenomicRun *rd = [TTIOGenomicRun openFromGroup:view.group
+                                                          name:@"block"
+                                                         error:error];
+            if (!rd) { [view discard]; return NO; }
+            // The view is one whole block, so read [0, nn) of it.
+            NSData *seq = nil, *qual = nil;
+            TTIOWrittenGenomicRun *block = ttioBlocksV1BlockRun(
+                rd, runGroup, study, table, b, 0, &seq, &qual, error);
+            [view discard];
+            if (!block) return NO;
+            if (refMD5 == nil && block.referenceChromSeqs != nil) {
+                refMD5 = [TTIOSpectralDataset referenceMD5ForRun:block];
+            }
+            TTIOGenomicWriteContext *ctx = [TTIOGenomicWriteContext
+                contextWithChromNameToId:chromMap referenceMD5:refMD5];
+            ctx.qualStrategyHint = qualHint;
+            TTIOBlockBlobs *blobs = [TTIOGenomicBlocks encodeBlock:block
+                                                           context:ctx
+                                                             error:error];
+            if (!blobs) return NO;
+            qualHint = ttioBlocksV1DeriveQualHint(blobs, qualHint);
+
+            for (NSString *ch in channels) {
+                NSData *got = blobs.blobs[ch] ?: [NSData data];
+                unsigned long long off = [table offsetOf:ch at:b];
+                unsigned long long ln = [table lengthOf:ch at:b];
+                unsigned long long pos =
+                    [written[ch] unsignedLongLongValue];
+                if (got.length != (NSUInteger)ln || pos != off) {
+                    if (error) *error = makeErr(4,
+                        @"per-AU blocks_v1 restore: block %lu channel "
+                        @"'%@' re-encoded to %lu bytes at position "
+                        @"%llu, the index records %llu bytes at %llu; "
+                        @"the file cannot be restored consistently",
+                        (unsigned long)b, ch,
+                        (unsigned long)got.length, pos, ln, off);
+                    return NO;
+                }
+                id<TTIOStorageDataset> ds = newDs[ch];
+                if (ds == nil) {
+                    id<TTIOStorageGroup> parent;
+                    NSString *dsName;
+                    if ([ch isEqualToString:@"sequences"]) {
+                        parent = [sig createGroupNamed:@"sequences"
+                                                 error:error];
+                        dsName = @"data";
+                    } else {
+                        parent = sig;
+                        dsName = ch;
+                    }
+                    if (!parent) return NO;
+                    NSUInteger codec =
+                        [blobs.codecs[ch] unsignedIntegerValue];
+                    ds = [parent createDatasetNamed:dsName
+                                          precision:TTIOPrecisionUInt8
+                                             length:0
+                                          chunkSize:(256 << 10)
+                                        compression:(codec == 0
+                                            ? TTIOCompressionZlib
+                                            : TTIOCompressionNone)
+                                   compressionLevel:6
+                                         extendable:YES
+                                              error:error];
+                    if (!ds) return NO;
+                    if (![ds setAttributeValue:@((int64_t)codec)
+                                       forName:@"compression"
+                                         error:error]) return NO;
+                    NSDictionary *extra = blobs.extraAttrs[ch] ?: @{};
+                    for (NSString *k in [[extra allKeys]
+                            sortedArrayUsingSelector:@selector(compare:)]) {
+                        if (![ds setAttributeValue:extra[k]
+                                           forName:k
+                                             error:error]) return NO;
+                    }
+                    newDs[ch] = ds;
+                }
+                if (got.length > 0
+                    && ![ds appendData:got error:error]) return NO;
+                written[ch] = @(pos + got.length);
+            }
+        }
+    }
+    for (NSString *ch in channels) {
+        NSString *segName = [NSString stringWithFormat:@"%@_segments", ch];
+        if (![sig deleteChildNamed:segName error:error]) return NO;
+        NSString *algAttr = [NSString stringWithFormat:@"%@_algorithm", ch];
+        if ([sig hasAttributeNamed:algAttr]) {
+            [sig deleteAttributeNamed:algAttr error:NULL];
+        }
+    }
+    return YES;
+}
+
+
 @implementation TTIOPerAUFile
 
 + (BOOL)encryptFilePath:(NSString *)path
@@ -814,6 +1364,13 @@ static NSData *decryptChannelWithDispatch(
                 id<TTIOStorageGroup> gRun =
                     [gRuns openGroupNamed:gRunName error:error];
                 if (!gRun) continue;
+                if (ttioIsBlocksV1(gRun)) {
+                    if (!ttioEncryptBlocksV1Run(study, gRun, gRunName,
+                                                datasetId, key, error))
+                        return NO;
+                    datasetId++;
+                    continue;
+                }
                 id<TTIOStorageGroup> gSig =
                     [gRun openGroupNamed:@"signal_channels" error:error];
                 id<TTIOStorageGroup> gIdx =
@@ -1309,6 +1866,14 @@ static BOOL _writePlainDataset(id<TTIOStorageGroup> group, NSString *name,
                 id<TTIOStorageGroup> gSig =
                     [gRun openGroupNamed:@"signal_channels" error:error];
                 if (!gRun || !gSig) { datasetId++; continue; }
+                if (ttioIsBlocksV1(gRun)) {
+                    if (!ttioDecryptBlocksV1RunInPlace(study, gRun,
+                                                       datasetId, key,
+                                                       error))
+                        return NO;
+                    datasetId++;
+                    continue;
+                }
                 TTIOHDF5Group *hdf5GRun =
                     [hdf5GRuns openGroupNamed:gRunName error:NULL];
                 TTIOHDF5Group *hdf5GSig =

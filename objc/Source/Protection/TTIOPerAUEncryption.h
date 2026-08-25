@@ -224,6 +224,24 @@ NS_ASSUME_NONNULL_BEGIN
                           key:(NSData *)key
                         error:(NSError * _Nullable *)error;
 
+/** Block-streaming variant (M99): the caller hands in ONE block at a
+ *  time. ``offsets`` are then block-local, ``auBase`` is the block's
+ *  first global AU ordinal (feeding the AAD), and ``offsetBase`` is
+ *  the block's global plaintext element offset (feeding the stored
+ *  segment offset). Both 0 reproduces the whole-channel behaviour. */
++ (nullable NSArray<TTIOChannelSegment *> *)
+    encryptChannelToSegments:(NSData *)plaintext
+                      offsets:(const uint64_t *)offsets
+                      lengths:(const uint32_t *)lengths
+                     nSpectra:(NSUInteger)nSpectra
+              bytesPerElement:(NSUInteger)bytesPerElement
+                    datasetId:(uint16_t)datasetId
+                  channelName:(NSString *)channelName
+                          key:(NSData *)key
+                       auBase:(uint32_t)auBase
+                   offsetBase:(uint64_t)offsetBase
+                        error:(NSError * _Nullable *)error;
+
 /**
  * Decrypt every channel segment in order and concatenate the
  * plaintext float64 bytes.
@@ -257,6 +275,17 @@ NS_ASSUME_NONNULL_BEGIN
                       datasetId:(uint16_t)datasetId
                     channelName:(NSString *)channelName
                             key:(NSData *)key
+                          error:(NSError * _Nullable *)error;
+
+/** Block-streaming variant (M99): ``auBase`` offsets the AAD's AU
+ *  ordinal for callers that decrypt one block's rows at a time. */
++ (nullable NSData *)
+    decryptChannelFromSegments:(NSArray<TTIOChannelSegment *> *)segments
+              bytesPerElement:(NSUInteger)bytesPerElement
+                      datasetId:(uint16_t)datasetId
+                    channelName:(NSString *)channelName
+                            key:(NSData *)key
+                         auBase:(uint32_t)auBase
                           error:(NSError * _Nullable *)error;
 
 

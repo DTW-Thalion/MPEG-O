@@ -180,14 +180,20 @@ static BOOL writeCompoundDataset(hid_t group_id,
     return YES;
 }
 
-static BOOL readCompoundDataset(hid_t group_id,
-                                 const char *name,
-                                 hid_t mem_type_id,
-                                 size_t rec_size,
-                                 NSUInteger *outCount,
-                                 void **outBuffer,
-                                 hid_t *outSpaceId,
-                                 NSError **error)
+// Read rows [rangeOffset, rangeOffset+rangeCount) of a compound
+// dataset; rangeCount == NSUIntegerMax reads everything. The
+// returned space id is the MEMORY space matching the buffer layout,
+// which is what H5Dvlen_reclaim needs for a hyperslab read.
+static BOOL readCompoundDatasetRange(hid_t group_id,
+                                      const char *name,
+                                      hid_t mem_type_id,
+                                      size_t rec_size,
+                                      NSUInteger rangeOffset,
+                                      NSUInteger rangeCount,
+                                      NSUInteger *outCount,
+                                      void **outBuffer,
+                                      hid_t *outSpaceId,
+                                      NSError **error)
 {
     hid_t dset_id = H5Dopen2(group_id, name, H5P_DEFAULT);
     if (dset_id < 0) {
@@ -195,22 +201,32 @@ static BOOL readCompoundDataset(hid_t group_id,
             @"H5Dopen2 failed for compound dataset %s", name);
         return NO;
     }
-    hid_t space_id = H5Dget_space(dset_id);
+    hid_t fspace_id = H5Dget_space(dset_id);
     hsize_t dims[1] = { 0 };
-    H5Sget_simple_extent_dims(space_id, dims, NULL);
-    NSUInteger n = (NSUInteger)dims[0];
+    H5Sget_simple_extent_dims(fspace_id, dims, NULL);
+    NSUInteger total = (NSUInteger)dims[0];
+    NSUInteger off = rangeOffset > total ? total : rangeOffset;
+    NSUInteger n = (rangeCount == NSUIntegerMax) ? total - off
+                    : (off + rangeCount > total ? total - off : rangeCount);
 
     void *buf = calloc(n > 0 ? n : 1, rec_size);
     if (!buf) {
-        H5Sclose(space_id);
+        H5Sclose(fspace_id);
         H5Dclose(dset_id);
         if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite, @"calloc failed for compound read");
         return NO;
     }
-    herr_t rc = H5Dread(dset_id, mem_type_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf);
+    hsize_t hoff[1] = { (hsize_t)off };
+    hsize_t hcnt[1] = { (hsize_t)n };
+    H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, hoff, NULL, hcnt, NULL);
+    hid_t mspace_id = H5Screate_simple(1, hcnt, NULL);
+    herr_t rc = n > 0
+        ? H5Dread(dset_id, mem_type_id, mspace_id, fspace_id, H5P_DEFAULT, buf)
+        : 0;
+    H5Sclose(fspace_id);
     if (rc < 0) {
         free(buf);
-        H5Sclose(space_id);
+        H5Sclose(mspace_id);
         H5Dclose(dset_id);
         if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
             @"H5Dread failed for compound dataset %s", name);
@@ -220,8 +236,22 @@ static BOOL readCompoundDataset(hid_t group_id,
 
     *outCount   = n;
     *outBuffer  = buf;
-    *outSpaceId = space_id;  // caller reclaims VL with this
+    *outSpaceId = mspace_id;  // caller reclaims VL with this
     return YES;
+}
+
+static BOOL readCompoundDataset(hid_t group_id,
+                                 const char *name,
+                                 hid_t mem_type_id,
+                                 size_t rec_size,
+                                 NSUInteger *outCount,
+                                 void **outBuffer,
+                                 hid_t *outSpaceId,
+                                 NSError **error)
+{
+    return readCompoundDatasetRange(group_id, name, mem_type_id, rec_size,
+                                    0, NSUIntegerMax,
+                                    outCount, outBuffer, outSpaceId, error);
 }
 
 @implementation TTIOCompoundIO
@@ -655,6 +685,54 @@ static BOOL ttioSchemaIsPrimitive(NSArray<TTIOCompoundField *> *fields)
     return YES;
 }
 
+// Pack rows including VL fields. VL members store POINTERS into the
+// row values' backing buffers, so the caller must keep `keepAlive`
+// (and the rows themselves) alive until after the H5Dwrite.
+static void ttioPackRowsWithVL(NSArray<NSDictionary *> *rows,
+                               NSArray<TTIOCompoundField *> *fields,
+                               const size_t *fieldOff, size_t recSize,
+                               uint8_t *buf,
+                               NSMutableArray *keepAlive)
+{
+    NSUInteger nFields = fields.count;
+    for (NSUInteger r = 0; r < rows.count; r++) {
+        NSDictionary *row = rows[r];
+        uint8_t *base = buf + r * recSize;
+        for (NSUInteger i = 0; i < nFields; i++) {
+            TTIOCompoundField *f = fields[i];
+            id v = row[f.name];
+            size_t off = fieldOff[i];
+            switch (f.kind) {
+                case TTIOCompoundFieldKindUInt32: {
+                    uint32_t x = (uint32_t)[v unsignedIntValue]; memcpy(base + off, &x, 4); break; }
+                case TTIOCompoundFieldKindInt64: {
+                    int64_t x = [v longLongValue]; memcpy(base + off, &x, 8); break; }
+                case TTIOCompoundFieldKindUInt64: {
+                    uint64_t x = [v unsignedLongLongValue]; memcpy(base + off, &x, 8); break; }
+                case TTIOCompoundFieldKindFloat64: {
+                    double x = [v doubleValue]; memcpy(base + off, &x, 8); break; }
+                case TTIOCompoundFieldKindVLString: {
+                    NSData *s = [(NSString *)v
+                        dataUsingEncoding:NSUTF8StringEncoding];
+                    NSMutableData *z = [s mutableCopy];
+                    [z appendBytes:"" length:1];   // NUL terminator
+                    [keepAlive addObject:z];
+                    const char *ptr = (const char *)z.bytes;
+                    memcpy(base + off, &ptr, sizeof(char *));
+                    break; }
+                case TTIOCompoundFieldKindVLBytes: {
+                    NSData *d = (NSData *)v;
+                    [keepAlive addObject:d];
+                    hvl_t hv;
+                    hv.len = (size_t)d.length;
+                    hv.p = (void *)d.bytes;
+                    memcpy(base + off, &hv, sizeof(hvl_t));
+                    break; }
+            }
+        }
+    }
+}
+
 + (BOOL)writeGeneric:(NSArray<NSDictionary *> *)rows
             intoGroup:(id<TTIOStorageGroup>)parent
          datasetNamed:(NSString *)name
@@ -973,11 +1051,30 @@ static BOOL ttioSchemaIsPrimitive(NSArray<TTIOCompoundField *> *fields)
                                              fields:(NSArray<TTIOCompoundField *> *)fields
                                               error:(NSError **)error
 {
+    return [self readGenericFromGroup:parent datasetNamed:name
+                                fields:fields
+                                offset:0 count:NSUIntegerMax
+                                 error:error];
+}
+
++ (NSArray<NSDictionary *> *)readGenericFromGroup:(id<TTIOStorageGroup>)parent
+                                       datasetNamed:(NSString *)name
+                                             fields:(NSArray<TTIOCompoundField *> *)fields
+                                             offset:(NSUInteger)rangeOffset
+                                              count:(NSUInteger)rangeCount
+                                              error:(NSError **)error
+{
     // Non-HDF5: route through the protocol's compound read.
     if (![parent isKindOfClass:[TTIOHDF5Group class]]) {
         id<TTIOStorageDataset> ds = [parent openDatasetNamed:name error:error];
         if (!ds) return nil;
-        return [ds readRows:error];
+        NSArray<NSDictionary *> *all = [ds readRows:error];
+        if (!all) return nil;
+        if (rangeOffset == 0 && rangeCount == NSUIntegerMax) return all;
+        NSUInteger from = MIN(rangeOffset, all.count);
+        NSUInteger to = (rangeCount == NSUIntegerMax) ? all.count
+                        : MIN(from + rangeCount, all.count);
+        return [all subarrayWithRange:NSMakeRange(from, to - from)];
     }
     TTIOHDF5Group *hdf5Parent = (TTIOHDF5Group *)parent;
     size_t recSize = 0;
@@ -1046,8 +1143,10 @@ static BOOL ttioSchemaIsPrimitive(NSArray<TTIOCompoundField *> *fields)
     NSUInteger n = 0;
     void *buf = NULL;
     hid_t space_id = -1;
-    if (!readCompoundDataset(hdf5Parent.groupId, [name UTF8String],
-                              t.typeId, recSize, &n, &buf, &space_id, error)) {
+    if (!readCompoundDatasetRange(hdf5Parent.groupId, [name UTF8String],
+                              t.typeId, recSize,
+                              rangeOffset, rangeCount,
+                              &n, &buf, &space_id, error)) {
         [t close];
         return nil;
     }
@@ -1113,11 +1212,6 @@ static BOOL ttioSchemaIsPrimitive(NSArray<TTIOCompoundField *> *fields)
                               chunkRows:(NSUInteger)chunkRows
                                   error:(NSError **)error
 {
-    if (!ttioSchemaIsPrimitive(fields)) {
-        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
-            @"extendable compound '%@': variable-length fields are not supported", name);
-        return NO;
-    }
     if (chunkRows == 0) {
         if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument, @"chunkRows must be > 0");
         return NO;
@@ -1152,11 +1246,6 @@ static BOOL ttioSchemaIsPrimitive(NSArray<TTIOCompoundField *> *fields)
             fields:(NSArray<TTIOCompoundField *> *)fields
              error:(NSError **)error
 {
-    if (!ttioSchemaIsPrimitive(fields)) {
-        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
-            @"extendable compound '%@': variable-length fields are not supported", name);
-        return NO;
-    }
     if (rows.count == 0) return YES;
     NSUInteger nFields = fields.count;
     size_t *fieldOff = malloc((nFields ? nFields : 1) * sizeof(size_t));
@@ -1164,7 +1253,12 @@ static BOOL ttioSchemaIsPrimitive(NSArray<TTIOCompoundField *> *fields)
     TTIOHDF5CompoundType *t = ttioMakeCompoundType(fields, fieldOff, &recSize, error);
     if (!t) { free(fieldOff); return NO; }
     uint8_t *buf = calloc(rows.count, recSize);
-    ttioPackPrimitiveRows(rows, fields, fieldOff, recSize, buf);
+    NSMutableArray *keepAlive = [NSMutableArray array];
+    if (ttioSchemaIsPrimitive(fields)) {
+        ttioPackPrimitiveRows(rows, fields, fieldOff, recSize, buf);
+    } else {
+        ttioPackRowsWithVL(rows, fields, fieldOff, recSize, buf, keepAlive);
+    }
     free(fieldOff);
     BOOL ok = NO;
     hid_t dset = H5Dopen2(parent.groupId, [name UTF8String], H5P_DEFAULT);
@@ -1195,6 +1289,9 @@ static BOOL ttioSchemaIsPrimitive(NSArray<TTIOCompoundField *> *fields)
         }
         H5Dclose(dset);
     }
+    // The packed record buffer holds pointers into keepAlive's
+    // buffers during the write; this use pins them past H5Dwrite.
+    [keepAlive removeAllObjects];
     free(buf);
     [t close];
     return ok;

@@ -138,9 +138,22 @@
                                            fields:(NSArray<TTIOCompoundField *> *)fields
                                             error:(NSError **)error;
 
+/** Ranged variant: rows ``[offset, offset+count)``;
+ *  ``count == NSUIntegerMax`` reads to the end. The block-streaming
+ *  per-AU walker (M99) reads one block's segment rows at a time
+ *  through this. */
++ (NSArray<NSDictionary *> *)readGenericFromGroup:(TTIOHDF5Group *)parent
+                                     datasetNamed:(NSString *)name
+                                           fields:(NSArray<TTIOCompoundField *> *)fields
+                                           offset:(NSUInteger)offset
+                                            count:(NSUInteger)count
+                                            error:(NSError **)error;
+
 /** Create an empty compound dataset with an unlimited first dimension,
  *  chunked in ``chunkRows`` records; rows are added with
- *  ``+appendRows:toGroup:name:fields:error:``. Primitive kinds only. */
+ *  ``+appendRows:toGroup:name:fields:error:``. VL-string and VL-bytes
+ *  fields are supported: the append path stores pointers into the row
+ *  values' buffers for the duration of the write. */
 + (BOOL)createExtendableCompoundInGroup:(TTIOHDF5Group *)parent
                                    name:(NSString *)name
                                  fields:(NSArray<TTIOCompoundField *> *)fields
