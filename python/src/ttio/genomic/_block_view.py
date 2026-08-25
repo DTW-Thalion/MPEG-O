@@ -77,8 +77,14 @@ def _rows_of(group, name) -> list[dict]:
 
 def materialise_block(run_group, table: BlockTable, b: int, *,
                       chrom_name_rows: list[dict] | None = None,
-                      mate_chrom_rows: list[dict] | None = None):
-    """Return an in-memory v1.8-shaped run group holding block ``b``."""
+                      mate_chrom_rows: list[dict] | None = None,
+                      skip_channels: tuple = ()):
+    """Return an in-memory v1.8-shaped run group holding block ``b``.
+
+    ``skip_channels`` names blob channels to leave out of the view —
+    the per-AU decrypt walker skips the encrypted (deleted) channels
+    and injects their decrypted raw bytes itself.
+    """
     from ..providers.memory import MemoryProvider
 
     root = MemoryProvider.open(f"memory://ttio-block-view-{id(run_group)}-{b}", mode="w").root_group()
@@ -109,6 +115,8 @@ def materialise_block(run_group, table: BlockTable, b: int, *,
     dst_sc = view.create_group("signal_channels")
     from ..enums import Compression
     for ch in _blocks.BLOCK_CHANNELS:
+        if ch in skip_channels:
+            continue
         off, ln = int(table.ranges[ch][0][b]), int(table.ranges[ch][1][b])
         if ln == 0:
             continue
