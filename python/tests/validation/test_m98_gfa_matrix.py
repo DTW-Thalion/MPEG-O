@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -171,4 +172,117 @@ def test_m98_container_matrix_byte_exact(writer, emitter, fixture, tmp_path):
     assert got == src, (
         f"cell ({writer} -> {emitter}) re-emission differs for "
         f"{fixture}: {len(got)} vs {len(src)} bytes"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Encrypted exchange matrix: encryptor x decryptor via the PerAU CLIs.
+# --------------------------------------------------------------------------- #
+
+_PERAU_OBJC_TOOL = "TtioPerAU"
+_PERAU_JAVA_CLASS = "global.thalion.ttio.tools.PerAUCli"
+
+
+def _py_perau(args: list[str]) -> None:
+    from ttio.tools.per_au_cli import main
+
+    assert main(args) == 0
+
+
+def _objc_perau(args: list[str]) -> None:
+    tool = _resolve_objc_tool(_PERAU_OBJC_TOOL)
+    if tool is None:
+        pytest.skip(f"ObjC {_PERAU_OBJC_TOOL} binary not built")
+    binary, env = tool
+    proc = subprocess.run(
+        [str(binary), *args],
+        capture_output=True, env=env, timeout=240,
+    )
+    assert proc.returncode == 0, (
+        f"{_PERAU_OBJC_TOOL} {args} failed rc={proc.returncode}: "
+        f"{proc.stderr.decode(errors='replace')[:500]}"
+    )
+
+
+def _java_perau(args: list[str]) -> None:
+    tool = _resolve_java_tool(_PERAU_JAVA_CLASS)
+    if tool is None:
+        pytest.skip("Java classpath not available")
+    argv, env = tool
+    proc = subprocess.run(
+        [*argv, *args],
+        capture_output=True, env=env, timeout=240,
+    )
+    assert proc.returncode == 0, (
+        f"{_PERAU_JAVA_CLASS} {args} failed rc={proc.returncode}: "
+        f"{proc.stderr.decode(errors='replace')[:500]}"
+    )
+
+
+_PERAU_CLIS = {"python": _py_perau, "objc": _objc_perau, "java": _java_perau}
+_ENC_MATRIX = [(a, b) for a in _PERAU_CLIS for b in _PERAU_CLIS]
+
+_SEG_GROUP = "study/assembly_graphs/graph_0001/segments"
+
+
+def _features(path: Path) -> list[str]:
+    import h5py
+
+    with h5py.File(path, "r") as f:
+        raw = f.attrs["ttio_features"]
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8")
+    elif not isinstance(raw, str):
+        raw = bytes(raw).decode("utf-8")
+    return json.loads(raw)
+
+
+@pytest.mark.parametrize("fixture", _FIXTURES)
+@pytest.mark.parametrize(
+    "encryptor,decryptor", _ENC_MATRIX,
+    ids=[f"{a}-encrypt_{b}-decrypt" for a, b in _ENC_MATRIX])
+def test_m98_encrypted_exchange_byte_exact(encryptor, decryptor, fixture,
+                                            tmp_path):
+    import h5py
+
+    gfa = _materialise(tmp_path, fixture)
+    src = _fixture_bytes(fixture)
+
+    plain = tmp_path / "plain.tio"
+    _py_write(gfa, plain)
+
+    key = tmp_path / "key.bin"
+    key.write_bytes(bytes(range(32)))
+
+    enc = tmp_path / "enc.tio"
+    _PERAU_CLIS[encryptor](["encrypt", str(plain), str(enc), str(key)])
+
+    # The encryptor must actually have engaged on the graph channel:
+    # flag set, sequences replaced by the per-AU segment layout.
+    assert "opt_per_au_encryption" in _features(enc)
+    with h5py.File(enc, "r") as f:
+        seg = f[_SEG_GROUP]
+        assert "sequences_segments" in seg
+        assert "sequences" not in seg
+        assert len(seg["sequences_segments"]) == len(seg["records"]), (
+            "per-AU walker must emit one AU per segment record"
+        )
+
+    work = tmp_path / f"{encryptor}_{decryptor}.tio"
+    shutil.copyfile(enc, work)
+    _PERAU_CLIS[decryptor](["decrypt-in-place", str(work), str(key)])
+
+    # Flag stripped, raw channel restored, segment layout gone.
+    assert "opt_per_au_encryption" not in _features(work)
+    with h5py.File(work, "r") as f:
+        seg = f[_SEG_GROUP]
+        assert "sequences" in seg
+        assert "sequences_segments" not in seg
+
+    out = tmp_path / f"{encryptor}_{decryptor}.gfa"
+    _py_emit(work, out)
+    got = out.read_bytes()
+    assert got == src, (
+        f"encrypted cell ({encryptor} -> {decryptor}) re-emission differs "
+        f"for {fixture}: {len(got)} vs {len(src)} bytes"
     )
