@@ -49,9 +49,9 @@ pre-v0.12 receivers skip the sidecar packets and rebuild an
 unrestorable legacy-shaped container, detectable only through the
 `transport_blocks_v1` feature token.
 
-Suite state at handoff: Python 2694 pass 0 fail; ObjC 5283 pass /
-3 known-environmental TestM90Final failures; Java 1637 tests 0
-failures 18 skipped.
+Suite state at handoff (post-M99.1): Python 2714 pass 0 fail; ObjC
+5340 pass / 3 known-environmental TestM90Final failures; Java 1644
+tests 0 failures 18 skipped.
 
 ---
 
