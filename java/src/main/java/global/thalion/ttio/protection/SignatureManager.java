@@ -419,6 +419,74 @@ public final class SignatureManager {
         return verifyGenomicRun(runGroup, key, "hmac-sha256");
     }
 
+    /** Sign the byte channels of one assembly graph
+     *  ({@code /study/assembly_graphs/<name>/}) — M98. The signed
+     *  set is the {@code segments/sequences} channel; signatures
+     *  cover it the way they cover genomic-run channels. The
+     *  compound tables (records, links, paths, extras, line_index)
+     *  are outside the signed set.
+     *
+     *  <p>Returns a map from {@code "segments/sequences"} to the
+     *  prefixed signature stored on the dataset's
+     *  {@code @ttio_signature} attribute. Absent datasets (a graph
+     *  whose segments all carry {@code *}, or an encrypted file
+     *  where the channel is a {@code sequences_segments} compound)
+     *  are silently skipped.
+     *
+     *  <p><b>Cross-language equivalents:</b> Python
+     *  {@code ttio.signatures.sign_assembly_graph}, Objective-C
+     *  {@code TTIOSignatureManager#signAssemblyGraph:}.</p> */
+    public static Map<String, String> signAssemblyGraph(
+            StorageGroup graphGroup, byte[] key, String algorithm) {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (graphGroup.hasChild("segments")) {
+            try (StorageGroup seg = graphGroup.openGroup("segments")) {
+                if (seg.hasChild("sequences")) {
+                    try (StorageDataset ds = seg.openDataset("sequences")) {
+                        byte[] canonical = ds.readCanonicalBytes();
+                        String s = sign(canonical, key, algorithm);
+                        ds.setAttribute("ttio_signature", s);
+                        out.put("segments/sequences", s);
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /** {@code signAssemblyGraph} convenience overload defaulting to
+     *  {@code "hmac-sha256"}. */
+    public static Map<String, String> signAssemblyGraph(
+            StorageGroup graphGroup, byte[] key) {
+        return signAssemblyGraph(graphGroup, key, "hmac-sha256");
+    }
+
+    /** Verify every dataset {@link #signAssemblyGraph} would sign.
+     *  Returns {@code true} iff every present, signed dataset
+     *  verifies under {@code key}; a present unsigned dataset fails,
+     *  matching {@link #verifyGenomicRun}. Absent datasets are
+     *  skipped. */
+    public static boolean verifyAssemblyGraph(
+            StorageGroup graphGroup, byte[] key, String algorithm) {
+        if (graphGroup.hasChild("segments")) {
+            try (StorageGroup seg = graphGroup.openGroup("segments")) {
+                if (seg.hasChild("sequences")
+                        && !verifyOneDataset(seg, "sequences", key,
+                                             algorithm)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** {@code verifyAssemblyGraph} convenience overload defaulting to
+     *  {@code "hmac-sha256"}. */
+    public static boolean verifyAssemblyGraph(
+            StorageGroup graphGroup, byte[] key) {
+        return verifyAssemblyGraph(graphGroup, key, "hmac-sha256");
+    }
+
     private static boolean verifyOneDataset(StorageGroup parent, String name,
                                               byte[] key, String algorithm) {
         try (StorageDataset ds = parent.openDataset(name)) {

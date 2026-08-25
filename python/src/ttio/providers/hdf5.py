@@ -222,7 +222,14 @@ class _Dataset(StorageDataset):
                     if fname in rec:
                         val = rec[fname]
                         subdt = dt.fields[fname][0]
-                        if subdt == h5py.vlen_dtype(np.uint8):
+                        # plain ``==`` cannot separate the two vlen
+                        # kinds: both VL-string and VL-bytes fields are
+                        # numpy object dtypes, and dtype equality
+                        # ignores the h5py special-type metadata. Ask
+                        # h5py which kind this field really is.
+                        if (h5py.check_string_dtype(subdt) is None
+                                and h5py.check_vlen_dtype(subdt)
+                                is not None):
                             arr[i][fname] = np.frombuffer(
                                 bytes(val), dtype=np.uint8
                             )

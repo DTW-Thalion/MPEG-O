@@ -555,14 +555,16 @@ public final class Hdf5Provider implements StorageProvider {
                     .toList();
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public void writeAll(Object data) {
             if (extendable) {
                 append(data);
                 return;
             }
-            List<Object[]> rows = (List<Object[]>) data;
+            // toRows normalises both accepted shapes (List<Object[]>
+            // and List<Map>) the way append already does; the raw cast
+            // rejected Map rows.
+            List<Object[]> rows = toRows(data);
             Hdf5CompoundIO.writeCompoundDataset(parent, name, schema, rows.size(),
                     (row, pool) -> {
                         Object[] vals = rows.get(row);

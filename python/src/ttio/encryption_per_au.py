@@ -517,6 +517,51 @@ def encrypt_per_au(
                     )
                 dataset_id_counter += 1
 
+        # M98: assembly graphs. One AU per segment record; offsets /
+        # lengths come from segments/records (seq_missing rows have
+        # length 0 and encrypt to empty ciphertext). The stored
+        # channel is codec-encoded (@compression), so decode to raw
+        # bytes before slicing — the per-AU segment contract is raw
+        # per-segment bytes, and decrypt writes the raw channel back
+        # (the FLOAT_DELTA_ZSTD precedent on the MS path).
+        # dataset_id continues after the genomic runs.
+        if study.has_child("assembly_graphs"):
+            from .assembly import _decode_bytes_channel
+
+            ag_root = study.open_group("assembly_graphs")
+            ag_names = [n for n in ag_root.child_names()
+                        if not n.startswith("_") and ag_root.has_child(n)]
+            for ag_name in ag_names:
+                g_group = ag_root.open_group(ag_name)
+                if not g_group.has_child("segments"):
+                    dataset_id_counter += 1
+                    continue
+                seg_g = g_group.open_group("segments")
+                if (not seg_g.has_child("sequences")
+                        or not seg_g.has_child("records")):
+                    dataset_id_counter += 1
+                    continue
+                raw = _decode_bytes_channel(seg_g.open_dataset("sequences"))
+                rows = seg_g.open_dataset("records").read_rows()
+                a_offsets = np.array(
+                    [int(r["seq_offset"]) for r in rows], dtype="<u8")
+                a_lengths = np.array(
+                    [int(r["length"]) for r in rows], dtype="<u4")
+                segments = encrypt_channel_to_segments(
+                    np.frombuffer(raw, dtype="<u1"),
+                    a_offsets, a_lengths,
+                    dataset_id=dataset_id_counter,
+                    channel_name="sequences",
+                    key=key,
+                    dtype="<u1",
+                )
+                io.write_channel_segments(
+                    seg_g, "sequences_segments", segments,
+                )
+                seg_g.delete_child("sequences")
+                seg_g.set_attribute("sequences_algorithm", "aes-256-gcm")
+                dataset_id_counter += 1
+
         features_set.add("opt_per_au_encryption")
         if encrypt_headers:
             features_set.add("opt_encrypted_au_headers")
@@ -812,6 +857,45 @@ def decrypt_per_au_in_place(
                     alg_attr = f"{cname}_algorithm"
                     if g_sig.has_attribute(alg_attr):
                         g_sig.delete_attribute(alg_attr)
+                dataset_id_counter += 1
+
+        # M98: assembly graphs. The raw sequences bytes are written
+        # back as a plain uint8 dataset with no @compression — the
+        # graph re-emits byte-exactly from raw bytes (the codec is an
+        # at-rest optimisation, not part of the graph's identity).
+        # dataset_id numbering mirrors encrypt_per_au exactly.
+        if study.has_child("assembly_graphs"):
+            ag_root = study.open_group("assembly_graphs")
+            ag_names = [n for n in ag_root.child_names()
+                        if not n.startswith("_") and ag_root.has_child(n)]
+            for ag_name in ag_names:
+                g_group = ag_root.open_group(ag_name)
+                if not g_group.has_child("segments"):
+                    dataset_id_counter += 1
+                    continue
+                seg_g = g_group.open_group("segments")
+                if not seg_g.has_child("sequences_segments"):
+                    dataset_id_counter += 1
+                    continue
+                segments = io.read_channel_segments(
+                    seg_g, "sequences_segments")
+                plain = decrypt_channel_from_segments(
+                    segments,
+                    dataset_id=dataset_id_counter,
+                    channel_name="sequences",
+                    key=key,
+                    dtype="<u1",
+                )
+                if seg_g.has_child("sequences"):
+                    seg_g.delete_child("sequences")
+                ds = seg_g.create_dataset(
+                    "sequences", Precision.UINT8,
+                    int(np.asarray(plain).size))
+                if np.asarray(plain).size:
+                    ds.write(np.asarray(plain, dtype="<u1"))
+                seg_g.delete_child("sequences_segments")
+                if seg_g.has_attribute("sequences_algorithm"):
+                    seg_g.delete_attribute("sequences_algorithm")
                 dataset_id_counter += 1
 
         # All MS + genomic segments are now plaintext: strip the per-AU

@@ -314,6 +314,58 @@ def verify_genomic_run(
     return True
 
 
+# M98: assembly graphs. The signed set is the segments/sequences byte
+# channel — signatures cover it the way they cover genomic-run
+# channels. The compounds (records, links, paths, extras, line_index)
+# are skipped the way the genomic chromosomes compound was: VL-string
+# compound rows are outside the canonical-bytes API.
+
+
+def sign_assembly_graph(
+    graph_group: h5py.Group,
+    key: bytes,
+    *,
+    algorithm: str = "hmac-sha256",
+) -> dict[str, str]:
+    """Sign the byte channels of one assembly graph
+    (``/study/assembly_graphs/<name>/``).
+
+    Returns a dict mapping ``"segments/sequences"`` to the prefixed
+    signature stored on the dataset's ``@ttio_signature`` attribute.
+    Absent datasets are skipped (a graph whose segments all carry
+    ``*`` has no sequences channel).
+    """
+    out: dict[str, str] = {}
+    if "segments" in graph_group:
+        seg_group = graph_group["segments"]
+        if "sequences" in seg_group:
+            out["segments/sequences"] = sign_dataset(
+                seg_group["sequences"], key, algorithm=algorithm,
+            )
+    return out
+
+
+def verify_assembly_graph(
+    graph_group: h5py.Group,
+    key: bytes,
+    *,
+    algorithm: str = "hmac-sha256",
+) -> bool:
+    """Verify every dataset :func:`sign_assembly_graph` would sign.
+
+    Returns ``True`` iff every present, signed dataset verifies under
+    the key; an unsigned present dataset fails, matching
+    :func:`verify_genomic_run`. Absent datasets are skipped.
+    """
+    if "segments" in graph_group:
+        seg_group = graph_group["segments"]
+        if "sequences" in seg_group and not verify_dataset(
+            seg_group["sequences"], key, algorithm=algorithm,
+        ):
+            return False
+    return True
+
+
 # ── Provider-agnostic sign / verify () ─────────────────────────
 
 

@@ -1739,6 +1739,66 @@ transport-spec §4.22).
 
 ---
 
+## 11a. Assembly graphs (M98)
+
+One assembly graph stores a GFA 1.x file at
+`/study/assembly_graphs/<name>/` so that re-emission is byte-exact
+against the parsed input. The `assembly_graphs/` group carries a
+`@_graph_names` comma-list attribute (the `_run_names` convention);
+files with at least one graph set the `opt_assembly_graph` feature
+flag, and graph-less files carry neither the flag nor the subtree.
+
+Per-graph attributes:
+
+| Attribute | Type | Semantics |
+|---|---|---|
+| `@gfa_version` | UTF-8 string | The `VN:Z:` value of the first header line routed to extras, else `"1.0"`. |
+| `@producer` | UTF-8 string | Reserved; `""` from the GFA readers. |
+| `@final_newline` | integer | 1 when the source file ended in LF, else 0. Structural marker: a group without this attribute is not an M98 graph. |
+
+Per-graph children, all 1-D:
+
+| Child | Kind | Fields / element |
+|---|---|---|
+| `segments/records` | compound | `name` VL_STRING, `length` UINT64, `seq_offset` UINT64, `seq_missing` UINT32, `tags` VL_STRING |
+| `segments/sequences` | uint8 | Concatenation of every present segment sequence; `seq_offset`/`length` index into the decoded bytes. Absent when every segment carries `*`. |
+| `links` | compound | `from`, `from_orient`, `to`, `to_orient`, `overlap`, `tags` — all VL_STRING |
+| `paths` | compound | `name`, `segment_list`, `overlaps`, `tags` — all VL_STRING |
+| `extras` | compound | `line` VL_STRING — the verbatim source line |
+| `line_index` | compound | `line_type` UINT32 (0 = S, 1 = L, 2 = P, 3 = extra), `row` UINT64 |
+
+Empty tables are ABSENT: a 0-row non-extendable compound does not
+round-trip on every provider, and readers in all 3 SDKs treat a
+missing table as empty.
+
+**Parser structural rules** (identical in the 3 SDKs): split on LF
+after final-newline detection; fields split on TAB with trailing
+empty fields preserved. `S` needs at least 3 fields, `L` 6, `P` 4;
+every other line (`H`, `C`, comments, hifiasm `A` lines, short
+S/L/P) goes verbatim into `extras`. `tags` is the tab-joined
+verbatim remainder, `""` when none. A `*` sequence stores no bytes
+and sets `seq_missing`. An empty file has 0 lines; a file holding
+one LF is one empty extras line. Emission replays `line_index`,
+writes `*` for a missing sequence, appends `tags` with a TAB only
+when non-empty, and restores the final newline from the attribute.
+
+**Sequences codec**: `segments/sequences` is stored through
+BASE_PACK (id 6) when every byte is in `ACGTNacgtn`, RANS_ORDER1
+(id 5) otherwise, uncompressed when empty; the codec id sits in the
+dataset's `@compression` attribute per §10.5 (0 or absent = raw).
+
+**Protection**: per-AU encryption (§9.1) covers
+`segments/sequences` with one AES-256-GCM operation per segment
+record — offsets and lengths from `segments/records`, AAD channel
+name `sequences`, dataset_id continuing after the genomic runs. The
+channel is decoded to raw bytes before slicing; decrypt-in-place
+restores the raw uint8 dataset with no `@compression`. `v2:`/`v3:`
+signatures (§10) cover `segments/sequences` the way they cover
+genomic-run channels; the compound tables are outside the signed
+set.
+
+---
+
 ## 12. Backward compatibility
 
 A v0.2 reader recognizes a v0.1 file by the absence of

@@ -69,6 +69,12 @@ public final class FeatureFlags {
      *  readers ignore unknown opt_* flags and continue to read from
      *  {@code genomic_index/} correctly. */
     public static final String OPT_NO_SIGNAL_INT_DUPS = "opt_no_signal_int_dups";
+    /** file contains one or more assembly graphs under
+     *  {@code /study/assembly_graphs/} (M98, format-spec §11a).
+     *  Strictly additive: readers that ignore the flag parse the rest
+     *  of the file normally (the graphs are a separate group
+     *  hierarchy). */
+    public static final String OPT_ASSEMBLY_GRAPH = "opt_assembly_graph";
 
     private static final Set<String> REQUIRED = Set.of(
         BASE_V1, COMPOUND_IDENTIFICATIONS, COMPOUND_QUANTIFICATIONS,

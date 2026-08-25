@@ -140,7 +140,7 @@ public final class BamDump {
         return out;
     }
 
-    private static String md5Hex(byte[] data) {
+    static String md5Hex(byte[] data) {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] digest = md.digest(data);
@@ -166,7 +166,7 @@ public final class BamDump {
      * brace immediately, then a newline, then indented children.</p>
      */
     @SuppressWarnings("unchecked")
-    private static void writeJson(StringBuilder sb, Object value, int indent) {
+    static void writeJson(StringBuilder sb, Object value, int indent) {
         if (value == null) {
             sb.append("null");
         } else if (value instanceof Boolean b) {

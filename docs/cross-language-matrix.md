@@ -74,6 +74,7 @@ contract levels per language pair. Footnotes follow the table.
 | **v1.0 per-AU transport** (`.tis` send/recv) | `=` (20) | `=` (20) | `=` (20) | `=` | `python/tests/integration/test_per_au_cross_language.py` |
 | **M89.6 genomic transport per-AU** (3×3 writer × reader) | `=` | `=` | `=` | `=` | `python/tests/validation/test_m89_cross_language.py` |
 | **Phase 2c-T transport bulk-mode** (3×3 writer × reader, byte-identity on `mate_info` + `read_names` blobs) | `=` | `=` | `=` | `=` | `python/tests/validation/test_phase_2c_t_bulk_mode.py` |
+| **M98 AssemblyGraph** (canonical-JSON dump equality + 3×3 writer × emitter container matrix, byte-exact GFA re-emission on a synthetic + a hifiasm graph) | `=` | `=` | `=` | `=` | `python/tests/validation/test_m98_gfa_matrix.py` (drives `TtioGfaDump` + Java `GfaDump`) |
 | **nmrML reader parity** (acquisition-parameter scalars + complex128 FID) | `=` | `=` | `=` | n/a | `python/tests/integration/test_nmrml_roundtrip.py` (Py) + `java/.../ImportExportTest::nmrmlParityFieldsSurfaced` |
 | **nmrML 3-way probe parity** (synthetic + bmse000325 fixture, JSON-dumped surface fields, bit-exact doubles) | `=` | `=` | `=` | `=` | `python/tests/integration/test_nmrml_cross_lang_parity.py` (drives `NmrMLProbe.java` + `TtioNmrMLProbe`) |
 | **mzML 3-way probe parity** (synthetic + tiny.pwiz fixture, retentionTime / msLevel / polarity / precursorMz / precursorCharge / mz / intensity) | `=` | `=` | `=` | `=` | `python/tests/integration/test_mzml_cross_lang_parity.py` (drives `MzMLProbe.java` + `TtioMzMLProbe`) (23) |
@@ -205,6 +206,7 @@ The harnesses depend on per-language CLI tools. Build them via:
 | Purpose | Python | ObjC | Java |
 |---|---|---|---|
 | BAM/CRAM dump (canonical JSON) | `python -m ttio.importers.bam_dump` | `objc/Tools/obj/TtioBamDump` | `global.thalion.ttio.importers.BamDump` |
+| GFA dump (canonical JSON) + M98 `--write-tio` / `--emit-gfa` conformance modes | `python -m ttio.importers.gfa_dump` | `objc/Tools/obj/TtioGfaDump` | `global.thalion.ttio.importers.GfaDump` |
 | Per-AU encrypt/decrypt/transcode/send/recv | `python -m ttio.tools.per_au_cli` | `objc/Tools/obj/TtioPerAU` | `global.thalion.ttio.tools.PerAUCli` |
 | `.tio` summary (cross-lang verify pivot) | `python -m ttio.tools.ttio_verify_cli` (`ttio-verify`) | `objc/Tools/obj/TtioVerify` | `global.thalion.ttio.tools.TtioVerify` |
 | Sign a dataset (M18) | `ttio-sign` | `objc/Tools/obj/TtioSign` | (covered via `TtioVerify` flag set; no standalone) |

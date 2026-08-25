@@ -92,6 +92,12 @@
  *          <code>/study/genomic_runs/</code>. */
 + (NSString *)featureOptGenomic;
 
+/** @return <code>@"opt_assembly_graph"</code> — file declares
+ *          assembly-graph content under
+ *          <code>/study/assembly_graphs/</code> (M98,
+ *          format-spec 11a). */
++ (NSString *)featureOptAssemblyGraph;
+
 /** @return <code>@"opt_no_signal_int_dups"</code> — file omits the
  *          legacy integer-channel duplicates from
  *          <code>signal_channels/</code>. */

@@ -124,6 +124,18 @@ public final class PerAUFile {
                         }
                     }
                 }
+                // M98: assembly graphs; datasetId continues after
+                // the genomic runs.
+                if (study.hasChild("assembly_graphs")) {
+                    try (StorageGroup agRoot =
+                            study.openGroup("assembly_graphs")) {
+                        for (String agName : runNames(agRoot)) {
+                            encryptOneAssemblyGraph(agRoot, agName,
+                                                    datasetId, key);
+                            datasetId++;
+                        }
+                    }
+                }
             }
 
             List<String> updatedFeatures = new ArrayList<>(flags.features());
@@ -261,6 +273,18 @@ public final class PerAUFile {
                         for (String runName : runNames(gRuns)) {
                             decryptOneGenomicRunInPlace(gRuns, runName,
                                                           datasetId, key);
+                            datasetId++;
+                        }
+                    }
+                }
+                // M98: assembly graphs; datasetId numbering mirrors
+                // encryptFile exactly.
+                if (study.hasChild("assembly_graphs")) {
+                    try (StorageGroup agRoot =
+                            study.openGroup("assembly_graphs")) {
+                        for (String agName : runNames(agRoot)) {
+                            decryptOneAssemblyGraphInPlace(agRoot, agName,
+                                                           datasetId, key);
                             datasetId++;
                         }
                     }
@@ -710,6 +734,82 @@ public final class PerAUFile {
                 writeChannelSegments(sig, cname + "_segments", segs);
                 sig.deleteChild(cname);
                 sig.setAttribute(cname + "_algorithm", "aes-256-gcm");
+            }
+        }
+    }
+
+    /** M98: per-AU encrypt one assembly graph's sequences channel
+     *  in place. One AU per segment record; offsets / lengths come
+     *  from {@code segments/records} ({@code seq_missing} rows have
+     *  length 0 and encrypt to empty ciphertext). The stored channel
+     *  is codec-encoded ({@code @compression}), so it is decoded to
+     *  raw bytes before slicing; {@code decryptOneAssemblyGraphInPlace}
+     *  writes the raw channel back. */
+    private static void encryptOneAssemblyGraph(StorageGroup agRoot,
+                                                 String graphName,
+                                                 int datasetId,
+                                                 byte[] key) {
+        try (StorageGroup g = agRoot.openGroup(graphName)) {
+            if (!g.hasChild("segments")) return;
+            try (StorageGroup seg = g.openGroup("segments")) {
+                if (!seg.hasChild("sequences")
+                        || !seg.hasChild("records")) {
+                    return;
+                }
+                byte[] raw;
+                try (StorageDataset ds = seg.openDataset("sequences")) {
+                    raw = global.thalion.ttio.assembly.AssemblyGraph
+                        .decodeBytesChannel(ds);
+                }
+                List<Map<String, Object>> rows;
+                try (StorageDataset recs = seg.openDataset("records")) {
+                    rows = recs.readRows();
+                }
+                long[] offsets = new long[rows.size()];
+                int[] lengths = new int[rows.size()];
+                for (int i = 0; i < rows.size(); i++) {
+                    offsets[i] = ((Number) rows.get(i)
+                        .get("seq_offset")).longValue();
+                    lengths[i] = (int) ((Number) rows.get(i)
+                        .get("length")).longValue();
+                }
+                List<ChannelSegment> segs =
+                    PerAUEncryption.encryptChannelToSegments(
+                        raw, offsets, lengths, datasetId, "sequences",
+                        key, 1);
+                writeChannelSegments(seg, "sequences_segments", segs);
+                seg.deleteChild("sequences");
+                seg.setAttribute("sequences_algorithm", "aes-256-gcm");
+            }
+        }
+    }
+
+    /** M98: per-AU decrypt one assembly graph in place. The raw
+     *  sequences bytes come back as a plain uint8 dataset with no
+     *  {@code @compression}; the graph re-emits byte-exactly from
+     *  raw bytes. */
+    private static void decryptOneAssemblyGraphInPlace(StorageGroup agRoot,
+                                                        String graphName,
+                                                        int datasetId,
+                                                        byte[] key) {
+        try (StorageGroup g = agRoot.openGroup(graphName)) {
+            if (!g.hasChild("segments")) return;
+            try (StorageGroup seg = g.openGroup("segments")) {
+                if (!seg.hasChild("sequences_segments")) return;
+                List<ChannelSegment> segs =
+                    readChannelSegments(seg, "sequences_segments");
+                byte[] plain = PerAUEncryption.decryptChannelFromSegments(
+                    segs, datasetId, "sequences", key, 1);
+                if (seg.hasChild("sequences")) seg.deleteChild("sequences");
+                try (StorageDataset ds = seg.createDataset(
+                        "sequences", Precision.UINT8, plain.length, 0,
+                        Compression.NONE, 0)) {
+                    ds.writeAll(plain);
+                }
+                seg.deleteChild("sequences_segments");
+                if (seg.hasAttribute("sequences_algorithm")) {
+                    seg.deleteAttribute("sequences_algorithm");
+                }
             }
         }
     }

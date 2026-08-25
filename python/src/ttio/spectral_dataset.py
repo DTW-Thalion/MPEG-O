@@ -25,6 +25,11 @@ from ._rwlock import RWLock
 from .access_policy import AccessPolicy
 from .io.progress import ProgressSinkLike, _fire
 from .acquisition_run import AcquisitionRun
+from .assembly import (  # M98
+    AssemblyGraph,
+    WrittenAssemblyGraph,
+    write_assembly_graph,
+)
 from .genomic.reference_import import ReferenceImport  # tio-browser Phase 0
 from .genomic_run import GenomicRun  # M82
 from .enums import EncryptionLevel, SpectrumKind
@@ -124,6 +129,10 @@ class SpectralDataset:
     ms_runs: dict[str, AcquisitionRun] = field(default_factory=dict)
     nmr_runs: dict[str, AcquisitionRun] = field(default_factory=dict)
     genomic_runs: dict[str, GenomicRun] = field(default_factory=dict)  # M82
+    # Assembly graphs at /study/assembly_graphs/<name>/, populated on
+    # open() (M98, format-spec §11a). Empty for files without the
+    # opt_assembly_graph feature.
+    assembly_graphs: dict[str, AssemblyGraph] = field(default_factory=dict)
     # Embedded references at /study/references/<uri>/, populated on
     # open() from the canonical embed layout (see
     # :func:`_embed_references_for_runs` for the writer side). Empty
@@ -321,6 +330,23 @@ class SpectralDataset:
                         bulk_read=bulk_read,
                     )
 
+        # M98: provider-agnostic assembly_graphs read. Unreadable
+        # graphs are skipped the way unreadable genomic runs are.
+        assembly_graphs_map: dict[str, AssemblyGraph] = {}
+        if study.has_child("assembly_graphs"):
+            ag_group = study.open_group("assembly_graphs")
+            ag_names = io.read_string_attr(
+                ag_group, "_graph_names", default="") or ""
+            for gname in ag_names.split(","):
+                gname = gname.strip()
+                if not gname or not ag_group.has_child(gname):
+                    continue
+                try:
+                    assembly_graphs_map[gname] = AssemblyGraph.open(
+                        ag_group.open_group(gname), gname)
+                except ValueError:
+                    continue
+
         references_map = _gw._load_references_provider(study)
 
         return cls(
@@ -331,6 +357,7 @@ class SpectralDataset:
             ms_runs=ms_runs,
             nmr_runs=nmr_runs,
             genomic_runs=genomic_runs_map,  # M82
+            assembly_graphs=assembly_graphs_map,  # M98
             _references=references_map,
             encrypted_algorithm=encrypted,
             _remote_fileobj=_remote_fileobj,
@@ -903,6 +930,7 @@ class SpectralDataset:
         isa_investigation_id: str,
         runs: Mapping[str, "WrittenRun"],
         genomic_runs: Mapping[str, WrittenGenomicRun] | None = None,  # M82
+        assembly_graphs: Mapping[str, WrittenAssemblyGraph] | None = None,  # M98
         identifications: list[Identification] | None = None,
         quantifications: list[Quantification] | None = None,
         provenance: list[ProvenanceRecord] | None = None,
@@ -979,6 +1007,12 @@ class SpectralDataset:
         has_genomic = bool(genomic_runs)
         if has_genomic and "opt_genomic" not in feature_list:
             feature_list = feature_list + ["opt_genomic"]
+        # M98: opt_assembly_graph advertises assembly-graph content
+        # the same way, added only when a graph is present so ms-only
+        # files stay byte-identical.
+        has_graphs = bool(assembly_graphs)
+        if has_graphs and "opt_assembly_graph" not in feature_list:
+            feature_list = feature_list + ["opt_assembly_graph"]
         format_version = "1.0"
 
         # ------------------------------------------------------------------
@@ -1057,6 +1091,16 @@ class SpectralDataset:
                     for gname, grun in genomic_runs.items():
                         _write_genomic_run_default(study, g_group, gname, grun)
 
+                if has_graphs:
+                    # M98: assembly_graphs subtree, written through the
+                    # StorageGroup adapter so the layout is identical
+                    # to the provider path below.
+                    from ttio.providers.hdf5 import _Group as _Hdf5Group
+                    study_sg = _Hdf5Group(study)
+                    for ag_name in sorted(assembly_graphs):
+                        write_assembly_graph(
+                            assembly_graphs[ag_name], ag_name, study_sg)
+
                 if (image is not None or raman_image is not None
                         or ir_image is not None):
                     # Wrap the raw h5py.Group in the package-private adapter
@@ -1131,6 +1175,12 @@ class SpectralDataset:
                 )
                 for gname, grun in genomic_runs.items():
                     _write_genomic_run_default(study, g_group, gname, grun)
+
+            if has_graphs:
+                # M98: study is already a StorageGroup here.
+                for ag_name in sorted(assembly_graphs):
+                    write_assembly_graph(
+                        assembly_graphs[ag_name], ag_name, study)
 
             if image is not None:
                 image.write_to(study)   # study is already a StorageGroup here

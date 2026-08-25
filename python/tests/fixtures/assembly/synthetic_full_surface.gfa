@@ -1,0 +1,11 @@
+H	VN:Z:1.0
+# produced by the m98 synthetic generator
+S	utg000001l	ACGTACGTACGTNNNACGT	LN:i:19	rd:i:12
+A	utg000001l	0	+	read_00001	0	19	id:i:0	HG:A:a
+S	utg000002l	*	LN:i:5000
+L	utg000001l	+	utg000002l	-	15M	L1:i:4985
+S	utg000003c	GGGGCCCCTTTTAAAA	LN:i:16
+L	utg000002l	-	utg000003c	+	*
+C	utg000001l	+	utg000003c	-	2	14M	NM:i:0
+P	scaffold_1	utg000001l+,utg000002l-,utg000003c+	15M,*	XX:Z:demo
+L	utg000003c	+	utg000001l	+	0M
