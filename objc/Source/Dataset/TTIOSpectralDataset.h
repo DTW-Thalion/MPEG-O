@@ -141,6 +141,24 @@
 + (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error;
 
 /**
+ * Reads a dataset from <code>path</code>, opening the underlying
+ * provider read-write when <code>writable</code> is <code>YES</code>
+ * so in-place writers such as
+ * <code>-[TTIOReferenceImport writeToDataset:overwrite:error:]</code>
+ * can reach a writable <code>provider</code>. The file must exist;
+ * a missing file is an error in either mode.
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>SpectralDataset.open(path, writable=True)</code><br/>
+ * Java: <code>SpectralDataset.open(pathOrUrl, writable)</code></p>
+ *
+ * @since 1.9.0
+ */
++ (instancetype)readFromFilePath:(NSString *)path
+                        writable:(BOOL)writable
+                           error:(NSError **)error;
+
+/**
  * Flat-buffer fast write path. Bypasses per-spectrum object
  * construction and the channel-concat that
  * <code>-writeToFilePath:error:</code> performs when given a

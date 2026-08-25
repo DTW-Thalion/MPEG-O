@@ -35,6 +35,7 @@ the source (`@since`, `@Deprecated`, `TTIO_DEPRECATED_MSG`,
 | API | Status | Since | Notes |
 |---|---|---|---|
 | `SpectralDataset.open(path, mode="r")` | **Stable** | v0.2 | Primary entry point. `mode` values `r`, `r+`, `w`, `w-` (matches h5py). |
+| `SpectralDataset` writable reopen — Python `open(path, writable=True)`, Java `open(pathOrUrl, writable)`, ObjC `+readFromFilePath:writable:error:` | **Stable** | v1.9.0 | M100. Read-write provider behind the open dataset; the file must exist in either mode. |
 | `SpectralDataset.write_minimal(path, title, runs, ...)` | **Stable** | v0.3 | Convenience writer that builds a full `.tio` from `WrittenRun` buffers. |
 | `_pack_run` / `WrittenRun` | **Stable** | v0.3 | Internal but documented; used by importers to assemble runs. The `channel_data` dict accepts arbitrary channel names (v0.8 M53 adds `inv_ion_mobility`). |
 | `close()` / context-manager | **Stable** | v0.2 | |

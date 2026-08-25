@@ -11,25 +11,23 @@ invariant ``ReferenceImport.read_from_group`` /
 ``ReferenceImport.readFromGroup`` / ``-[TTIOReferenceImport
 readFromGroup:]`` were designed to guarantee.
 
-Phase 0 Task 0.12 (tio-browser): all three writer helpers now drive
-**production writer entry points** (no direct-graft):
+All three writer helpers drive the same production path (M100):
+write a minimal dataset, reopen it writable, embed through the
+public write-to-dataset API.
 
 * Python — ``SpectralDataset.write_minimal`` then reopen
-  ``writable=True`` and call ``ReferenceImport.write_to_dataset``
-  (the public API added in Task 0.10).
-* Java — ``SpectralDataset.create`` (returns an open writable dataset)
-  and call ``ReferenceImport.writeToDataset`` (Task 0.10c parity).
-* ObjC — ``+[TTIOSpectralDataset writeMinimalToPath:...:genomicRuns:...]``
-  with one empty-read ``TTIOWrittenGenomicRun`` carrying
-  ``embedReference=YES`` + ``referenceChromSeqs=...``. Task 0.11
-  softened the embed gate so this no longer needs ``libttio_rans``;
-  this exercises the canonical writer path
-  (``_TTIO_M93_EmbedReferences``) end-to-end.
+  ``writable=True`` and call ``ReferenceImport.write_to_dataset``.
+* Java — ``SpectralDataset.create`` + close, reopen
+  ``SpectralDataset.open(path, true)`` and call
+  ``ReferenceImport.writeToDataset``.
+* ObjC — ``+writeMinimalToPath:...``, reopen
+  ``+readFromFilePath:writable:error:`` and call
+  ``-[TTIOReferenceImport writeToDataset:error:]``.
 
-That makes this the *first* place where all three production writer
-paths are end-to-end byte-equal-verified against each other (and
-each other's readers). The earlier direct-graft helpers proved the
-storage-provider layer agreed; this proves the writer layer does too.
+The writable reopen is the piece under test cross-language; the
+embed-helper writer path (``_TTIO_M93_EmbedReferences``) keeps its
+own coverage in each language's unit suite
+(e.g. ``TTIOReferencesAccessorTests``).
 
 SPDX-License-Identifier: Apache-2.0
 """

@@ -11,18 +11,11 @@
 // ReferenceImport.writeToDataset emit. Round-trip is verified through
 // the existing -[TTIOSpectralDataset references] accessor.
 //
-// Test isolation note: TTIOSpectralDataset has no public "open
-// writable" class method. Tests open a TTIOHDF5Provider directly in
-// ReadWrite mode, then attach it to a stub-initialised
-// TTIOSpectralDataset via object_setIvar so writeToDataset can reach
-// the provider through the public -[TTIOSpectralDataset provider]
-// accessor. This is purely a test-only workaround; production callers
-// hold the dataset returned by their own writer paths and never need
-// the runtime trick.
+// Datasets are opened for writing through the public
+// +[TTIOSpectralDataset readFromFilePath:writable:error:] (M100).
 //
 // SPDX-License-Identifier: Apache-2.0
 #import <Foundation/Foundation.h>
-#import <objc/runtime.h>
 #import "Testing.h"
 #import "Core/TTIOProgressSink.h"
 #import "Dataset/TTIOSpectralDataset.h"
@@ -38,9 +31,8 @@ static NSString *makeTempPathW(NSString *suffix)
     return [NSTemporaryDirectory() stringByAppendingPathComponent:base];
 }
 
-/** Seed an empty .tio at path then return a minimally-initialised
- *  TTIOSpectralDataset with a writable HDF5 provider attached via
- *  object_setIvar. Caller must -closeFile when done. */
+/** Seed an empty .tio at path then reopen it writable. Caller must
+ *  -closeFile when done. */
 static TTIOSpectralDataset *makeWritableDatasetForPath(NSString *path,
                                                         NSError **error)
 {
@@ -53,29 +45,9 @@ static TTIOSpectralDataset *makeWritableDatasetForPath(NSString *path,
                                      provenanceRecords:nil
                                                  error:error];
     if (!ok) return nil;
-
-    TTIOHDF5Provider *p = [[TTIOHDF5Provider alloc] init];
-    if (![p openURL:path mode:TTIOStorageOpenModeReadWrite error:error]) {
-        return nil;
-    }
-
-    TTIOSpectralDataset *ds =
-        [[TTIOSpectralDataset alloc] initWithTitle:@"w2d-test"
-                                isaInvestigationId:@"W2D001"
-                                            msRuns:@{}
-                                           nmrRuns:@{}
-                                   identifications:@[]
-                                   quantifications:@[]
-                                 provenanceRecords:@[]
-                                       transitions:nil];
-
-    // Attach the writable provider via direct ivar set so the dataset's
-    // public `provider` getter surfaces it for writeToDataset:.
-    Ivar provIvar = class_getInstanceVariable([TTIOSpectralDataset class],
-                                               "_provider");
-    if (provIvar == NULL) return nil;
-    object_setIvar(ds, provIvar, p);
-    return ds;
+    return [TTIOSpectralDataset readFromFilePath:path
+                                        writable:YES
+                                           error:error];
 }
 
 static void testWriteToDatasetRoundTripsThroughReferences(void)

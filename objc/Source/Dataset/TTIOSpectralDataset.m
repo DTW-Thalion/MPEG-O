@@ -440,14 +440,16 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
 
 #pragma mark - HDF5 read
 
-+ (instancetype)readViaProviderURL:(NSString *)url error:(NSError **)error
++ (instancetype)readViaProviderURL:(NSString *)url
+                              mode:(TTIOStorageOpenMode)mode
+                             error:(NSError **)error
 {
     // v0.9 M64.5-objc-java: read a non-HDF5 .tio by routing through
     // the provider registry. Metadata (idents/quants/prov) comes from
     // the JSON mirror attributes; runs are reconstructed via
     // +[TTIOAcquisitionRun readFromStorageGroup:].
     id<TTIOStorageProvider> prov = [[TTIOProviderRegistry sharedRegistry]
-        openURL:url mode:TTIOStorageOpenModeRead provider:nil error:error];
+        openURL:url mode:mode provider:nil error:error];
     if (!prov) return nil;
     id<TTIOStorageGroup> root = [prov rootGroupWithError:error];
     if (!root) return nil;
@@ -586,13 +588,22 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
 
 + (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error
 {
+    return [self readFromFilePath:path writable:NO error:error];
+}
+
++ (instancetype)readFromFilePath:(NSString *)path
+                        writable:(BOOL)writable
+                           error:(NSError **)error
+{
+    TTIOStorageOpenMode mode = writable ? TTIOStorageOpenModeReadWrite
+                                        : TTIOStorageOpenModeRead;
     if (isNonHdf5ProviderURL(path)) {
-        return [self readViaProviderURL:path error:error];
+        return [self readViaProviderURL:path mode:mode error:error];
     }
     // route through TTIOHDF5Provider; the native handle is the
     // TTIOHDF5File previously obtained directly.
     TTIOHDF5Provider *p = [[TTIOHDF5Provider alloc] init];
-    if (![p openURL:path mode:TTIOStorageOpenModeRead error:error]) return nil;
+    if (![p openURL:path mode:mode error:error]) return nil;
     TTIOHDF5File *f = (TTIOHDF5File *)[p nativeHandle];
     if (!f) return nil;
     TTIOHDF5Group *root = [f rootGroup];
