@@ -10,6 +10,7 @@ drives this via subprocess.
 Usage:
     python -m ttio.tools.per_au_cli encrypt   <in.tio> <out.tio> <key-file> [--headers]
     python -m ttio.tools.per_au_cli decrypt   <in.tio> <out.mpad> <key-file>
+    python -m ttio.tools.per_au_cli decrypt-in-place <file.tio> <key-file>
     python -m ttio.tools.per_au_cli send      <in.tio> <out.tis> [--provider NAME]
     python -m ttio.tools.per_au_cli recv      <in.tis> <out.tio>
     python -m ttio.tools.per_au_cli transcode <in.tio> <out.tio> <key-file> [--headers] [--rekey <new-key-file>]
@@ -30,7 +31,11 @@ from pathlib import Path
 
 import numpy as np
 
-from ttio.encryption_per_au import decrypt_per_au, encrypt_per_au
+from ttio.encryption_per_au import (
+    decrypt_per_au,
+    decrypt_per_au_in_place,
+    encrypt_per_au,
+)
 from ttio.transport.encrypted import (
     read_encrypted_to_file,
     write_encrypted_dataset,
@@ -150,6 +155,11 @@ def _do_decrypt(args: argparse.Namespace) -> int:
             fp.write(struct.pack("<B", dtype_code))
             fp.write(struct.pack("<I", len(value)))
             fp.write(value)
+    return 0
+
+
+def _do_decrypt_in_place(args: argparse.Namespace) -> int:
+    decrypt_per_au_in_place(args.input, _read_key(args.key))
     return 0
 
 
@@ -297,6 +307,11 @@ def main(argv: list[str] | None = None) -> int:
     dec.add_argument("output")
     dec.add_argument("key")
     dec.set_defaults(func=_do_decrypt)
+
+    dip = subs.add_parser("decrypt-in-place")
+    dip.add_argument("input")
+    dip.add_argument("key")
+    dip.set_defaults(func=_do_decrypt_in_place)
 
     snd = subs.add_parser("send")
     snd.add_argument("input")

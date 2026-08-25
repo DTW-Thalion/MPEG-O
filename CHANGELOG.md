@@ -34,6 +34,14 @@ public API is stable from onward.
   cover it the way they cover genomic-run channels
   (`sign_assembly_graph` / `signAssemblyGraph`).
 
+- **Per-AU CLI `decrypt-in-place`.** The three PerAU conformance CLIs
+  (`python -m ttio.tools.per_au_cli`, `TtioPerAU`, Java `PerAUCli`)
+  gain a `decrypt-in-place <file> <key-file>` subcommand over the
+  existing in-place APIs. The M98 matrix gains 3×3 encryptor ×
+  decryptor cells proving a graph container encrypted by one SDK
+  decrypts in place under any other and re-emits GFA byte-exactly,
+  with the per-AU feature flags stripped.
+
 - **M97 long-read profile.** Genomic runs gain the `@read_role` UTF-8
   attribute (`hifi`, `ont_ul`, `hic_r1`, `hic_r2`, `parental_maternal`,
   `parental_paternal`, `illumina_wgs`; other strings stored unchecked),
@@ -149,6 +157,17 @@ public API is stable from onward.
   written before it exists open unchanged.
 
 ### Fixed
+- **ObjC and Java compound readers built ASCII VL-string memory types.**
+  HDF5 has no ASCII↔UTF-8 string conversion path, so reading an
+  h5py-written compound (UTF-8 members) failed on a cold
+  conversion-path cache; a warm cache aliases the pair and masked the
+  bug in every earlier cross-language read. First cold reader was the
+  per-AU graph walker: ObjC errored, Java swallowed the exception and
+  encrypted zero AUs. Both readers now mirror the file member's
+  character set (`TTIOCompoundIO` generic read, `Hdf5CompoundIO`
+  VL-string pass); the encrypted-exchange matrix asserts one AU per
+  segment record so an empty walk can no longer pass.
+
 - **`TTIOSpectralStreamWriter` capped encode work in flight by count, not
   by memory.** `-_emitFdzBlock:` drained only until `threads` blocks
   remained in flight for a channel. An FDZ1 block is 2^20 float64 values

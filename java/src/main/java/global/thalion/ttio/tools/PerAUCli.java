@@ -33,6 +33,7 @@ import java.util.TreeMap;
  * <pre>
  *   java -cp ... PerAUCli encrypt  in.tio out.tio key [--headers]
  *   java -cp ... PerAUCli decrypt  in.tio out.npz_like key
+ *   java -cp ... PerAUCli decrypt-in-place file.tio key
  *   java -cp ... PerAUCli send     in.tio out.tis
  *   java -cp ... PerAUCli recv     in.tis out.tio
  * </pre>
@@ -67,6 +68,7 @@ public final class PerAUCli {
         switch (cmd) {
             case "encrypt" -> encrypt(args);
             case "decrypt" -> decrypt(args);
+            case "decrypt-in-place" -> decryptInPlace(args);
             case "send" -> send(args);
             case "recv" -> recv(args);
             default -> usageAndExit();
@@ -121,6 +123,11 @@ public final class PerAUCli {
                 out.write(me.value());
             }
         }
+    }
+
+    private static void decryptInPlace(String[] args) throws Exception {
+        if (args.length < 3) usageAndExit();
+        PerAUFile.decryptFileInPlace(args[1], readKey(args[2]), "hdf5");
     }
 
     private static void send(String[] args) throws Exception {
@@ -192,7 +199,7 @@ public final class PerAUCli {
 
     private static void usageAndExit() {
         System.err.println(
-            "usage: PerAUCli <encrypt|decrypt|send|recv> <in> <out> [<key>] [--headers]");
+            "usage: PerAUCli <encrypt|decrypt|decrypt-in-place|send|recv> <in> <out> [<key>] [--headers]");
         System.exit(2);
     }
 }

@@ -197,6 +197,24 @@ static int cmdDecrypt(int argc, const char **argv)
     return 0;
 }
 
+static int cmdDecryptInPlace(int argc, const char **argv)
+{
+    if (argc < 4) { fprintf(stderr, "usage: decrypt-in-place <file> <key>\n"); return 2; }
+    NSString *path = @(argv[2]);
+    NSString *keyPath = @(argv[3]);
+    NSError *err = nil;
+    BOOL ok = [TTIOPerAUFile decryptFilePathInPlace:path
+                                                 key:readKeyFile(keyPath)
+                                        providerName:nil
+                                               error:&err];
+    if (!ok) {
+        fprintf(stderr, "decrypt-in-place failed: %s\n",
+                err.localizedDescription.UTF8String ?: "unknown");
+        return 1;
+    }
+    return 0;
+}
+
 static int cmdSend(int argc, const char **argv)
 {
     if (argc < 4) { fprintf(stderr, "usage: send <in> <out>\n"); return 2; }
@@ -241,11 +259,12 @@ int main(int argc, const char **argv)
 {
     @autoreleasepool {
         if (argc < 2) {
-            fprintf(stderr, "usage: TtioPerAU <encrypt|decrypt|send|recv> ...\n");
+            fprintf(stderr, "usage: TtioPerAU <encrypt|decrypt|decrypt-in-place|send|recv> ...\n");
             return 2;
         }
         const char *cmd = argv[1];
         if (strcmp(cmd, "encrypt") == 0) return cmdEncrypt(argc, argv);
+        if (strcmp(cmd, "decrypt-in-place") == 0) return cmdDecryptInPlace(argc, argv);
         if (strcmp(cmd, "decrypt") == 0) return cmdDecrypt(argc, argv);
         if (strcmp(cmd, "send") == 0)    return cmdSend(argc, argv);
         if (strcmp(cmd, "recv") == 0)    return cmdRecv(argc, argv);
