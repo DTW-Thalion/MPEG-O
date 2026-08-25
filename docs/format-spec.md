@@ -713,6 +713,67 @@ The legacy decryption code remains for migration; see the
 `--transcode` flow described in
 `docs/transport-encryption-design.md` §6.
 
+#### 9.1.1 Genomic runs under `blocks_v1` (M99)
+
+For a genomic run in the `blocks_v1` layout (§10.12), the walkers
+stream **block by block** instead of materialising the channel:
+each block's `sequences` / `qualities` blob is decoded with its
+per-block codec from the block index, sliced per read using the
+`genomic_index/lengths` slice, and encrypted as one AU per read
+with **global** AU numbering (`au_sequence` = the read's index-row
+ordinal; the stored segment `offset` is the read's global plaintext
+offset). The segments compounds are extendable and appended one
+block at a time, so peak memory follows the block policy, not the
+channel size. The on-disk `<channel>_segments` layout, the AAD, and
+the `dataset_id` ordering are identical to the whole-channel form
+above — a reader of the segments tables cannot tell which walker
+produced them.
+
+Decrypt-in-place restores the **original layout**: each block's AUs
+are decrypted, the block is re-encoded through the block writer
+(replicating the stream writer's sticky qualities strategy: block 0
+auto-tunes, the winner read back from the encoded stream pins the
+rest), and the blobs are appended into recreated channel datasets.
+
+So that the re-encode reproduces the original blobs, the stream
+writers persist the writer policy that shapes them as run-group
+attributes (M99.1), and the walkers set them on every reconstructed
+block:
+
+| Attribute | Type | Written when |
+|---|---|---|
+| `@ref_diff_slice_bytes` | uint64 | The REF_DIFF slice byte budget is non-zero. |
+| `@opt_disable_qualities_v5` | int `1` | The qualities-V5 opt-out is set. |
+| `@reference_md5s` | string, JSON object | The run's sequences code through `REF_DIFF_V2`. Maps each chromosome name of the writer's reference set to the hex **reference-set** md5 — the digest of every chromosome's bytes concatenated in sorted-name order, the same value the blob headers carry and the on-disk reference `@md5` records. |
+
+A `REF_DIFF_V2` run's restore rebuilds `reference_chrom_seqs`
+through the reference resolver from `@reference_md5s`: the embedded
+`/study/references/` copy when present, else a `REF_PATH` FASTA
+verified against the digests. Files without the attribute keep the
+embedded-directory walk; when neither source resolves, the walkers
+refuse with an error naming both.
+
+When every re-encoded blob lands on the ranges the block index
+records — the case whenever the persisted policy is honoured — the
+index is untouched and the restore is **byte-identical**. When any
+blob differs (an older file without the policy attrs), restore does
+not refuse: it appends the blobs it produced and rewrites
+`blocks/index` with the offsets, lengths and codec ids actually
+written, keeping the file consistent and readable at the cost of
+byte-identity.
+
+The encrypted transport stream carries `blocks_v1` genomic runs via
+the transport-spec v0.12 sidecar packets (`GenomicRunSidecar` 0x1C,
+`BlockSidecar` 0x1D, feature token `transport_blocks_v1` — see
+`transport-spec.md` §4.24): the AU stream carries the encrypted
+sequences and qualities per read, the sidecars carry the run
+scalars, the restore attributes, both chromosome name tables, the
+block index rows and the verbatim plaintext
+`read_names`/`cigars`/`mate_info` blob slices, so decrypt-in-place
+on the received container restores it byte-identically. The stream
+does not carry embedded reference bytes; a received `REF_DIFF_V2`
+run restores through `@reference_md5s` and `REF_PATH`.
+
 ---
 
 ## 10. Digital signatures
@@ -1493,6 +1554,7 @@ v1.8 whole-channel layout.
 | `@layout` | fixed string `"blocks_v1"` | Selects this layout. Absent means the v1.8 whole-channel layout. A reader that does not know the value MUST fail with an unsupported-layout error. |
 | `@block_policy` | fixed string | Writer policy, informative, e.g. `reads=1000000,bytes=67108864`. |
 | `@read_count`, `@base_count` | int64 | Totals over the blocks written so far; updated at every flush and at close. |
+| `@ref_diff_slice_bytes`, `@opt_disable_qualities_v5`, `@reference_md5s` | see §9.1.1 | Persisted writer policy and reference set for the per-AU restore re-encode (M99.1). Present only when non-default / applicable. |
 
 ### 10.12.2 `blocks/index`
 

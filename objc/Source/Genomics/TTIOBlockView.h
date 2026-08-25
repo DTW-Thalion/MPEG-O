@@ -33,6 +33,18 @@ NS_ASSUME_NONNULL_BEGIN
                         mateChromNames:(NSArray<NSString *> *)mateChromNames
                                  error:(NSError **)error;
 
+/** As above, leaving out the blob channels named in
+ *  <code>skipChannels</code> — the per-AU decrypt walker (M99) skips
+ *  the encrypted (deleted) channels and injects their decrypted raw
+ *  bytes itself. */
++ (nullable instancetype)materialiseBlock:(NSUInteger)b
+                                 ofRun:(id<TTIOStorageGroup>)runGroup
+                                 table:(TTIOBlockTable *)table
+                            chromNames:(NSArray<NSString *> *)chromNames
+                        mateChromNames:(NSArray<NSString *> *)mateChromNames
+                          skipChannels:(nullable NSSet<NSString *> *)skipChannels
+                                 error:(NSError **)error;
+
 /** Drop the memory store. */
 - (void)discard;
 

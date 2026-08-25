@@ -507,6 +507,23 @@ public final class GenomicStreamWriter implements AutoCloseable {
         return g;
     }
 
+    /** MD5 of the chromosome sequences concatenated in sorted-name
+     *  order: the on-disk {@code @md5} / blob-header digest. */
+    private static byte[] referenceSetMd5(Map<String, byte[]> seqs) {
+        try {
+            java.security.MessageDigest md =
+                java.security.MessageDigest.getInstance("MD5");
+            List<String> names = new ArrayList<>(seqs.keySet());
+            Collections.sort(names);
+            for (String n : names) {
+                md.update(seqs.get(n));
+            }
+            return md.digest();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     private void ensureLayout() {
         if (rg != null) return;
         StorageGroup g = runsGroup();
@@ -526,6 +543,39 @@ public final class GenomicStreamWriter implements AutoCloseable {
         run.setAttribute("base_count", 0L);
         run.setAttribute("layout", LAYOUT);
         run.setAttribute("block_policy", "reads=" + opt.blockReads() + ",bytes=" + opt.blockBytes());
+        // Non-default writer policy shapes the coded blobs; a per-AU
+        // restore re-encodes with it, so it is persisted on the run
+        // (format-spec 9.1.1).
+        if (opt.refDiffSliceBytes() != 0) {
+            run.setAttribute("ref_diff_slice_bytes", opt.refDiffSliceBytes());
+        }
+        if (opt.optDisableQualitiesV5()) {
+            run.setAttribute("opt_disable_qualities_v5", 1L);
+        }
+        if (opt.referenceChromSeqs() != null) {
+            // The chromosome set and the reference-set digest (the
+            // md5 the REF_DIFF blob headers carry and the resolver
+            // verifies), so a restore can rebuild the reference from
+            // /study/references or REF_PATH (format-spec 9.1.1).
+            Map<String, byte[]> seqs = opt.referenceChromSeqs();
+            if (referenceMd5 == null) {
+                referenceMd5 = referenceSetMd5(seqs);
+            }
+            StringBuilder hex = new StringBuilder(32);
+            for (byte b : referenceMd5) {
+                hex.append(String.format("%02x", b));
+            }
+            List<String> names = new ArrayList<>(seqs.keySet());
+            Collections.sort(names);
+            StringBuilder json = new StringBuilder("{");
+            for (int i = 0; i < names.size(); i++) {
+                if (i > 0) json.append(',');
+                json.append('"').append(names.get(i)).append("\":\"")
+                    .append(hex).append('"');
+            }
+            json.append('}');
+            run.setAttribute("reference_md5s", json.toString());
+        }
         StorageGroup blocks = run.createGroup("blocks");
         indexDs = blocks.createCompoundDataset("index", INDEX_FIELDS, 0, true, 1024);
         StorageGroup idx = run.createGroup("genomic_index");

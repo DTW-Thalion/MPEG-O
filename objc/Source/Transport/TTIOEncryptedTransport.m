@@ -28,6 +28,10 @@
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "ValueClasses/TTIOEnums.h"
+#import "Genomics/TTIOBlockTable.h"          // M99.1 blocks_v1 sidecars
+#import "Genomics/TTIOBlockView.h"           // readNamesIn:named:
+#import "Genomics/TTIOGenomicBlocks.h"       // blockChannels
+#import "Genomics/TTIOGenomicStreamWriter.h" // indexFields
 
 #include <string.h>
 
@@ -61,6 +65,16 @@ static void appendLEString(NSMutableData *buf, NSString *s, int width) {
     if (width == 2) appendU16LE(buf, (uint16_t)d.length);
     else            appendU32LE(buf, (uint32_t)d.length);
     [buf appendData:d];
+}
+static void appendU64LE(NSMutableData *buf, uint64_t v) {
+    uint8_t b[8];
+    for (int i = 0; i < 8; i++) b[i] = (uint8_t)((v >> (8 * i)) & 0xFFu);
+    [buf appendBytes:b length:8];
+}
+static uint64_t readU64LE(const uint8_t *b) {
+    uint64_t v = 0;
+    for (int i = 0; i < 8; i++) v |= ((uint64_t)b[i]) << (8 * i);
+    return v;
 }
 static uint16_t readU16LE(const uint8_t *b) {
     return (uint16_t)((uint32_t)b[0] | ((uint32_t)b[1] << 8));
@@ -303,6 +317,11 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
 @property (nonatomic, strong) NSMutableArray<NSNumber *> *genomicMapqs;
 @property (nonatomic, strong) NSMutableArray<NSNumber *> *genomicFlags;
 @property (nonatomic, copy) NSString *genomicMetadataJSON;
+// M99.1 blocks_v1 sidecars; runSidecar stays nil for legacy-shaped
+// genomic runs. Decoded packet dictionaries (transport-spec §4.24;
+// see decodeGenomicRunSidecar / decodeBlockSidecar).
+@property (nonatomic, strong) NSDictionary *runSidecar;
+@property (nonatomic, strong) NSMutableArray<NSDictionary *> *blockSidecars;
 @end
 @implementation DatasetAccumulator
 @end
@@ -321,6 +340,276 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
 @end
 @implementation ProtectionMeta
 @end
+
+// ------------------------------------------- M99.1 blocks_v1 sidecars
+
+static int64_t sidecarIntAttr(id<TTIOStorageGroup> g, NSString *name)
+{
+    if (![g hasAttributeNamed:name]) return 0;
+    id v = [g attributeValueForName:name error:NULL];
+    return [v respondsToSelector:@selector(longLongValue)]
+        ? [v longLongValue] : 0;
+}
+
+// One GenomicRunSidecar, then one BlockSidecar per block, for a
+// blocks_v1 per-AU-encrypted genomic run (transport-spec §4.24).
+static BOOL emitBlocksV1Sidecars(TTIOTransportWriter *writer,
+                                 id<TTIOStorageGroup> gRun,
+                                 id<TTIOStorageGroup> gSig,
+                                 uint16_t did,
+                                 NSError **error)
+{
+    TTIOBlockTable *table = [TTIOBlockTable readFromRunGroup:gRun
+                                                       error:error];
+    if (!table) return NO;
+
+    NSMutableDictionary *attrs = [NSMutableDictionary dictionary];
+    int64_t slice = sidecarIntAttr(gRun, @"ref_diff_slice_bytes");
+    if (slice != 0) attrs[@"ref_diff_slice_bytes"] = @(slice);
+    if (sidecarIntAttr(gRun, @"opt_disable_qualities_v5") != 0) {
+        attrs[@"opt_disable_qualities_v5"] = @1;
+    }
+    NSString *md5s = readStringAttr(gRun, @"reference_md5s");
+    if (md5s.length > 0) attrs[@"reference_md5s"] = md5s;
+
+    NSArray<NSString *> *sidecarBlobChannels =
+        @[@"read_names", @"cigars", @"mate_info"];
+    NSMutableArray *channels = [NSMutableArray array];
+    NSMutableDictionary<NSString *, id<TTIOStorageDataset>> *blobDs =
+        [NSMutableDictionary dictionary];
+    for (NSString *ch in sidecarBlobChannels) {
+        id<TTIOStorageDataset> ds = nil;
+        if ([ch isEqualToString:@"mate_info"]) {
+            if ([gSig hasChildNamed:@"mate_info"]) {
+                id<TTIOStorageGroup> mg =
+                    [gSig openGroupNamed:@"mate_info" error:NULL];
+                if (mg && [mg hasChildNamed:@"inline_v2"]) {
+                    ds = [mg openDatasetNamed:@"inline_v2" error:NULL];
+                }
+            }
+        } else if ([gSig hasChildNamed:ch]) {
+            ds = [gSig openDatasetNamed:ch error:NULL];
+        }
+        if (ds == nil) continue;
+        blobDs[ch] = ds;
+        NSMutableDictionary *centry = [NSMutableDictionary dictionary];
+        centry[@"name"] = ch;
+        centry[@"compression"] = @([ds hasAttributeNamed:@"compression"]
+            ? [[ds attributeValueForName:@"compression" error:NULL]
+                  longLongValue] : 0);
+        NSMutableDictionary *extra = [NSMutableDictionary dictionary];
+        for (NSString *k in [ds attributeNames]) {
+            if ([k isEqualToString:@"compression"]) continue;
+            id v = [ds attributeValueForName:k error:NULL];
+            if ([v isKindOfClass:[NSData class]]) {
+                v = [[NSString alloc] initWithData:v
+                                           encoding:NSUTF8StringEncoding]
+                    ?: @"";
+            }
+            if (v != nil) extra[k] = v;
+        }
+        if (extra.count > 0) centry[@"extra_attrs"] = extra;
+        [channels addObject:centry];
+    }
+
+    id<TTIOStorageGroup> gIdx = [gRun openGroupNamed:@"genomic_index"
+                                               error:error];
+    if (!gIdx) return NO;
+    NSArray<NSString *> *chromNames =
+        [TTIOBlockView readNamesIn:gIdx named:@"chromosome_names"];
+    NSArray<NSString *> *mateNames = @[];
+    if ([gSig hasChildNamed:@"mate_info"]) {
+        id<TTIOStorageGroup> mg =
+            [gSig openGroupNamed:@"mate_info" error:NULL];
+        if (mg && [mg hasChildNamed:@"chrom_names"]) {
+            mateNames = [TTIOBlockView readNamesIn:mg named:@"chrom_names"];
+        }
+    }
+
+    NSData *attrsJson = [NSJSONSerialization
+        dataWithJSONObject:attrs options:TTIO_JSON_SORTED_KEYS error:NULL];
+    NSData *channelsJson = [NSJSONSerialization
+        dataWithJSONObject:channels options:TTIO_JSON_SORTED_KEYS
+                     error:NULL];
+
+    NSMutableData *payload = [NSMutableData data];
+    appendLEString(payload, readStringAttr(gRun, @"layout") ?: @"", 2);
+    appendLEString(payload, readStringAttr(gRun, @"block_policy") ?: @"", 2);
+    appendU64LE(payload, (uint64_t)sidecarIntAttr(gRun, @"read_count"));
+    appendU64LE(payload, (uint64_t)sidecarIntAttr(gRun, @"base_count"));
+    appendU32LE(payload, (uint32_t)attrsJson.length);
+    [payload appendData:attrsJson];
+    appendU32LE(payload, (uint32_t)channelsJson.length);
+    [payload appendData:channelsJson];
+    appendU32LE(payload, (uint32_t)chromNames.count);
+    for (NSString *n in chromNames) appendLEString(payload, n, 2);
+    appendU32LE(payload, (uint32_t)mateNames.count);
+    for (NSString *n in mateNames) appendLEString(payload, n, 2);
+    [writer _writeRawPacketHeader:TTIOTransportPacketGenomicRunSidecar
+                             flags:0
+                         datasetId:did
+                        auSequence:0
+                           payload:payload];
+
+    NSArray<NSString *> *blockChannels = [TTIOGenomicBlocks blockChannels];
+    for (NSUInteger b = 0; b < table.count; b++) {
+        NSMutableData *bp = [NSMutableData data];
+        appendU32LE(bp, (uint32_t)b);
+        appendU64LE(bp, [table readStartAt:b]);
+        appendU32LE(bp, (uint32_t)[table nReadsAt:b]);
+        appendU64LE(bp, [table baseStartAt:b]);
+        appendU64LE(bp, [table nBasesAt:b]);
+        uint8_t nch = (uint8_t)blockChannels.count;
+        [bp appendBytes:&nch length:1];
+        for (NSString *ch in blockChannels) {
+            appendLEString(bp, ch, 2);
+            appendU64LE(bp, [table offsetOf:ch at:b]);
+            appendU64LE(bp, [table lengthOf:ch at:b]);
+            appendU32LE(bp, table.hasCodecs
+                ? (uint32_t)[table codecOf:ch at:b] : 0);
+        }
+        uint8_t nb = (uint8_t)blobDs.count;
+        [bp appendBytes:&nb length:1];
+        for (NSString *ch in sidecarBlobChannels) {
+            id<TTIOStorageDataset> ds = blobDs[ch];
+            if (ds == nil) continue;
+            unsigned long long off = [table offsetOf:ch at:b];
+            unsigned long long ln = [table lengthOf:ch at:b];
+            NSData *data = ln > 0
+                ? [ds readSliceAtOffset:(NSUInteger)off
+                                  count:(NSUInteger)ln
+                                  error:error]
+                : [NSData data];
+            if (!data) return NO;
+            appendLEString(bp, ch, 2);
+            appendU32LE(bp, (uint32_t)data.length);
+            [bp appendData:data];
+        }
+        [writer _writeRawPacketHeader:TTIOTransportPacketBlockSidecar
+                                 flags:0
+                             datasetId:did
+                            auSequence:(uint32_t)b
+                               payload:bp];
+    }
+    return YES;
+}
+
+static NSDictionary *decodeGenomicRunSidecar(NSData *payload)
+{
+    const uint8_t *b = (const uint8_t *)payload.bytes;
+    NSUInteger len = payload.length;
+    NSUInteger off = 0;
+    NSMutableDictionary *out = [NSMutableDictionary dictionary];
+    if (off + 2 > len) return nil;
+    uint16_t sl = readU16LE(&b[off]); off += 2;
+    out[@"layout"] = [[NSString alloc] initWithBytes:&b[off] length:sl
+                                             encoding:NSUTF8StringEncoding]
+        ?: @"";
+    off += sl;
+    if (off + 2 > len) return nil;
+    sl = readU16LE(&b[off]); off += 2;
+    out[@"block_policy"] =
+        [[NSString alloc] initWithBytes:&b[off] length:sl
+                                encoding:NSUTF8StringEncoding] ?: @"";
+    off += sl;
+    if (off + 16 > len) return nil;
+    out[@"read_count"] = @(readU64LE(&b[off])); off += 8;
+    out[@"base_count"] = @(readU64LE(&b[off])); off += 8;
+    if (off + 4 > len) return nil;
+    uint32_t jl = readU32LE(&b[off]); off += 4;
+    if (off + jl > len) return nil;
+    id attrs = [NSJSONSerialization
+        JSONObjectWithData:[payload subdataWithRange:NSMakeRange(off, jl)]
+                   options:0 error:NULL];
+    off += jl;
+    out[@"attrs"] = [attrs isKindOfClass:[NSDictionary class]] ? attrs : @{};
+    if (off + 4 > len) return nil;
+    jl = readU32LE(&b[off]); off += 4;
+    if (off + jl > len) return nil;
+    id channels = [NSJSONSerialization
+        JSONObjectWithData:[payload subdataWithRange:NSMakeRange(off, jl)]
+                   options:0 error:NULL];
+    off += jl;
+    out[@"channels"] = [channels isKindOfClass:[NSArray class]]
+        ? channels : @[];
+    if (off + 4 > len) return nil;
+    uint32_t n = readU32LE(&b[off]); off += 4;
+    NSMutableArray *chromNames = [NSMutableArray arrayWithCapacity:n];
+    for (uint32_t i = 0; i < n; i++) {
+        if (off + 2 > len) return nil;
+        sl = readU16LE(&b[off]); off += 2;
+        if (off + sl > len) return nil;
+        [chromNames addObject:
+            [[NSString alloc] initWithBytes:&b[off] length:sl
+                                    encoding:NSUTF8StringEncoding] ?: @""];
+        off += sl;
+    }
+    out[@"chromosome_names"] = chromNames;
+    if (off + 4 > len) return nil;
+    n = readU32LE(&b[off]); off += 4;
+    NSMutableArray *mateNames = [NSMutableArray arrayWithCapacity:n];
+    for (uint32_t i = 0; i < n; i++) {
+        if (off + 2 > len) return nil;
+        sl = readU16LE(&b[off]); off += 2;
+        if (off + sl > len) return nil;
+        [mateNames addObject:
+            [[NSString alloc] initWithBytes:&b[off] length:sl
+                                    encoding:NSUTF8StringEncoding] ?: @""];
+        off += sl;
+    }
+    out[@"mate_chrom_names"] = mateNames;
+    return out;
+}
+
+static NSDictionary *decodeBlockSidecar(NSData *payload)
+{
+    const uint8_t *b = (const uint8_t *)payload.bytes;
+    NSUInteger len = payload.length;
+    NSUInteger off = 0;
+    if (off + 32 > len) return nil;
+    NSMutableDictionary *out = [NSMutableDictionary dictionary];
+    out[@"block_index"] = @(readU32LE(&b[off])); off += 4;
+    out[@"read_start"] = @(readU64LE(&b[off])); off += 8;
+    out[@"n_reads"] = @(readU32LE(&b[off])); off += 4;
+    out[@"base_start"] = @(readU64LE(&b[off])); off += 8;
+    out[@"n_bases"] = @(readU64LE(&b[off])); off += 8;
+    if (off + 1 > len) return nil;
+    uint8_t nch = b[off++];
+    NSMutableDictionary *channels = [NSMutableDictionary dictionary];
+    for (uint8_t i = 0; i < nch; i++) {
+        if (off + 2 > len) return nil;
+        uint16_t sl = readU16LE(&b[off]); off += 2;
+        if (off + sl + 20 > len) return nil;
+        NSString *name =
+            [[NSString alloc] initWithBytes:&b[off] length:sl
+                                    encoding:NSUTF8StringEncoding] ?: @"";
+        off += sl;
+        uint64_t cOff = readU64LE(&b[off]); off += 8;
+        uint64_t cLen = readU64LE(&b[off]); off += 8;
+        uint32_t codec = readU32LE(&b[off]); off += 4;
+        channels[name] = @[@(cOff), @(cLen), @(codec)];
+    }
+    out[@"channels"] = channels;
+    if (off + 1 > len) return nil;
+    uint8_t nb = b[off++];
+    NSMutableDictionary *blobs = [NSMutableDictionary dictionary];
+    for (uint8_t i = 0; i < nb; i++) {
+        if (off + 2 > len) return nil;
+        uint16_t sl = readU16LE(&b[off]); off += 2;
+        if (off + sl > len) return nil;
+        NSString *name =
+            [[NSString alloc] initWithBytes:&b[off] length:sl
+                                    encoding:NSUTF8StringEncoding] ?: @"";
+        off += sl;
+        if (off + 4 > len) return nil;
+        uint32_t bl = readU32LE(&b[off]); off += 4;
+        if (off + bl > len) return nil;
+        blobs[name] = [payload subdataWithRange:NSMakeRange(off, bl)];
+        off += bl;
+    }
+    out[@"blobs"] = blobs;
+    return out;
+}
 
 // ---------------------------------------------------------------- impl
 
@@ -403,12 +692,37 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
                 }
             }
         }
+        // blocks_v1 runs ride the same per-read AU stream plus the
+        // M99.1 sidecar packets (GenomicRunSidecar + one BlockSidecar
+        // per block); the StreamHeader announces them with a wire
+        // feature token so receivers know the stream needs them.
+        NSMutableDictionary<NSString *, NSString *> *genomicLayouts =
+            [NSMutableDictionary dictionary];
+        for (NSString *n in genomicRunNames) {
+            id<TTIOStorageGroup> g =
+                [genomicRunsGroup openGroupNamed:n error:NULL];
+            id layoutVal = (g && [g hasAttributeNamed:@"layout"])
+                ? [g attributeValueForName:@"layout" error:NULL] : nil;
+            NSString *layout = nil;
+            if ([layoutVal isKindOfClass:[NSData class]]) {
+                layout = [[NSString alloc] initWithData:layoutVal
+                                                encoding:NSUTF8StringEncoding];
+            } else if (layoutVal != nil) {
+                layout = [layoutVal description];
+            }
+            genomicLayouts[n] = layout ?: @"";
+        }
+        NSMutableArray *streamFeatures =
+            [NSMutableArray arrayWithArray:features];
+        if ([genomicLayouts.allValues containsObject:@"blocks_v1"]) {
+            [streamFeatures addObject:@"transport_blocks_v1"];
+        }
 
         // StreamHeader
         if (![writer writeStreamHeaderWithFormatVersion:@"1.2"
                                                    title:title
                                         isaInvestigation:isa
-                                                features:features
+                                                features:streamFeatures
                                                nDatasets:(uint16_t)(runNames.count + genomicRunNames.count)
                                                    error:error]) return NO;
 
@@ -566,6 +880,10 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
                                             instrumentJSON:gMetaJson
                                           expectedAUCount:gNReads
                                                      error:error]) return NO;
+            if ([genomicLayouts[gRunName] isEqualToString:@"blocks_v1"]
+                && !emitBlocksV1Sidecars(writer, gRun, gSig, did, error)) {
+                return NO;
+            }
             did++;
         }
 
@@ -890,6 +1208,7 @@ static DatasetAccumulator *makeAcc(NSString *name, uint8_t acqMode,
     d.genomicMapqs = [NSMutableArray array];
     d.genomicFlags = [NSMutableArray array];
     d.genomicMetadataJSON = @"";
+    d.blockSidecars = [NSMutableArray array];
     return d;
 }
 
@@ -1100,6 +1419,297 @@ static BOOL ingestAU(TTIOTransportPacketRecord *record,
 
         if (!parseEncryptedChannels(buf, len, &off, nChannels, acc, 0, error))
             return NO;
+    }
+    return YES;
+}
+
+
+// Materialise one blocks_v1 per-AU-encrypted genomic run from its
+// sidecar packets and AU stream, in the shape the stream writer
+// creates it, so decrypt-in-place restores it (transport-spec §4.24).
+static BOOL writeBlocksV1GenomicRun(id<TTIOStorageGroup> gRunsGroup,
+                                    DatasetAccumulator *acc,
+                                    ProtectionMeta *pm,
+                                    NSError **error)
+{
+    NSDictionary *sc = acc.runSidecar;
+    NSDictionary *gMeta = @{};
+    if (acc.genomicMetadataJSON.length > 0) {
+        NSData *jd =
+            [acc.genomicMetadataJSON dataUsingEncoding:NSUTF8StringEncoding];
+        id parsed = [NSJSONSerialization JSONObjectWithData:jd
+                                                      options:0 error:NULL];
+        if ([parsed isKindOfClass:[NSDictionary class]]) gMeta = parsed;
+    }
+    id<TTIOStorageGroup> gRun =
+        [gRunsGroup createGroupNamed:acc.name error:error];
+    if (!gRun) return NO;
+    if (![gRun setAttributeValue:@((int64_t)acc.acquisitionMode)
+                           forName:@"acquisition_mode" error:error]) return NO;
+    NSString *modality = [gMeta[@"modality"] isKindOfClass:[NSString class]]
+        ? gMeta[@"modality"] : @"";
+    if (![gRun setAttributeValue:modality forName:@"modality" error:error])
+        return NO;
+    if (![gRun setAttributeValue:@((int64_t)5)
+                           forName:@"spectrum_class" error:error]) return NO;
+    for (NSString *fld in @[@"reference_uri", @"platform"]) {
+        NSString *v = [gMeta[fld] isKindOfClass:[NSString class]]
+            ? gMeta[fld] : @"";
+        if (![gRun setAttributeValue:v forName:fld error:error]) return NO;
+    }
+    NSString *gRole = [gMeta[@"read_role"] isKindOfClass:[NSString class]]
+        ? gMeta[@"read_role"] : @"";
+    if (gRole.length > 0
+        && ![gRun setAttributeValue:gRole forName:@"read_role" error:error])
+        return NO;
+    NSString *sample = [gMeta[@"sample_name"] isKindOfClass:[NSString class]]
+        ? gMeta[@"sample_name"] : @"";
+    if (![gRun setAttributeValue:sample forName:@"sample_name" error:error])
+        return NO;
+    if (![gRun setAttributeValue:sc[@"read_count"] ?: @0
+                           forName:@"read_count" error:error]) return NO;
+    if (![gRun setAttributeValue:sc[@"base_count"] ?: @0
+                           forName:@"base_count" error:error]) return NO;
+    if (![gRun setAttributeValue:sc[@"layout"] ?: @""
+                           forName:@"layout" error:error]) return NO;
+    if (![gRun setAttributeValue:sc[@"block_policy"] ?: @""
+                           forName:@"block_policy" error:error]) return NO;
+    NSDictionary *attrs = sc[@"attrs"] ?: @{};
+    if ([attrs[@"ref_diff_slice_bytes"] longLongValue] != 0
+        && ![gRun setAttributeValue:
+                @([attrs[@"ref_diff_slice_bytes"] longLongValue])
+                            forName:@"ref_diff_slice_bytes" error:error])
+        return NO;
+    if ([attrs[@"opt_disable_qualities_v5"] longLongValue] != 0
+        && ![gRun setAttributeValue:@((int64_t)1)
+                            forName:@"opt_disable_qualities_v5" error:error])
+        return NO;
+    if ([attrs[@"reference_md5s"] isKindOfClass:[NSString class]]
+        && ![gRun setAttributeValue:attrs[@"reference_md5s"]
+                            forName:@"reference_md5s" error:error])
+        return NO;
+
+    NSArray<NSDictionary *> *sidecars = [acc.blockSidecars
+        sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a,
+                                                       NSDictionary *b) {
+            return [a[@"block_index"] compare:b[@"block_index"]];
+        }];
+    id<TTIOStorageGroup> blocks = [gRun createGroupNamed:@"blocks"
+                                                    error:error];
+    if (!blocks) return NO;
+    id<TTIOStorageDataset> idxDs = [blocks
+        createCompoundDatasetNamed:@"index"
+                            fields:[TTIOGenomicStreamWriter indexFields]
+                             count:0
+                        extendable:YES
+                         chunkRows:1024
+                             error:error];
+    if (!idxDs) return NO;
+    NSMutableArray *rows = [NSMutableArray arrayWithCapacity:sidecars.count];
+    for (NSDictionary *bs in sidecars) {
+        NSMutableDictionary *row = [NSMutableDictionary dictionary];
+        row[@"read_start"] = bs[@"read_start"];
+        row[@"n_reads"] = @([bs[@"n_reads"] unsignedIntValue]);
+        row[@"base_start"] = bs[@"base_start"];
+        row[@"n_bases"] = bs[@"n_bases"];
+        NSDictionary *chans = bs[@"channels"];
+        for (NSString *ch in chans) {
+            NSArray *triple = chans[ch];
+            row[[ch stringByAppendingString:@"_off"]] = triple[0];
+            row[[ch stringByAppendingString:@"_len"]] = triple[1];
+            row[[ch stringByAppendingString:@"_codec"]] =
+                @([triple[2] unsignedIntValue]);
+        }
+        [rows addObject:row];
+    }
+    if (rows.count > 0 && ![idxDs appendData:rows error:error]) return NO;
+
+    id<TTIOStorageGroup> gIdx = [gRun createGroupNamed:@"genomic_index"
+                                                  error:error];
+    if (!gIdx) return NO;
+    NSString *firstCh = acc.channelNames.firstObject;
+    NSArray<TTIOChannelSegment *> *firstSegs = acc.channelSegments[firstCh];
+    NSUInteger nReads = firstSegs.count;
+    NSArray<NSString *> *chromTable = sc[@"chromosome_names"] ?: @[];
+    NSMutableDictionary<NSString *, NSNumber *> *nameToId =
+        [NSMutableDictionary dictionary];
+    for (NSUInteger i = 0; i < chromTable.count; i++) {
+        nameToId[chromTable[i]] = @(i);
+    }
+    NSMutableData *lenData = [NSMutableData dataWithLength:nReads * 4];
+    uint32_t *lenP = lenData.mutableBytes;
+    for (NSUInteger i = 0; i < nReads; i++) lenP[i] = firstSegs[i].length;
+    NSMutableData *posData = [NSMutableData dataWithLength:nReads * 8];
+    NSMutableData *mqData = [NSMutableData dataWithLength:nReads];
+    NSMutableData *flData = [NSMutableData dataWithLength:nReads * 4];
+    NSMutableData *cidData = [NSMutableData dataWithLength:nReads * 2];
+    int64_t *posP = posData.mutableBytes;
+    uint8_t *mqP = mqData.mutableBytes;
+    uint32_t *flP = flData.mutableBytes;
+    uint16_t *cidP = cidData.mutableBytes;
+    for (NSUInteger i = 0; i < nReads; i++) {
+        posP[i] = i < acc.genomicPositions.count
+            ? [acc.genomicPositions[i] longLongValue] : 0;
+        mqP[i] = i < acc.genomicMapqs.count
+            ? (uint8_t)[acc.genomicMapqs[i] unsignedCharValue] : 0;
+        flP[i] = i < acc.genomicFlags.count
+            ? (uint32_t)[acc.genomicFlags[i] unsignedIntValue] : 0;
+        NSString *c = i < acc.genomicChromosomes.count
+            ? acc.genomicChromosomes[i] : @"";
+        NSNumber *slot = nameToId[c ?: @""];
+        if (slot == nil) {
+            if (error) *error = makeErr(33,
+                @"AU chromosome '%@' is not in the sidecar "
+                @"chromosome_names table", c);
+            return NO;
+        }
+        cidP[i] = (uint16_t)slot.unsignedShortValue;
+    }
+    // Extendable, chunked and zlib-6 like the stream writer's
+    // genomic_index arrays (kIndexArrayChunk).
+    NSArray *idxArrays = @[
+        @[@"lengths", @(TTIOPrecisionUInt32), lenData],
+        @[@"positions", @(TTIOPrecisionInt64), posData],
+        @[@"mapping_qualities", @(TTIOPrecisionUInt8), mqData],
+        @[@"flags", @(TTIOPrecisionUInt32), flData],
+        @[@"chromosome_ids", @(TTIOPrecisionUInt16), cidData],
+    ];
+    for (NSArray *a in idxArrays) {
+        id<TTIOStorageDataset> ds =
+            [gIdx createDatasetNamed:a[0]
+                            precision:(TTIOPrecision)[a[1] integerValue]
+                               length:0
+                            chunkSize:65536
+                          compression:TTIOCompressionZlib
+                     compressionLevel:6
+                           extendable:YES
+                                error:error];
+        if (!ds || ![ds appendData:a[2] error:error]) return NO;
+    }
+    NSArray<TTIOCompoundField *> *nameFields = @[
+        [TTIOCompoundField fieldWithName:@"name"
+                                    kind:TTIOCompoundFieldKindVLString],
+    ];
+    id<TTIOStorageDataset> namesDs =
+        [gIdx createCompoundDatasetNamed:@"chromosome_names"
+                                   fields:nameFields
+                                    count:chromTable.count
+                                    error:error];
+    if (!namesDs) return NO;
+    NSMutableArray *nameRows =
+        [NSMutableArray arrayWithCapacity:chromTable.count];
+    for (NSString *n in chromTable) [nameRows addObject:@{ @"name": n }];
+    if (![namesDs writeAll:nameRows error:error]) return NO;
+
+    id<TTIOStorageGroup> gSig =
+        [gRun createGroupNamed:@"signal_channels" error:error];
+    if (!gSig) return NO;
+    NSArray<TTIOCompoundField *> *chFields = channelSegFields();
+    for (NSString *cname in acc.channelNames) {
+        NSArray<TTIOChannelSegment *> *segs = acc.channelSegments[cname];
+        NSString *segName = [NSString stringWithFormat:@"%@_segments", cname];
+        id<TTIOStorageDataset> ds =
+            [gSig createCompoundDatasetNamed:segName
+                                       fields:chFields
+                                        count:segs.count
+                                        error:error];
+        if (!ds) return NO;
+        NSMutableArray *segRows = [NSMutableArray arrayWithCapacity:segs.count];
+        for (TTIOChannelSegment *s in segs) {
+            [segRows addObject:@{
+                @"offset": @(s.offset), @"length": @(s.length),
+                @"iv": s.iv, @"tag": s.tag, @"ciphertext": s.ciphertext,
+            }];
+        }
+        if (![ds writeAll:segRows error:error]) return NO;
+        if (![gSig setAttributeValue:(pm.cipherSuite ?: @"aes-256-gcm")
+                               forName:[NSString stringWithFormat:
+                                           @"%@_algorithm", cname]
+                                 error:error]) return NO;
+        if (pm && pm.wrappedDek.length > 0) {
+            [gSig setAttributeValue:pm.wrappedDek
+                              forName:[NSString stringWithFormat:
+                                          @"%@_wrapped_dek", cname]
+                                error:NULL];
+            [gSig setAttributeValue:(pm.kekAlgorithm ?: @"")
+                              forName:[NSString stringWithFormat:
+                                          @"%@_kek_algorithm", cname]
+                                error:NULL];
+            NSData *recipBlock = encodeRecipientBlock(pm.additionalRecipients);
+            if (recipBlock.length > 0) {
+                [gSig setAttributeValue:recipBlock
+                                forName:[NSString stringWithFormat:
+                                            @"%@_wrapped_dek_recipients",
+                                            cname]
+                                  error:NULL];
+            }
+            if (pm.serverKekId.length > 0) {
+                [gSig setAttributeValue:pm.serverKekId
+                                forName:[NSString stringWithFormat:
+                                            @"%@_server_kek_id", cname]
+                                  error:NULL];
+            }
+        }
+    }
+
+    id<TTIOStorageGroup> mateGroup = nil;
+    for (NSDictionary *centry in (NSArray *)(sc[@"channels"] ?: @[])) {
+        NSString *ch = centry[@"name"];
+        id<TTIOStorageGroup> parent;
+        NSString *dsName;
+        if ([ch isEqualToString:@"mate_info"]) {
+            mateGroup = [gSig createGroupNamed:@"mate_info" error:error];
+            if (!mateGroup) return NO;
+            parent = mateGroup;
+            dsName = @"inline_v2";
+        } else {
+            parent = gSig;
+            dsName = ch;
+        }
+        int64_t codec = [centry[@"compression"] longLongValue];
+        id<TTIOStorageDataset> ds =
+            [parent createDatasetNamed:dsName
+                             precision:TTIOPrecisionUInt8
+                                length:0
+                             chunkSize:[TTIOGenomicStreamWriter channelChunk]
+                           compression:(codec == 0 ? TTIOCompressionZlib
+                                                    : TTIOCompressionNone)
+                      compressionLevel:6
+                            extendable:YES
+                                 error:error];
+        if (!ds) return NO;
+        if (![ds setAttributeValue:@(codec)
+                           forName:@"compression" error:error]) return NO;
+        NSDictionary *extra = centry[@"extra_attrs"] ?: @{};
+        for (NSString *k in [[extra allKeys]
+                sortedArrayUsingSelector:@selector(compare:)]) {
+            if (![ds setAttributeValue:extra[k] forName:k error:error])
+                return NO;
+        }
+        for (NSDictionary *bs in sidecars) {
+            NSData *data = ((NSDictionary *)bs[@"blobs"])[ch];
+            if (data.length > 0
+                && ![ds appendData:data error:error]) return NO;
+        }
+    }
+    // The stream writer creates mate_info and its chrom_names table
+    // at close even when no mate blob was written; mirror that.
+    NSArray *mateNames = sc[@"mate_chrom_names"] ?: @[];
+    if (mateNames.count > 0) {
+        if (mateGroup == nil) {
+            mateGroup = [gSig createGroupNamed:@"mate_info" error:error];
+            if (!mateGroup) return NO;
+        }
+        id<TTIOStorageDataset> mateDs =
+            [mateGroup createCompoundDatasetNamed:@"chrom_names"
+                                            fields:nameFields
+                                             count:mateNames.count
+                                             error:error];
+        if (!mateDs) return NO;
+        NSMutableArray *mateRows =
+            [NSMutableArray arrayWithCapacity:mateNames.count];
+        for (NSString *n in mateNames) [mateRows addObject:@{ @"name": n }];
+        if (![mateDs writeAll:mateRows error:error]) return NO;
     }
     return YES;
 }
@@ -1364,6 +1974,12 @@ static BOOL writeEncryptedFile(NSString *path,
 
             for (NSNumber *didKey in genomicDids) {
                 DatasetAccumulator *acc = datasets[didKey];
+                if (acc.runSidecar != nil) {
+                    if (!writeBlocksV1GenomicRun(gRunsGroup, acc,
+                                                 protection[didKey],
+                                                 error)) return NO;
+                    continue;
+                }
                 id<TTIOStorageGroup> gRun =
                     [gRunsGroup createGroupNamed:acc.name error:error];
                 if (!gRun) return NO;
@@ -1673,6 +2289,35 @@ static BOOL writeEncryptedFile(NSString *path,
             DatasetAccumulator *acc = makeAcc(runName, acq, spectrumClass, chNames);
             acc.genomicMetadataJSON = instrJson;
             datasets[@(did)] = acc;
+        } else if (t == TTIOTransportPacketGenomicRunSidecar) {
+            DatasetAccumulator *acc = datasets[@(rec.header.datasetId)];
+            if (!acc) {
+                if (error) *error = makeErr(31,
+                    @"GenomicRunSidecar for unknown dataset_id %u",
+                    (unsigned)rec.header.datasetId);
+                return NO;
+            }
+            acc.runSidecar = decodeGenomicRunSidecar(rec.payload);
+            if (!acc.runSidecar) {
+                if (error) *error = makeErr(31,
+                    @"malformed GenomicRunSidecar payload");
+                return NO;
+            }
+        } else if (t == TTIOTransportPacketBlockSidecar) {
+            DatasetAccumulator *acc = datasets[@(rec.header.datasetId)];
+            if (!acc) {
+                if (error) *error = makeErr(32,
+                    @"BlockSidecar for unknown dataset_id %u",
+                    (unsigned)rec.header.datasetId);
+                return NO;
+            }
+            NSDictionary *bs = decodeBlockSidecar(rec.payload);
+            if (!bs) {
+                if (error) *error = makeErr(32,
+                    @"malformed BlockSidecar payload");
+                return NO;
+            }
+            [acc.blockSidecars addObject:bs];
         } else if (t == TTIOTransportPacketAccessUnit) {
             DatasetAccumulator *acc = datasets[@(rec.header.datasetId)];
             if (!acc) {
@@ -1686,6 +2331,9 @@ static BOOL writeEncryptedFile(NSString *path,
     }
 
     NSMutableSet *featureSet = [NSMutableSet setWithArray:features];
+    // The blocks_v1 wire token is transport-scoped and never a
+    // container feature flag.
+    [featureSet removeObject:@"transport_blocks_v1"];
     [featureSet addObject:@"opt_per_au_encryption"];
     BOOL anyHeaderEncrypted = NO;
     for (NSNumber *k in datasets) {

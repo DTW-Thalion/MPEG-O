@@ -71,6 +71,7 @@ header. Version 1 is defined by this document.
 
 | Version | Date       | Changes |
 |---------|------------|---------|
+| v0.12   | 2026-08-25 | blocks_v1 per-AU carriage: `GENOMIC_RUN_SIDECAR` (0x1C) + `BLOCK_SIDECAR` (0x1D) packets and the required `transport_blocks_v1` feature token (§4.24). Senders no longer refuse blocks_v1 containers. |
 | v0.11   | 2026-05-25 | Complete `.tio` coverage: references, image cubes, identifications, quantifications, dataset-level provenance, subjects/samples metadata, encryption-algorithm name. New packet types 0x10–0x1B. `SUBJECT_METADATA` (0x19) + `SAMPLE_METADATA` (0x1A) wire format finalised 2026-05-26 (§4.22). Backward-compatible: v0.10 readers skip unknown packet types via length-prefixed wire frames; readers that need v0.11 semantics check the `transport_v0_11` feature flag in StreamHeader. |
 
 ## 3. Wire Format
@@ -801,6 +802,90 @@ this packet only conveys the algorithm-name string.
 algorithm_length:    uint16
 algorithm_utf8:      bytes[algorithm_length]
 ```
+
+### 4.24 GenomicRunSidecar (`0x1C`) and BlockSidecar (`0x1D`) — v0.12
+
+Carriage for per-AU-encrypted genomic runs in the `blocks_v1`
+layout (format-spec §10.12). The per-read AU stream carries the
+encrypted sequences and qualities plus the genomic filter suffix; the
+sidecar packets carry everything else the receiver needs to rebuild a
+container that `decrypt-in-place` restores byte-identically: the run
+scalars and restore-policy attributes, the block index rows, and the
+verbatim slices of the plaintext channel blobs (`read_names`,
+`cigars`, `mate_info`).
+
+When any genomic run in the stream uses `blocks_v1`, the sender adds
+the required feature token `transport_blocks_v1` to
+`StreamHeader.features`. The token is wire-scoped: receivers MUST NOT
+write it into the output container's feature flags. Pre-v0.12
+receivers skip the sidecar packets per §3.3 and rebuild a
+legacy-shaped container that cannot be restored, so senders MUST NOT
+target them with `blocks_v1` streams; the feature token is the
+detection handle.
+
+Exactly one GenomicRunSidecar follows the run's DatasetHeader, before
+any of its BlockSidecars or AccessUnits:
+
+```
+layout:              uint16 len + UTF-8       # "blocks_v1"
+block_policy:        uint16 len + UTF-8       # e.g. "reads=1000000,bytes=67108864"
+read_count:          uint64
+base_count:          uint64
+attrs_json_len:      uint32
+attrs_json:          bytes[attrs_json_len]    # JSON object; only keys present on
+                                              # the run group are emitted:
+                                              # ref_diff_slice_bytes (int),
+                                              # opt_disable_qualities_v5 (int 1),
+                                              # reference_md5s (string, verbatim)
+channels_json_len:   uint32
+channels_json:       bytes[channels_json_len] # JSON array, one object per plaintext
+                                              # sidecar channel present in the run:
+                                              # {"name", "compression" (dataset attr),
+                                              #  "extra_attrs" {k: v} when present}
+n_chrom_names:       uint32
+chrom_names:         repeated uint16 len + UTF-8   # genomic_index/chromosome_names
+                                                   # rows, in table order
+n_mate_chrom_names:  uint32
+mate_chrom_names:    repeated uint16 len + UTF-8   # mate_info/chrom_names rows
+```
+
+One BlockSidecar per block, in block order, `au_sequence` = block
+index:
+
+```
+block_index:         uint32
+read_start:          uint64
+n_reads:             uint32
+base_start:          uint64
+n_bases:             uint64
+n_channels:          uint8                    # all 5 block channels
+# repeated n_channels times:
+channel_name:        uint16 len + UTF-8
+off:                 uint64                   # blocks/index <ch>_off
+len:                 uint64                   # blocks/index <ch>_len
+codec:               uint32                   # blocks/index <ch>_codec
+n_blobs:             uint8                    # plaintext sidecar channels only
+# repeated n_blobs times:
+channel_name:        uint16 len + UTF-8
+blob_length:         uint32
+blob:                bytes[blob_length]       # the block's verbatim blob slice
+```
+
+The receiver writes the run attributes (including the verbatim
+`reference_md5s` string and the policy attributes), recreates
+`blocks/index` from the sidecar rows, appends the blob slices into
+the plaintext channel datasets with the carried dataset attributes,
+builds the `genomic_index` arrays from the AU stream (lengths from
+the segment table, positions, mapping qualities, flags and
+chromosome ids from the filter suffixes, ids resolved against the
+carried `chromosome_names` order), and writes both name tables from
+the sidecar rather than from first-seen AU order, so the restored
+tables match the sender's container.
+
+The stream does not carry the embedded reference bytes. A received
+REF_DIFF run restores through its `reference_md5s` attribute and
+`REF_PATH` (format-spec §9.1.1); receivers that need the embedded
+copy must obtain it out of band.
 
 ## 5. Ordering Rules
 

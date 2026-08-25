@@ -24,11 +24,11 @@ import java.util.Set;
  * run-level name tables) so the whole-channel {@link GenomicRun} decode
  * runs over it unchanged. Python: {@code ttio.genomic._block_view}.
  */
-final class BlockView {
+public final class BlockView {
 
     /** The materialised group and the memory store it lives in. */
-    record Handle(StorageGroup group, String storeUrl) {
-        void discard() { MemoryProvider.discardStore(storeUrl); }
+    public record Handle(StorageGroup group, String storeUrl) {
+        public void discard() { MemoryProvider.discardStore(storeUrl); }
     }
 
     private static final String[][] INDEX_ARRAYS = {
@@ -40,8 +40,18 @@ final class BlockView {
     private BlockView() {}
 
     /** Materialise block {@code b} of {@code runGroup}. */
-    static Handle materialise(StorageGroup runGroup, BlockTable t, int b,
+    public static Handle materialise(StorageGroup runGroup, BlockTable t, int b,
                               List<String> chromNames, List<String> mateChromNames) {
+        return materialise(runGroup, t, b, chromNames, mateChromNames, Set.of());
+    }
+
+    /** As above, leaving out the blob channels named in
+     *  {@code skipChannels} — the per-AU decrypt walker (M99) skips
+     *  the encrypted (deleted) channels and injects their decrypted
+     *  raw bytes itself. */
+    public static Handle materialise(StorageGroup runGroup, BlockTable t, int b,
+                              List<String> chromNames, List<String> mateChromNames,
+                              Set<String> skipChannels) {
         String url = "memory://ttio-block-view-" + System.identityHashCode(runGroup)
                    + "-" + b + "-" + System.nanoTime();
         StorageProvider mem = new MemoryProvider().open(url, StorageProvider.Mode.CREATE);
@@ -70,6 +80,7 @@ final class BlockView {
         StorageGroup srcSc = runGroup.openGroup("signal_channels");
         StorageGroup dstSc = view.createGroup("signal_channels");
         for (String ch : GenomicBlocks.BLOCK_CHANNELS) {
+            if (skipChannels.contains(ch)) continue;
             long off = t.off.get(ch)[b], ln = t.len.get(ch)[b];
             if (ln == 0) continue;
             Integer codec = t.codec != null ? t.codec.get(ch)[b] : null;
@@ -124,7 +135,7 @@ final class BlockView {
     }
 
     /** The {@code name} column of a one-column name table. */
-    static List<String> readNames(StorageGroup g, String name) {
+    public static List<String> readNames(StorageGroup g, String name) {
         List<String> out = new ArrayList<>();
         if (!g.hasChild(name)) return out;
         try (StorageDataset ds = g.openDataset(name)) {

@@ -14,8 +14,9 @@ import java.util.List;
 import java.util.Map;
 
 /** The {@code blocks/index} rows of a {@code blocks_v1} run as column
- *  arrays (format-spec 10.12.2). */
-final class BlockTable {
+ *  arrays (format-spec 10.12.2). Public accessors serve the per-AU
+ *  blocks_v1 walkers in the protection package (M99). */
+public final class BlockTable {
 
     final long[] readStart;
     final int[] nReads;
@@ -37,7 +38,19 @@ final class BlockTable {
         codec = hasCodecs ? new LinkedHashMap<>() : null;
     }
 
-    static BlockTable read(StorageGroup runGroup) {
+    public long readStartAt(int b) { return readStart[b]; }
+    public int nReadsAt(int b) { return nReads[b]; }
+    public long baseStartAt(int b) { return baseStart[b]; }
+    public long nBasesAt(int b) { return nBases[b]; }
+    public long offsetOf(String channel, int b) { return off.get(channel)[b]; }
+    public long lengthOf(String channel, int b) { return len.get(channel)[b]; }
+    public boolean hasCodecs() { return codec != null; }
+    /** Codec id of a channel in a block; 0 without codec columns. */
+    public int codecOf(String channel, int b) {
+        return codec != null ? codec.get(channel)[b] : 0;
+    }
+
+    public static BlockTable read(StorageGroup runGroup) {
         List<Map<String, Object>> rows;
         try (StorageGroup blocks = runGroup.openGroup("blocks");
              StorageDataset ds = blocks.openDataset("index")) {
@@ -72,7 +85,7 @@ final class BlockTable {
         return ((Number) v).longValue();
     }
 
-    int count() { return readStart.length; }
+    public int count() { return readStart.length; }
 
     long readCount() {
         int n = count();

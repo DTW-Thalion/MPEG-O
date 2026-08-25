@@ -600,11 +600,11 @@ public final class Hdf5Provider implements StorageProvider {
 
         @Override
         public Object readSlice(long offset, long count) {
-            @SuppressWarnings("unchecked")
-            List<Object[]> all = (List<Object[]>) readAll();
-            int from = (int) offset;
-            int to = (int) Math.min(all.size(), offset + count);
-            return new ArrayList<>(all.subList(from, to));
+            // Hyperslab read: the block-streaming per-AU walker (M99)
+            // reads one block's segment rows at a time; materialising
+            // the whole compound here would defeat its memory bound.
+            return Hdf5CompoundIO.readCompoundFullRange(
+                    parent, name, schema, offset, (int) count);
         }
 
         // route attribute API through a freshly-opened

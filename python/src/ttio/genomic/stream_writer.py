@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import concurrent.futures as _cf
 import dataclasses
+import json
 import os
 from typing import Any
 
@@ -427,6 +428,36 @@ class GenomicStreamWriter:
         io.write_fixed_string_attr(rg, "layout", LAYOUT)
         io.write_fixed_string_attr(
             rg, "block_policy", f"reads={self._block_reads},bytes={self._block_bytes}")
+        # Persist non-default writer policy that shapes the coded
+        # blobs, so a per-AU restore re-encodes with the same policy
+        # (format-spec 9.1.1).
+        if m["ref_diff_slice_bytes"]:
+            io.write_int_attr(rg, "ref_diff_slice_bytes",
+                              m["ref_diff_slice_bytes"], dtype="<u8")
+        if m["opt_disable_qualities_v5"]:
+            io.write_int_attr(rg, "opt_disable_qualities_v5", 1)
+        if m["reference_chrom_seqs"] is not None:
+            # The chromosome set and the reference-set digest (the
+            # md5 the REF_DIFF blob headers carry and the resolver
+            # verifies), so a restore can rebuild the reference from
+            # /study/references or REF_PATH (format-spec 9.1.1).
+            seqs = m["reference_chrom_seqs"]
+            md5 = self._reference_md5
+            if md5 is None:
+                import hashlib
+                set_md5 = getattr(seqs, "set_md5", None)
+                if callable(set_md5):
+                    md5 = set_md5()
+                else:
+                    h = hashlib.md5()
+                    for c in sorted(seqs):
+                        h.update(seqs[c])
+                    md5 = h.digest()
+                self._reference_md5 = md5
+            io.write_fixed_string_attr(
+                rg, "reference_md5s",
+                json.dumps({c: md5.hex() for c in sorted(seqs)},
+                           separators=(",", ":")))
         blocks = rg.create_group("blocks")
         self._index = blocks.create_compound_dataset(
             "index", INDEX_FIELDS, 0, extendable=True, chunk_rows=1024)

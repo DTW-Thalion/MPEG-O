@@ -107,6 +107,7 @@ extern void testRefDiffV2(void);
 extern void testRefDiffV2Dispatch(void);
 extern void testM97LongReadProfile(void);
 extern void testM98AssemblyGraph(void);
+extern void testM99BlocksV1PerAU(void);
 extern void testNameTokenizerV2(void);
 extern void testNameTokenizedV2Dispatch(void);
 extern void testOffsetsCumsum(void);
@@ -587,6 +588,10 @@ int main(int argc, const char *argv[])
         START_SET("M98: assembly graph GFA + storage round-trip")
             testM98AssemblyGraph();
         END_SET("M98: assembly graph GFA + storage round-trip")
+
+        START_SET("M99: blocks_v1 per-AU streaming walkers")
+            testM99BlocksV1PerAU();
+        END_SET("M99: blocks_v1 per-AU streaming walkers")
 
         START_SET("name_tok v2 codec round-trip + invalid-input")
             testNameTokenizerV2();

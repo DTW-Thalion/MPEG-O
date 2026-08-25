@@ -527,11 +527,19 @@ def read_channel_segments(parent_storage_group, name):
     """Inverse of write_channel_segments. Returns a list of
     SimpleNamespace rows with ``.offset``, ``.length``, ``.iv``,
     ``.tag``, ``.ciphertext`` (all Python bytes)."""
+    return read_channel_segments_slice(parent_storage_group, name, 0, -1)
+
+
+def read_channel_segments_slice(parent_storage_group, name, offset, count):
+    """Rows ``[offset, offset+count)`` of a segments compound —
+    the block-streaming walker's bounded counterpart to
+    :func:`read_channel_segments` (M99). ``count=-1`` reads to the
+    end."""
     from types import SimpleNamespace
     if not parent_storage_group.has_child(name):
         raise KeyError(f"channel segments dataset {name!r} not found")
     ds = parent_storage_group.open_dataset(name)
-    arr = ds.read()
+    arr = ds.read(offset, count)
     rows = []
     for row in arr:
         rows.append(SimpleNamespace(
@@ -542,6 +550,30 @@ def read_channel_segments(parent_storage_group, name):
             ciphertext=_row_value_to_bytes(row["ciphertext"]),
         ))
     return rows
+
+
+def create_channel_segments_extendable(parent_storage_group, name):
+    """Create an empty, extendable ChannelSegment compound so a
+    block-streaming walker can append one block's AUs at a time
+    (M99). Same field layout as :func:`write_channel_segments`."""
+    parent_storage_group.delete_child(name)
+    return parent_storage_group.create_compound_dataset(
+        name, _channel_segments_fields(), 0,
+        extendable=True, chunk_rows=1024)
+
+
+def append_channel_segments(segments_dataset, segments):
+    """Append ChannelSegment rows to an extendable segments compound."""
+    segments_dataset.append([
+        {
+            "offset": int(seg.offset),
+            "length": int(seg.length),
+            "iv": bytes(seg.iv),
+            "tag": bytes(seg.tag),
+            "ciphertext": bytes(seg.ciphertext),
+        }
+        for seg in segments
+    ])
 
 
 def write_au_header_segments(parent_storage_group, name, segments):

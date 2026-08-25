@@ -147,6 +147,8 @@ def encrypt_channel_to_segments(
     channel_name: str,
     key: bytes,
     dtype: np.dtype | str = "<f8",
+    au_base: int = 0,
+    offset_base: int = 0,
 ) -> list[ChannelSegment]:
     """Slice ``plaintext_flat`` into per-AU rows and encrypt each
     independently.
@@ -160,6 +162,12 @@ def encrypt_channel_to_segments(
     to ``plaintext_flat`` if it doesn't already match. Default
     ``"<f8"`` (float64, 8 bytes) preserves pre-M90.1 behaviour.
     Genomic callers pass ``"<u1"`` (uint8, 1 byte).
+
+    Block-streaming callers (M99) hand in ONE block at a time:
+    ``offsets`` are then block-local, ``au_base`` is the block's
+    first global AU ordinal (feeding the AAD), and ``offset_base``
+    is the block's global plaintext offset (feeding the stored
+    segment offset). Both default to 0, the whole-channel behaviour.
     """
     target = np.dtype(dtype)
     if plaintext_flat.dtype != target:
@@ -169,11 +177,11 @@ def encrypt_channel_to_segments(
         off_i = int(off)
         length_i = int(length)
         chunk = plaintext_flat[off_i:off_i + length_i].tobytes()
-        aad = aad_for_channel(dataset_id, au_seq, channel_name)
+        aad = aad_for_channel(dataset_id, au_base + au_seq, channel_name)
         iv, tag, ciphertext = encrypt_with_aad(chunk, key, aad)
         segments.append(
             ChannelSegment(
-                offset=off_i,
+                offset=offset_base + off_i,
                 length=length_i,
                 iv=iv,
                 tag=tag,
@@ -190,18 +198,21 @@ def decrypt_channel_from_segments(
     channel_name: str,
     key: bytes,
     dtype: np.dtype | str = "<f8",
+    au_base: int = 0,
 ) -> np.ndarray:
     """Decrypt every row and concatenate plaintext values.
 
     ``dtype`` controls the per-element byte width used to validate
     the decrypted length and the dtype of the returned array.
     Default ``"<f8"`` (MS path); genomic callers pass ``"<u1"``.
+    ``au_base`` offsets the AAD's AU ordinal for block-streaming
+    callers (M99) that decrypt one block's rows at a time.
     """
     target = np.dtype(dtype)
     bpe = target.itemsize
     chunks: list[bytes] = []
     for au_seq, seg in enumerate(segments):
-        aad = aad_for_channel(dataset_id, au_seq, channel_name)
+        aad = aad_for_channel(dataset_id, au_base + au_seq, channel_name)
         plaintext = decrypt_with_aad(seg.iv, seg.tag, seg.ciphertext, key, aad)
         if len(plaintext) != seg.length * bpe:
             raise ValueError(
@@ -325,6 +336,334 @@ def _get_int_attr(group, name: str, default: int = 0) -> int:
         return int(v)
     except Exception:
         return default
+
+
+# ------------------------------------------------ M99: blocks_v1 walkers
+#
+# The default genomic layout stores codec-coded per-block blobs, so
+# the per-AU walkers stream block by block: decode one block, slice
+# its reads, encrypt one AU per read with GLOBAL AU numbering, append
+# to the segments tables. Restore re-encodes each block with the
+# stream writer's own machinery; per-block re-encoding is
+# byte-deterministic given the sticky qualities discipline (block 0
+# auto-tunes, the winner read back from the encoded stream pins the
+# rest), so the block index never changes. Because writer policy that
+# is not persisted in the file (a non-default ref_diff_slice_bytes,
+# a v5 opt-out) would break that determinism, the ENCRYPT walker
+# re-encodes and byte-compares every block BEFORE deleting anything,
+# and refuses the run when a blob is not reproducible.
+
+_BLOCKS_V1_CHANNELS = ("sequences", "qualities")
+
+
+def _blocks_v1_layout(run_group) -> bool:
+    return _get_str_attr(run_group, "layout") == "blocks_v1"
+
+
+def _embedded_reference_seqs(references_group, uri: str):
+    """``{chromosome: bytes}`` for an embedded reference, else None."""
+    if references_group is None or not uri:
+        return None
+    if not references_group.has_child(uri):
+        return None
+    from .genomic import packed_reference
+    ref = references_group.open_group(uri)
+    if not ref.has_child("chromosomes"):
+        return None
+    chroms = ref.open_group("chromosomes")
+    return {
+        name: packed_reference.read_chromosome_bytes(
+            chroms.open_group(name))
+        for name in chroms.child_names()
+    }
+
+
+def _blocks_v1_reference_seqs(run_group, references_group, uri: str):
+    """``{chromosome: bytes}`` for re-encoding a run's REF_DIFF
+    blocks. With the ``@reference_md5s`` run attribute the reference
+    is rebuilt through :class:`ReferenceResolver` (embedded or
+    ``REF_PATH``); older files without the attribute fall back to the
+    embedded-directory walk. Returns None when neither works."""
+    raw = _get_str_attr(run_group, "reference_md5s")
+    if raw:
+        import json
+        from .genomic.reference_resolver import ReferenceResolver
+        md5s = json.loads(raw)
+        resolver = ReferenceResolver(references_group)
+        return {c: resolver.resolve(uri, bytes.fromhex(m), c)
+                for c, m in md5s.items()}
+    return _embedded_reference_seqs(references_group, uri)
+
+
+def _blocks_v1_block_run(run_group, table, b: int, references_group, *,
+                          decrypted: dict | None = None):
+    """Reconstruct block ``b`` as a per-block ``WrittenGenomicRun``.
+
+    ``decrypted`` maps channel name to raw plaintext bytes on the
+    decrypt path, where the coded blobs no longer exist; the raw
+    bytes are injected into the block view as codec-0 datasets. The
+    encrypt path passes ``None`` and decodes everything from the
+    file's blobs.
+
+    Returns ``(block_run, seq_bytes, qual_bytes)`` where the byte
+    strings are the block's decoded plaintext channels.
+    """
+    from . import _hdf5_io as io
+    from .enums import Compression, Precision
+    from .genomic._block_view import materialise_block
+    from .genomic_run import GenomicRun
+    from .written_genomic_run import WrittenGenomicRun
+
+    skip = tuple(decrypted) if decrypted else ()
+    view = materialise_block(run_group, table, b, skip_channels=skip)
+    if decrypted:
+        sc = view.open_group("signal_channels")
+        for cname, raw in decrypted.items():
+            ds = sc.create_dataset(cname, Precision.UINT8, len(raw))
+            ds.write(np.frombuffer(raw, dtype=np.uint8))
+            io.write_int_attr(ds, "compression", 0, dtype="<u1")
+    rd = GenomicRun.open(view, "block", references_group=references_group)
+    reads = list(rd.iter_reads())
+
+    idx = view.open_group("genomic_index")
+    lengths = np.asarray(idx.open_dataset("lengths").read(),
+                          dtype=np.uint32)
+    n = len(lengths)
+    offsets = np.zeros(n, dtype=np.uint64)
+    if n > 1:
+        offsets[1:] = np.cumsum(lengths[:-1].astype(np.uint64))
+    if decrypted:
+        seq_bytes = decrypted.get("sequences", b"")
+        qual_bytes = decrypted.get("qualities", b"")
+    else:
+        seq_bytes = "".join(r.sequence for r in reads).encode("ascii")
+        qual_bytes = b"".join(r.qualities for r in reads)
+
+    ref_uri = _get_str_attr(run_group, "reference_uri")
+    codecs = table.codecs or {}
+    seq_codec = int(codecs["sequences"][b]) if "sequences" in codecs else 0
+    qual_codec = int(codecs["qualities"][b]) if "qualities" in codecs else 0
+    ref_seqs = None
+    overrides: dict = {}
+    if seq_codec == int(Compression.REF_DIFF_V2):
+        ref_seqs = _blocks_v1_reference_seqs(
+            run_group, references_group, ref_uri)
+        if ref_seqs is None:
+            raise ValueError(
+                f"per-AU blocks_v1: block {b} codes sequences with "
+                f"REF_DIFF_V2 but reference {ref_uri!r} is not embedded "
+                "in /study/references and not resolvable via REF_PATH; "
+                "restoring the blob needs the reference bytes")
+    elif seq_codec:
+        overrides["sequences"] = Compression(seq_codec)
+    if qual_codec:
+        overrides["qualities"] = Compression(qual_codec)
+
+    block = WrittenGenomicRun(
+        acquisition_mode=_get_int_attr(run_group, "acquisition_mode", 0),
+        reference_uri=ref_uri,
+        platform=_get_str_attr(run_group, "platform"),
+        sample_name=_get_str_attr(run_group, "sample_name"),
+        positions=np.asarray(idx.open_dataset("positions").read(),
+                              dtype=np.int64),
+        mapping_qualities=np.asarray(
+            idx.open_dataset("mapping_qualities").read(), dtype=np.uint8),
+        flags=np.asarray(idx.open_dataset("flags").read(),
+                          dtype=np.uint32),
+        sequences=np.frombuffer(seq_bytes, dtype=np.uint8),
+        qualities=np.frombuffer(qual_bytes, dtype=np.uint8),
+        offsets=offsets,
+        lengths=lengths,
+        cigars=[r.cigar for r in reads],
+        read_names=[r.read_name for r in reads],
+        mate_chromosomes=[r.mate_chromosome for r in reads],
+        mate_positions=np.asarray(
+            [r.mate_position for r in reads], dtype=np.int64),
+        template_lengths=np.asarray(
+            [r.template_length for r in reads], dtype=np.int32),
+        chromosomes=[r.chromosome for r in reads],
+        reference_chrom_seqs=ref_seqs,
+        signal_codec_overrides=overrides,
+        opt_disable_qualities_v5=bool(
+            _get_int_attr(run_group, "opt_disable_qualities_v5", 0)),
+        ref_diff_slice_bytes=int(
+            _get_int_attr(run_group, "ref_diff_slice_bytes", 0) or 0),
+    )
+    return block, seq_bytes, qual_bytes
+
+
+def _blocks_v1_derive_qual_hint(blobs, current: int) -> int:
+    """The stream writer's sticky discipline: after the first
+    FQZCOMP_NX16_Z block, read the winning strategy back from the
+    encoded stream and pin it for the rest of the run."""
+    from .enums import Compression
+    if current != -1:
+        return current
+    if (int(blobs.compression.get("qualities", 0))
+            != int(Compression.FQZCOMP_NX16_Z)):
+        return current
+    from .codecs import fqzcomp_nx16_z as _fq
+    s_ = _fq.stream_strategy(blobs.blobs["qualities"])
+    return _fq.HINT_V4_AUTO if s_ == 4 else s_
+
+
+def _encrypt_blocks_v1_run(study, run_group, dataset_id: int,
+                            key: bytes) -> None:
+    """Per-AU encrypt one blocks_v1 genomic run, block by block.
+
+    Encrypt only decodes each block to plaintext and encrypts it;
+    restore re-encodes, honouring the writer policy the run group
+    persists (``opt_disable_qualities_v5``, ``ref_diff_slice_bytes``)
+    and falling back to an index rewrite when a re-encoded blob's
+    length still differs."""
+    from . import _hdf5_io as io
+    from .genomic._block_view import BlockTable
+
+    table = BlockTable.read(run_group)
+    sig = run_group.open_group("signal_channels")
+    channels = [ch for ch in _BLOCKS_V1_CHANNELS if sig.has_child(ch)]
+    if not channels:
+        return
+    refs = (study.open_group("references")
+            if study.has_child("references") else None)
+
+    seg_ds = {ch: io.create_channel_segments_extendable(
+        sig, f"{ch}_segments") for ch in channels}
+    try:
+        for b in range(table.count):
+            r0 = int(table.read_start[b])
+            block, seq_bytes, qual_bytes = _blocks_v1_block_run(
+                run_group, table, b, refs)
+            plain = {"sequences": seq_bytes, "qualities": qual_bytes}
+            for ch in channels:
+                blk_lengths = np.asarray(block.lengths, dtype=np.uint32)
+                local = np.zeros(len(blk_lengths), dtype=np.uint64)
+                if len(blk_lengths) > 1:
+                    local[1:] = np.cumsum(
+                        blk_lengths[:-1].astype(np.uint64))
+                segments = encrypt_channel_to_segments(
+                    np.frombuffer(plain[ch], dtype=np.uint8),
+                    local, blk_lengths,
+                    dataset_id=dataset_id,
+                    channel_name=ch,
+                    key=key,
+                    dtype="<u1",
+                    au_base=r0,
+                    offset_base=int(table.base_start[b]),
+                )
+                io.append_channel_segments(seg_ds[ch], segments)
+    except Exception:
+        for ch in channels:
+            sig.delete_child(f"{ch}_segments")
+        raise
+
+    for ch in channels:
+        sig.delete_child("sequences" if ch == "sequences" else ch)
+        sig.set_attribute(f"{ch}_algorithm", "aes-256-gcm")
+
+
+def _decrypt_blocks_v1_run_in_place(study, run_group, dataset_id: int,
+                                     key: bytes) -> None:
+    """Restore one blocks_v1 genomic run, block by block. Re-encoded
+    blobs are appended into recreated channel datasets. When every
+    blob lands on the ranges the block index records the index is
+    left untouched and the restore is byte-identical; when any blob
+    differs (the writer policy attrs were not honoured, or an older
+    file does not carry them) the index is rewritten to the ranges
+    actually written, keeping the file consistent and readable."""
+    from . import _hdf5_io as io
+    from .enums import Compression, Precision
+    from .genomic._block_view import BlockTable
+    from .genomic._blocks import encode_block
+    from .genomic.stream_writer import CHANNEL_CHUNK
+
+    table = BlockTable.read(run_group)
+    sig = run_group.open_group("signal_channels")
+    channels = [ch for ch in _BLOCKS_V1_CHANNELS
+                if sig.has_child(f"{ch}_segments")]
+    if not channels:
+        return
+    refs = (study.open_group("references")
+            if study.has_child("references") else None)
+
+    new_ds: dict = {}
+    written: dict = {ch: 0 for ch in channels}
+    new_ranges: dict = {ch: [] for ch in channels}
+    mismatch = False
+    qual_hint = -1
+    for b in range(table.count):
+        r0 = int(table.read_start[b])
+        nn = int(table.n_reads[b])
+        decrypted = {}
+        for ch in channels:
+            rows = io.read_channel_segments_slice(
+                sig, f"{ch}_segments", r0, nn)
+            decrypted[ch] = decrypt_channel_from_segments(
+                rows, dataset_id=dataset_id, channel_name=ch, key=key,
+                dtype="<u1", au_base=r0).tobytes()
+        block, _, _ = _blocks_v1_block_run(
+            run_group, table, b, refs, decrypted=decrypted)
+        blobs = encode_block(block, qual_strategy_hint=qual_hint)
+        qual_hint = _blocks_v1_derive_qual_hint(blobs, qual_hint)
+        for ch in channels:
+            got = blobs.blobs.get(ch, b"")
+            off = int(table.ranges[ch][0][b])
+            ln = int(table.ranges[ch][1][b])
+            if len(got) != ln or written[ch] != off:
+                mismatch = True
+            new_ranges[ch].append(
+                (written[ch], len(got),
+                 int(blobs.compression.get(ch, 0))))
+            if ch not in new_ds:
+                if ch == "sequences":
+                    parent = sig.create_group("sequences")
+                    name = "data"
+                else:
+                    parent, name = sig, ch
+                codec = int(blobs.compression.get(ch, 0))
+                ds = parent.create_dataset(
+                    name, Precision.UINT8, 0,
+                    chunk_size=CHANNEL_CHUNK,
+                    compression=(Compression.ZLIB if codec == 0
+                                 else Compression.NONE),
+                    compression_level=6, extendable=True)
+                io.write_int_attr(ds, "compression", codec, dtype="<u1")
+                for k, v in blobs.extra_attrs.get(ch, {}).items():
+                    ds.set_attribute(k, v)
+                new_ds[ch] = ds
+            new_ds[ch].append(np.frombuffer(got, dtype=np.uint8))
+            written[ch] += len(got)
+
+    if mismatch:
+        _rewrite_blocks_index(run_group, channels, new_ranges)
+
+    for ch in channels:
+        sig.delete_child(f"{ch}_segments")
+        alg_attr = f"{ch}_algorithm"
+        if sig.has_attribute(alg_attr):
+            sig.delete_attribute(alg_attr)
+
+
+def _rewrite_blocks_index(run_group, channels, new_ranges) -> None:
+    """Rewrite ``blocks/index`` with the ranges the restore actually
+    wrote for ``channels``. Only reached when a re-encoded blob did
+    not land on the recorded ranges; the other columns and channels
+    are carried over unchanged."""
+    from .genomic.stream_writer import INDEX_FIELDS
+
+    blocks = run_group.open_group("blocks")
+    rows = blocks.open_dataset("index").read_rows()
+    for b, row in enumerate(rows):
+        for ch in channels:
+            off, ln, codec = new_ranges[ch][b]
+            row[f"{ch}_off"] = off
+            row[f"{ch}_len"] = ln
+            row[f"{ch}_codec"] = codec
+    blocks.delete_child("index")
+    ds = blocks.create_compound_dataset(
+        "index", INDEX_FIELDS, 0, extendable=True, chunk_rows=1024)
+    if rows:
+        ds.append(rows)
 
 
 def encrypt_per_au(
@@ -484,6 +823,11 @@ def encrypt_per_au(
                 try:
                     g_group = g_runs.open_group(g_run_name)
                 except KeyError:
+                    continue
+                if _blocks_v1_layout(g_group):
+                    _encrypt_blocks_v1_run(study, g_group,
+                                            dataset_id_counter, key)
+                    dataset_id_counter += 1
                     continue
                 g_sig = g_group.open_group("signal_channels")
                 g_idx = g_group.open_group("genomic_index")
@@ -744,12 +1088,13 @@ def decrypt_per_au_in_place(
         headers_encrypted = "opt_encrypted_au_headers" in features
 
         study = root.open_group("study")
-        if not study.has_child("ms_runs"):
-            return
-
-        ms_runs = study.open_group("ms_runs")
-        run_names = [n for n in ms_runs.child_names()
-                     if not n.startswith("_") and ms_runs.has_child(n)]
+        # A genomic-only container may lack ms_runs entirely; the
+        # genomic walk below still applies.
+        run_names = []
+        if study.has_child("ms_runs"):
+            ms_runs = study.open_group("ms_runs")
+            run_names = [n for n in ms_runs.child_names()
+                         if not n.startswith("_") and ms_runs.has_child(n)]
         dataset_id_counter = 1
         for run_name in run_names:
             try:
@@ -833,6 +1178,11 @@ def decrypt_per_au_in_place(
                 try:
                     g_group = g_runs.open_group(g_run_name)
                 except KeyError:
+                    dataset_id_counter += 1
+                    continue
+                if _blocks_v1_layout(g_group):
+                    _decrypt_blocks_v1_run_in_place(
+                        study, g_group, dataset_id_counter, key)
                     dataset_id_counter += 1
                     continue
                 g_sig = g_group.open_group("signal_channels")

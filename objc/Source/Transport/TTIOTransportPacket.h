@@ -51,6 +51,13 @@ typedef NS_ENUM(uint8_t, TTIOTransportPacketType) {
     TTIOTransportPacketSubjectMetadata      = 0x19,
     TTIOTransportPacketSampleMetadata       = 0x1A,
     TTIOTransportPacketEncryptionAlgorithm  = 0x1B,
+    // ---- M99.1 blocks_v1 per-AU carriage (transport-spec §4.24) ----
+    // Emitted only for genomic runs with layout blocks_v1 in an
+    // encrypted stream, announced by the StreamHeader feature token
+    // "transport_blocks_v1". One GenomicRunSidecar per run after its
+    // DatasetHeader, then one BlockSidecar per block before the AUs.
+    TTIOTransportPacketGenomicRunSidecar    = 0x1C,
+    TTIOTransportPacketBlockSidecar         = 0x1D,
     TTIOTransportPacketEndOfStream         = 0xFF
 };
 

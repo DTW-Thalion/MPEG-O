@@ -148,6 +148,16 @@ final class VlBytesFFM {
     @SuppressWarnings("restricted")
     static void write(long dset, long memType, long fileSpaceId,
                       int count, byte[][] data) {
+        write(dset, memType, H5S_ALL, fileSpaceId, count, data);
+    }
+
+    /** As above with an explicit memory space. A hyperslab
+     *  {@code fileSpaceId} needs a {@code count}-element memory space:
+     *  with {@code H5S_ALL} the buffer would have to span the file's
+     *  full extent (M99 block-streaming append). */
+    @SuppressWarnings("restricted")
+    static void write(long dset, long memType, long memSpaceId,
+                      long fileSpaceId, int count, byte[][] data) {
         initHandles();
         // Allocate: hvl_t array (count * 16) + per-row data regions
         // All in one confined arena; lifetime matches this call.
@@ -177,7 +187,7 @@ final class VlBytesFFM {
             int rc;
             try {
                 rc = (int) H5DWRITE_HANDLE.invokeExact(
-                        dset, memType, H5S_ALL, fileSpaceId, 0L,
+                        dset, memType, memSpaceId, fileSpaceId, 0L,
                         hvlBuf);
             } catch (Throwable t) {
                 throw new Hdf5Errors.DatasetWriteException(
@@ -209,6 +219,14 @@ final class VlBytesFFM {
      */
     @SuppressWarnings("restricted")
     static byte[][] read(long dset, long memType, long fileSpaceId, int count) {
+        return read(dset, memType, H5S_ALL, fileSpaceId, count);
+    }
+
+    /** As above with an explicit memory space for hyperslab file
+     *  selections (M99 block-streaming read). */
+    @SuppressWarnings("restricted")
+    static byte[][] read(long dset, long memType, long memSpaceId,
+                         long fileSpaceId, int count) {
         initHandles();
         byte[][] result = new byte[count][];
 
@@ -222,7 +240,7 @@ final class VlBytesFFM {
             int rc;
             try {
                 rc = (int) H5DREAD_HANDLE.invokeExact(
-                        dset, memType, H5S_ALL, fileSpaceId, 0L,
+                        dset, memType, memSpaceId, fileSpaceId, 0L,
                         hvlBuf);
             } catch (Throwable t) {
                 throw new RuntimeException(
@@ -252,7 +270,7 @@ final class VlBytesFFM {
             // Free VL-allocated memory via H5Treclaim
             // (this calls free() on each hvl_t.p allocated by H5Dread)
             try {
-                H5TRECLAIM_HANDLE.invokeExact(memType, H5S_ALL, 0L, hvlBuf);
+                H5TRECLAIM_HANDLE.invokeExact(memType, memSpaceId, 0L, hvlBuf);
             } catch (Throwable t) {
                 // Best-effort: non-fatal, but may leak memory
             }

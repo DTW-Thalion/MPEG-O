@@ -63,6 +63,21 @@ static BOOL ttioWriteNames(id<TTIOStorageGroup> g, NSString *name, NSArray<NSStr
                   mateChromNames:(NSArray<NSString *> *)mateChromNames
                            error:(NSError **)error
 {
+    return [self materialiseBlock:b ofRun:runGroup table:t
+                       chromNames:chromNames
+                   mateChromNames:mateChromNames
+                     skipChannels:nil
+                            error:error];
+}
+
++ (instancetype)materialiseBlock:(NSUInteger)b
+                           ofRun:(id<TTIOStorageGroup>)runGroup
+                           table:(TTIOBlockTable *)t
+                      chromNames:(NSArray<NSString *> *)chromNames
+                  mateChromNames:(NSArray<NSString *> *)mateChromNames
+                    skipChannels:(NSSet<NSString *> *)skipChannels
+                           error:(NSError **)error
+{
     static _Atomic unsigned long counter = 0;
     unsigned long seq = atomic_fetch_add(&counter, 1);
     NSString *url = [NSString stringWithFormat:@"memory://ttio-block-view-%p-%lu-%lu",
@@ -120,6 +135,7 @@ static BOOL ttioWriteNames(id<TTIOStorageGroup> g, NSString *name, NSArray<NSStr
     id<TTIOStorageGroup> dstSc = [view createGroupNamed:@"signal_channels" error:error];
     if (!srcSc || !dstSc) { [v discard]; return nil; }
     for (NSString *ch in [TTIOGenomicBlocks blockChannels]) {
+        if (skipChannels != nil && [skipChannels containsObject:ch]) continue;
         unsigned long long off = [t offsetOf:ch at:b], ln = [t lengthOf:ch at:b];
         if (ln == 0) continue;
         NSNumber *codec = t.hasCodecs ? @([t codecOf:ch at:b]) : nil;

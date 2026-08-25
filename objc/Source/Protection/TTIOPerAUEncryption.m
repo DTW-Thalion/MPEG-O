@@ -321,6 +321,32 @@ static NSData *ttioGCMDecryptWithCtx(EVP_CIPHER_CTX *ctx,
                           key:(NSData *)key
                         error:(NSError **)error
 {
+    return [self encryptChannelToSegments:plaintext
+                                   offsets:offsets
+                                   lengths:lengths
+                                  nSpectra:nSpectra
+                           bytesPerElement:bpe
+                                 datasetId:datasetId
+                               channelName:channelName
+                                       key:key
+                                    auBase:0
+                                offsetBase:0
+                                     error:error];
+}
+
++ (NSArray<TTIOChannelSegment *> *)
+    encryptChannelToSegments:(NSData *)plaintext
+                      offsets:(const uint64_t *)offsets
+                      lengths:(const uint32_t *)lengths
+                     nSpectra:(NSUInteger)nSpectra
+              bytesPerElement:(NSUInteger)bpe
+                    datasetId:(uint16_t)datasetId
+                  channelName:(NSString *)channelName
+                          key:(NSData *)key
+                       auBase:(uint32_t)auBase
+                   offsetBase:(uint64_t)offsetBase
+                        error:(NSError **)error
+{
     if (bpe == 0) {
         if (error) *error = makeErr(kErrCrypto,
             @"bytesPerElement must be > 0");
@@ -348,7 +374,7 @@ static NSData *ttioGCMDecryptWithCtx(EVP_CIPHER_CTX *ctx,
             NSData *chunk = [NSData dataWithBytes:all + byteOffset length:byteLength];
             NSData *aad = [self aadForChannel:channelName
                                       datasetId:datasetId
-                                     auSequence:(uint32_t)i];
+                                     auSequence:(uint32_t)(auBase + i)];
             NSData *iv = [self randomIVWithError:error];
             if (!iv) { failed = YES; }
             NSData *tag = nil;
@@ -363,7 +389,7 @@ static NSData *ttioGCMDecryptWithCtx(EVP_CIPHER_CTX *ctx,
                 // so the segment safely owns them once this pool drains; the
                 // strong refs keep them alive past the autoreleasepool.
                 TTIOChannelSegment *seg =
-                    [[TTIOChannelSegment alloc] initWithOffset:offsets[i]
+                    [[TTIOChannelSegment alloc] initWithOffset:offsetBase + offsets[i]
                                                           length:lengths[i]
                                                               iv:iv
                                                              tag:tag
@@ -400,6 +426,23 @@ static NSData *ttioGCMDecryptWithCtx(EVP_CIPHER_CTX *ctx,
                                     key:(NSData *)key
                                   error:(NSError **)error
 {
+    return [self decryptChannelFromSegments:segments
+                            bytesPerElement:bpe
+                                  datasetId:datasetId
+                                channelName:channelName
+                                        key:key
+                                     auBase:0
+                                      error:error];
+}
+
++ (NSData *)decryptChannelFromSegments:(NSArray<TTIOChannelSegment *> *)segments
+                        bytesPerElement:(NSUInteger)bpe
+                              datasetId:(uint16_t)datasetId
+                            channelName:(NSString *)channelName
+                                    key:(NSData *)key
+                                 auBase:(uint32_t)auBase
+                                  error:(NSError **)error
+{
     if (bpe == 0) {
         if (error) *error = makeErr(kErrCrypto,
             @"bytesPerElement must be > 0");
@@ -421,7 +464,7 @@ static NSData *ttioGCMDecryptWithCtx(EVP_CIPHER_CTX *ctx,
             TTIOChannelSegment *seg = segments[i];
             NSData *aad = [self aadForChannel:channelName
                                       datasetId:datasetId
-                                     auSequence:(uint32_t)i];
+                                     auSequence:(uint32_t)(auBase + i)];
             NSData *plain = ttioGCMDecryptWithCtx(ctx, seg.ciphertext, key,
                                                   seg.iv, seg.tag, aad, error);
             if (!plain) {
