@@ -653,24 +653,107 @@ class M99BlocksV1PerAUTest {
             "opt_disable_qualities_v5", 6000);
     }
 
-    /** The v1.0 encrypted transport stream does not carry the
-     *  blocks_v1 sidecars; the sender must refuse. */
-    @Test
-    void sendRefusesBlocksV1Containers() throws Exception {
-        WrittenGenomicRun run = makeRun(300, 11, 0, false);
-        String path = writeBlocksFile("send.tio", run, 100);
+    /** Plaintext sidecar channels and the run scalars of a blocks_v1
+     *  run: everything the transport's AU stream alone cannot
+     *  carry. */
+    private static Map<String, Object> plainState(String path) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        try (StorageProvider sp = ProviderRegistry.open(path,
+                StorageProvider.Mode.READ, "hdf5");
+             StorageGroup root = sp.rootGroup();
+             StorageGroup study = root.openGroup("study");
+             StorageGroup gRuns = study.openGroup("genomic_runs");
+             StorageGroup rg = gRuns.openGroup("run")) {
+            for (String attr : List.of("layout", "block_policy",
+                                        "read_count", "base_count")) {
+                out.put(attr, rg.hasAttribute(attr)
+                    ? rg.getAttribute(attr).toString() : "");
+            }
+            try (StorageGroup sig = rg.openGroup("signal_channels")) {
+                for (String ch : List.of("read_names", "cigars")) {
+                    if (sig.hasChild(ch)) {
+                        try (StorageDataset ds = sig.openDataset(ch)) {
+                            out.put(ch, java.util.Arrays.toString(
+                                (byte[]) ds.readAll()));
+                        }
+                    }
+                }
+                if (sig.hasChild("mate_info")) {
+                    try (StorageGroup mi = sig.openGroup("mate_info")) {
+                        if (mi.hasChild("inline_v2")) {
+                            try (StorageDataset ds =
+                                    mi.openDataset("inline_v2")) {
+                                out.put("mate_info",
+                                    java.util.Arrays.toString(
+                                        (byte[]) ds.readAll()));
+                            }
+                        }
+                    }
+                }
+            }
+            try (StorageGroup gi = rg.openGroup("genomic_index")) {
+                for (String name : List.of("lengths", "positions",
+                        "mapping_qualities", "flags",
+                        "chromosome_ids")) {
+                    try (StorageDataset ds = gi.openDataset(name)) {
+                        Object arr = ds.readAll();
+                        StringBuilder sb = new StringBuilder();
+                        int len = java.lang.reflect.Array.getLength(arr);
+                        for (int i = 0; i < len; i++) {
+                            sb.append(java.lang.reflect.Array.get(arr, i))
+                              .append(',');
+                        }
+                        out.put("gi_" + name, sb.toString());
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Encrypted container to transport stream to received container
+     *  to decrypt-in-place: byte-identical to the pre-encrypt
+     *  container. */
+    private void transportRoundTrip(String tag, WrittenGenomicRun run,
+                                    int blockReads) throws Exception {
+        String path = writeBlocksFile(tag + ".tio", run, blockReads);
+        Snapshot before = snapshot(path);
+        Map<String, Object> plainBefore = plainState(path);
         PerAUFile.encryptFile(path, key(), false, "hdf5");
-        String out = tempDir.resolve("stream.tis").toString();
+
+        String out = tempDir.resolve(tag + "-stream.tis").toString();
         try (var fos = new java.io.BufferedOutputStream(
                 new java.io.FileOutputStream(out));
              var tw = new global.thalion.ttio.transport
                  .TransportWriter(fos)) {
-            IllegalStateException e = assertThrows(
-                IllegalStateException.class,
-                () -> EncryptedTransport.writeEncryptedDataset(
-                    path, tw, "hdf5"));
-            assertTrue(e.getMessage().contains("blocks_v1"),
-                "refusal names blocks_v1: " + e.getMessage());
+            EncryptedTransport.writeEncryptedDataset(path, tw, "hdf5");
         }
+        String received = tempDir.resolve(tag + "-recv.tio").toString();
+        byte[] streamData = java.nio.file.Files.readAllBytes(
+            java.nio.file.Path.of(out));
+        EncryptedTransport.readEncryptedToPath(received, streamData,
+                                               "hdf5");
+        PerAUFile.decryptFileInPlace(received, key(), "hdf5");
+
+        Snapshot after = snapshot(received);
+        assertEquals(before.index(), after.index(),
+            tag + ": restored block index byte-identical");
+        assertArrayEquals(before.seqBlob(), after.seqBlob(),
+            tag + ": sequences blob byte-identical");
+        assertArrayEquals(before.qualBlob(), after.qualBlob(),
+            tag + ": qualities blob byte-identical");
+        assertEquals(plainBefore, plainState(received),
+            tag + ": sidecar channels and scalars carried verbatim");
+        assertReadsDecode(tag, received, run);
+    }
+
+    @Test
+    void transportRoundTripPlain() throws Exception {
+        transportRoundTrip("tsplain", makeRun(900, 17, 0, false), 200);
+    }
+
+    @Test
+    void transportRoundTripCrossChromosomeMates() throws Exception {
+        transportRoundTrip("tsxmates", makeRun(600, 19, 0, true), 150);
     }
 }

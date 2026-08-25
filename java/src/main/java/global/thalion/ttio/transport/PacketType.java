@@ -58,6 +58,10 @@ public enum PacketType {
     SAMPLE_METADATA        (0x1A),
     /** Dataset-level @encrypted algorithm name. §4.23. */
     ENCRYPTION_ALGORITHM   (0x1B),
+    /** M99.1 blocks_v1 run-level sidecar. §4.24. */
+    GENOMIC_RUN_SIDECAR    (0x1C),
+    /** M99.1 blocks_v1 per-block sidecar. §4.24. */
+    BLOCK_SIDECAR          (0x1D),
     END_OF_STREAM       (0xFF);
 
     /** Phase 2c-T feature flag in StreamHeader features list. */
@@ -67,6 +71,12 @@ public enum PacketType {
     /** v0.11 feature flag in StreamHeader features list. */
     public static final String TRANSPORT_V0_11_FEATURE =
         "transport_v0_11";
+
+    /** M99.1 feature token in StreamHeader features list when
+     *  blocks_v1 sidecar packets ride on the wire. Wire-scoped:
+     *  receivers strip it before writing container feature flags. */
+    public static final String TRANSPORT_BLOCKS_V1_FEATURE =
+        "transport_blocks_v1";
 
     /** Phase 2c-T codec id constants (mirror enums.Compression). */
     public static final int CODEC_ID_MATE_INLINE_V2    = 13;

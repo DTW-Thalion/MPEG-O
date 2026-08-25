@@ -1088,12 +1088,13 @@ def decrypt_per_au_in_place(
         headers_encrypted = "opt_encrypted_au_headers" in features
 
         study = root.open_group("study")
-        if not study.has_child("ms_runs"):
-            return
-
-        ms_runs = study.open_group("ms_runs")
-        run_names = [n for n in ms_runs.child_names()
-                     if not n.startswith("_") and ms_runs.has_child(n)]
+        # A genomic-only container may lack ms_runs entirely; the
+        # genomic walk below still applies.
+        run_names = []
+        if study.has_child("ms_runs"):
+            ms_runs = study.open_group("ms_runs")
+            run_names = [n for n in ms_runs.child_names()
+                         if not n.startswith("_") and ms_runs.has_child(n)]
         dataset_id_counter = 1
         for run_name in run_names:
             try:

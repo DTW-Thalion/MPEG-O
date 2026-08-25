@@ -41,6 +41,7 @@ public final class BlockTable {
     public long readStartAt(int b) { return readStart[b]; }
     public int nReadsAt(int b) { return nReads[b]; }
     public long baseStartAt(int b) { return baseStart[b]; }
+    public long nBasesAt(int b) { return nBases[b]; }
     public long offsetOf(String channel, int b) { return off.get(channel)[b]; }
     public long lengthOf(String channel, int b) { return len.get(channel)[b]; }
     public boolean hasCodecs() { return codec != null; }

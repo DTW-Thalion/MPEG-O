@@ -418,36 +418,125 @@ static TTIOWrittenGenomicRun *m99MakeRefDiffRun(void)
     return m99MakeRefDiffRunEx(NO);
 }
 
-// The v1.0 encrypted transport stream does not carry the blocks_v1
-// sidecars; the sender must refuse.
-static void m99TransportRefusal(void)
+static BOOL m99ReadsDecode(NSString *path, TTIOWrittenGenomicRun *run);
+
+// Plaintext sidecar channels and run scalars of a blocks_v1 run:
+// everything the transport's AU stream alone cannot carry.
+static NSDictionary *m99PlainState(NSString *path)
 {
     NSError *err = nil;
-    NSString *path = m99TmpPath(@"send");
-    TTIOWrittenGenomicRun *run = m99MakeRun(300, 11, 0, NO);
-    PASS(m99WriteBlocksFile(path, run, 100, &err),
-         "M99 send: blocks_v1 file written (%s)",
+    TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+    if (!f) return nil;
+    TTIOHDF5Group *rg = [[[f.rootGroup openGroupNamed:@"study" error:NULL]
+        openGroupNamed:@"genomic_runs" error:NULL]
+        openGroupNamed:@"run" error:NULL];
+    id<TTIOStorageGroup> a = [TTIOHDF5Provider adapterForGroup:rg];
+    NSMutableDictionary *out = [NSMutableDictionary dictionary];
+    for (NSString *attr in @[@"layout", @"block_policy", @"read_count",
+                             @"base_count"]) {
+        id v = [a hasAttributeNamed:attr]
+            ? [a attributeValueForName:attr error:NULL] : nil;
+        out[attr] = [v description] ?: @"";
+    }
+    id<TTIOStorageGroup> sig = [a openGroupNamed:@"signal_channels"
+                                            error:NULL];
+    for (NSString *ch in @[@"read_names", @"cigars"]) {
+        if ([sig hasChildNamed:ch]) {
+            out[ch] = [[sig openDatasetNamed:ch error:NULL] readAll:NULL]
+                ?: [NSData data];
+        }
+    }
+    if ([sig hasChildNamed:@"mate_info"]) {
+        id<TTIOStorageGroup> mi = [sig openGroupNamed:@"mate_info"
+                                                error:NULL];
+        if ([mi hasChildNamed:@"inline_v2"]) {
+            out[@"mate_info"] =
+                [[mi openDatasetNamed:@"inline_v2" error:NULL]
+                    readAll:NULL] ?: [NSData data];
+        }
+    }
+    id<TTIOStorageGroup> gi = [a openGroupNamed:@"genomic_index"
+                                          error:NULL];
+    for (NSString *name in @[@"lengths", @"positions",
+                             @"mapping_qualities", @"flags",
+                             @"chromosome_ids"]) {
+        out[[@"gi_" stringByAppendingString:name]] =
+            [[gi openDatasetNamed:name error:NULL] readAll:NULL]
+            ?: [NSData data];
+    }
+    [f close];
+    return out;
+}
+
+// Encrypted container -> transport stream -> received container ->
+// decrypt-in-place: byte-identical to the pre-encrypt container.
+static void m99TransportRoundTrip(NSString *tag,
+                                  TTIOWrittenGenomicRun *run,
+                                  NSUInteger blockReads)
+{
+    NSError *err = nil;
+    NSString *path = m99TmpPath(tag);
+    PASS(m99WriteBlocksFile(path, run, blockReads, &err),
+         "M99 %s: blocks_v1 file written (%s)", tag.UTF8String,
          [[err localizedDescription] UTF8String] ?: "");
+    NSArray<NSData *> *before = m99Snapshot(path);
+    NSDictionary *plainBefore = m99PlainState(path);
+    PASS(before != nil && plainBefore != nil,
+         "M99 %s: pre-encrypt snapshots", tag.UTF8String);
     PASS([TTIOPerAUFile encryptFilePath:path key:m99Key()
                           encryptHeaders:NO providerName:nil error:&err],
-         "M99 send: encrypt (%s)",
+         "M99 %s: encrypt (%s)", tag.UTF8String,
          [[err localizedDescription] UTF8String] ?: "");
-    NSString *outPath = m99TmpPath(@"send-out");
-    m99Rm(outPath);
+
+    NSString *streamPath = m99TmpPath(
+        [tag stringByAppendingString:@"-stream"]);
+    m99Rm(streamPath);
     TTIOTransportWriter *tw =
-        [[TTIOTransportWriter alloc] initWithOutputPath:outPath];
-    err = nil;
+        [[TTIOTransportWriter alloc] initWithOutputPath:streamPath];
     BOOL ok = [TTIOEncryptedTransport writeEncryptedDataset:path
                                                        writer:tw
                                                  providerName:nil
                                                         error:&err];
     [tw close];
-    PASS(!ok, "M99 send: writeEncryptedDataset refuses blocks_v1");
-    PASS([err.localizedDescription rangeOfString:@"blocks_v1"].location
-             != NSNotFound,
-         "M99 send: refusal names blocks_v1 (%s)",
+    PASS(ok, "M99 %s: send emits blocks_v1 stream (%s)", tag.UTF8String,
          [[err localizedDescription] UTF8String] ?: "");
-    m99Rm(outPath);
+
+    NSString *received = m99TmpPath(
+        [tag stringByAppendingString:@"-recv"]);
+    m99Rm(received);
+    NSData *streamData = [NSData dataWithContentsOfFile:streamPath];
+    PASS(streamData.length > 0, "M99 %s: stream bytes", tag.UTF8String);
+    PASS([TTIOEncryptedTransport readEncryptedToPath:received
+                                          fromStream:streamData
+                                        providerName:nil
+                                               error:&err],
+         "M99 %s: receive materialises blocks_v1 (%s)", tag.UTF8String,
+         [[err localizedDescription] UTF8String] ?: "");
+    PASS([TTIOPerAUFile decryptFilePathInPlace:received key:m99Key()
+                                  providerName:nil error:&err],
+         "M99 %s: decrypt-in-place on received (%s)", tag.UTF8String,
+         [[err localizedDescription] UTF8String] ?: "");
+
+    NSArray<NSData *> *after = m99Snapshot(received);
+    PASS(before != nil && after != nil
+             && [after[0] isEqualToData:before[0]]
+             && [after[1] isEqualToData:before[1]]
+             && [after[2] isEqualToData:before[2]],
+         "M99 %s: restored index and blobs byte-identical",
+         tag.UTF8String);
+    NSDictionary *plainAfter = m99PlainState(received);
+    BOOL plainOk = plainAfter != nil
+        && plainBefore.count == plainAfter.count;
+    for (NSString *k in plainBefore) {
+        if (!plainOk) break;
+        plainOk = [plainBefore[k] isEqual:plainAfter[k]];
+    }
+    PASS(plainOk, "M99 %s: sidecar channels and scalars carried "
+         "verbatim", tag.UTF8String);
+    PASS(m99ReadsDecode(received, run),
+         "M99 %s: received reads decode identically", tag.UTF8String);
+    m99Rm(streamPath);
+    m99Rm(received);
     m99Rm(path);
 }
 
@@ -798,7 +887,8 @@ static void m99DefaultPolicyNoAttrs(void)
 void testM99BlocksV1PerAU(void)
 {
     m99EncryptShape();
-    m99TransportRefusal();
+    m99TransportRoundTrip(@"tsplain", m99MakeRun(900, 17, 0, NO), 200);
+    m99TransportRoundTrip(@"tsxmates", m99MakeRun(600, 19, 0, YES), 150);
     m99RoundTrip(@"plain", m99MakeRun(900, 7, 0, NO), 200);
     m99RoundTrip(@"zerolen", m99MakeRun(700, 9, 97, NO), 150);
     m99RoundTrip(@"xmates", m99MakeRun(600, 21, 0, YES), 150);

@@ -226,3 +226,77 @@ def test_m99_blocks_v1_exchange_byte_identical(encryptor, decryptor,
             np.asarray(run.sequences[lo:lo + ln], dtype=np.uint8)
             .tobytes())
         assert rd.read_name == run.read_names[i]
+
+
+def _plaintext_channel_state(path: Path):
+    """The sidecar-carried pieces: plaintext channel blobs, index
+    arrays and name tables of a blocks_v1 run."""
+    with h5py.File(path, "r") as f:
+        rg = f["study/genomic_runs/run"]
+        sig = rg["signal_channels"]
+        state = {}
+        for ch in ("read_names", "cigars"):
+            if ch in sig:
+                state[ch] = bytes(sig[ch][...])
+        if "mate_info" in sig and "inline_v2" in sig["mate_info"]:
+            state["mate_info"] = bytes(sig["mate_info/inline_v2"][...])
+        gi = rg["genomic_index"]
+        for name in ("lengths", "positions", "mapping_qualities",
+                     "flags", "chromosome_ids"):
+            state[f"gi_{name}"] = gi[name][...].tobytes()
+        state["chromosome_names"] = [
+            n.decode() if isinstance(n, bytes) else n
+            for (n,) in gi["chromosome_names"][...]]
+        if "mate_info" in sig and "chrom_names" in sig["mate_info"]:
+            state["mate_chrom_names"] = [
+                n.decode() if isinstance(n, bytes) else n
+                for (n,) in sig["mate_info/chrom_names"][...]]
+        return state
+
+
+@pytest.mark.parametrize(
+    "sender,receiver", _MATRIX,
+    ids=[f"{a}-send_{b}-recv" for a, b in _MATRIX])
+def test_m99_blocks_v1_transport_matrix(sender, receiver, tmp_path):
+    """Each SDK sends a per-AU-encrypted blocks_v1 container as an
+    encrypted transport stream carrying the M99.1 sidecar packets,
+    each SDK materialises the stream, and a decrypt-in-place on the
+    received container restores it byte-identically."""
+    run = _make_plain_run()
+    plain = tmp_path / "plain.tio"
+    _write_blocks_file(plain, run, block_reads=150)
+    before = _blob_state(plain)
+    plain_before = _plaintext_channel_state(plain)
+
+    key = tmp_path / "key.bin"
+    key.write_bytes(bytes(range(32)))
+    enc = tmp_path / "enc.tio"
+    _py_perau(["encrypt", str(plain), str(enc), str(key)])
+
+    stream = tmp_path / "stream.tis"
+    _PERAU_CLIS[sender](["send", str(enc), str(stream)])
+    received = tmp_path / f"{sender}_{receiver}.tio"
+    _PERAU_CLIS[receiver](["recv", str(stream), str(received)])
+
+    assert "opt_per_au_encryption" in _features(received)
+    _py_perau(["decrypt-in-place", str(received), str(key)])
+
+    after = _blob_state(received)
+    assert after[0] == before[0], "block index byte-identical"
+    assert after[1] == before[1], "sequences blob byte-identical"
+    assert after[2] == before[2], "qualities blob byte-identical"
+    assert _plaintext_channel_state(received) == plain_before, (
+        "sidecar channels, index arrays and name tables carried "
+        "verbatim")
+
+    ds = SpectralDataset.open(str(received))
+    gr = ds.genomic_runs["run"]
+    n = len(run.lengths)
+    for i in (0, n // 2, n - 1):
+        rd = gr[i]
+        lo = int(np.asarray(run.offsets)[i])
+        ln = int(np.asarray(run.lengths)[i])
+        assert rd.sequence.encode("ascii") == bytes(
+            np.asarray(run.sequences[lo:lo + ln], dtype=np.uint8)
+            .tobytes())
+        assert rd.read_name == run.read_names[i]

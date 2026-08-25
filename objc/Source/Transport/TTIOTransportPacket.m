@@ -133,6 +133,8 @@ static const uint8_t TTIOTransportKnownPacketTypes[] = {
     TTIOTransportPacketSubjectMetadata,      // 0x19
     TTIOTransportPacketSampleMetadata,       // 0x1A
     TTIOTransportPacketEncryptionAlgorithm,  // 0x1B
+    TTIOTransportPacketGenomicRunSidecar,    // 0x1C
+    TTIOTransportPacketBlockSidecar,         // 0x1D
     TTIOTransportPacketEndOfStream,          // 0xFF
 };
 

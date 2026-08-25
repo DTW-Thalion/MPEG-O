@@ -100,6 +100,7 @@ public final class EncryptedTransport {
                     }
                 }
                 List<String> genomicRunNames = new ArrayList<>();
+                Map<String, String> genomicLayouts = new LinkedHashMap<>();
                 if (study.hasChild("genomic_runs")) {
                     try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
                         for (String n : gRuns.childNames()) {
@@ -107,38 +108,26 @@ public final class EncryptedTransport {
                                 genomicRunNames.add(n);
                             }
                         }
-                        // The v1.0 stream carries the legacy genomic
-                        // shape only: a receiver rebuilds bare uint8
-                        // channels plus the genomic_index arrays, not
-                        // the blocks_v1 sidecars (blocks/index, coded
-                        // read_names/cigars/mate blobs). Refuse rather
-                        // than emit a stream that reconstructs to a
-                        // container decrypt-in-place cannot restore
-                        // (M99).
                         for (String n : genomicRunNames) {
                             try (StorageGroup g = gRuns.openGroup(n)) {
-                                if (g.hasAttribute("layout")
-                                        && "blocks_v1".equals(
-                                            g.getAttribute("layout")
-                                             .toString())) {
-                                    throw new IllegalStateException(
-                                        "genomic run '" + n + "' uses "
-                                        + "the blocks_v1 layout; the "
-                                        + "v1.0 encrypted transport "
-                                        + "stream does not carry the "
-                                        + "blocks_v1 sidecars, so the "
-                                        + "received container could "
-                                        + "not be restored. "
-                                        + "Transporting blocks_v1 "
-                                        + "per-AU containers needs a "
-                                        + "transport-spec extension.");
-                                }
+                                genomicLayouts.put(n,
+                                    g.hasAttribute("layout")
+                                        ? g.getAttribute("layout").toString()
+                                        : "");
                             }
                         }
                     }
                 }
 
+                // blocks_v1 runs ride the same per-read AU stream plus
+                // the M99.1 sidecar packets (GenomicRunSidecar + one
+                // BlockSidecar per block); the StreamHeader announces
+                // them with a wire feature token so receivers know the
+                // stream needs them.
                 List<String> features = new ArrayList<>(flags.features());
+                if (genomicLayouts.containsValue("blocks_v1")) {
+                    features.add(PacketType.TRANSPORT_BLOCKS_V1_FEATURE);
+                }
                 writer.writeStreamHeader("1.2", title, isa, features,
                                           msRunNames.size() + genomicRunNames.size());
                 int did = 1;
@@ -190,6 +179,11 @@ public final class EncryptedTransport {
                         int firstGenomicDid = did;
                         for (String runName : genomicRunNames) {
                             emitGenomicDatasetHeader(writer, gRuns, runName, did);
+                            if ("blocks_v1".equals(
+                                    genomicLayouts.get(runName))) {
+                                emitBlocksV1Sidecars(writer, gRuns,
+                                                     runName, did);
+                            }
                             did++;
                         }
                         did = firstGenomicDid;
@@ -249,6 +243,258 @@ public final class EncryptedTransport {
             writer.writeDatasetHeader(datasetId, runName, acqMode,
                 "TTIOGenomicRead", channelNames, metadataJson, expectedAUs);
         }
+    }
+
+    /** blocks_v1 channels whose coded blobs stay plaintext under
+     *  per-AU protection and ride in BlockSidecar packets. */
+    private static final List<String> SIDECAR_BLOB_CHANNELS =
+        List.of("read_names", "cigars", "mate_info");
+
+    private static void putLEString(java.io.ByteArrayOutputStream out,
+                                    String s) {
+        byte[] d = (s == null ? "" : s).getBytes(StandardCharsets.UTF_8);
+        out.write(d.length & 0xFF);
+        out.write((d.length >> 8) & 0xFF);
+        out.writeBytes(d);
+    }
+
+    private static void putLE(java.io.ByteArrayOutputStream out,
+                              long v, int width) {
+        for (int i = 0; i < width; i++) {
+            out.write((int) ((v >>> (8 * i)) & 0xFF));
+        }
+    }
+
+    /** One GenomicRunSidecar, then one BlockSidecar per block, for a
+     *  blocks_v1 per-AU-encrypted genomic run (transport-spec
+     *  §4.24). */
+    private static void emitBlocksV1Sidecars(TransportWriter writer,
+                                             StorageGroup gRuns,
+                                             String runName,
+                                             int datasetId)
+            throws IOException {
+        try (StorageGroup run = gRuns.openGroup(runName);
+             StorageGroup sig = run.openGroup("signal_channels")) {
+            global.thalion.ttio.genomics.BlockTable t =
+                global.thalion.ttio.genomics.BlockTable.read(run);
+
+            Map<String, Object> attrs = new TreeMap<>();
+            long slice = longAttr(run, "ref_diff_slice_bytes");
+            if (slice != 0) attrs.put("ref_diff_slice_bytes", slice);
+            if (longAttr(run, "opt_disable_qualities_v5") != 0) {
+                attrs.put("opt_disable_qualities_v5", 1);
+            }
+            String md5s = attrStr(run, "reference_md5s", "");
+            if (!md5s.isEmpty()) attrs.put("reference_md5s", md5s);
+
+            List<Map<String, Object>> channels = new ArrayList<>();
+            Map<String, StorageDataset> blobDs = new LinkedHashMap<>();
+            try {
+                for (String ch : SIDECAR_BLOB_CHANNELS) {
+                    StorageDataset ds = null;
+                    if (ch.equals("mate_info")) {
+                        if (sig.hasChild("mate_info")) {
+                            try (StorageGroup mg =
+                                    sig.openGroup("mate_info")) {
+                                if (mg.hasChild("inline_v2")) {
+                                    ds = mg.openDataset("inline_v2");
+                                }
+                            }
+                        }
+                    } else if (sig.hasChild(ch)) {
+                        ds = sig.openDataset(ch);
+                    }
+                    if (ds == null) continue;
+                    blobDs.put(ch, ds);
+                    Map<String, Object> centry = new TreeMap<>();
+                    centry.put("name", ch);
+                    centry.put("compression", ds.hasAttribute("compression")
+                        ? ((Number) ds.getAttribute("compression"))
+                              .longValue()
+                        : 0L);
+                    Map<String, Object> extra = new TreeMap<>();
+                    for (String k : ds.attributeNames()) {
+                        if (k.equals("compression")) continue;
+                        Object v = ds.getAttribute(k);
+                        if (v instanceof byte[] bb) {
+                            v = new String(bb, StandardCharsets.UTF_8);
+                        }
+                        if (v != null) extra.put(k, v);
+                    }
+                    if (!extra.isEmpty()) centry.put("extra_attrs", extra);
+                    channels.add(centry);
+                }
+
+                List<String> chromNames;
+                try (StorageGroup idx = run.openGroup("genomic_index")) {
+                    chromNames = global.thalion.ttio.genomics.BlockView
+                        .readNames(idx, "chromosome_names");
+                }
+                List<String> mateNames = List.of();
+                if (sig.hasChild("mate_info")) {
+                    try (StorageGroup mg = sig.openGroup("mate_info")) {
+                        if (mg.hasChild("chrom_names")) {
+                            mateNames = global.thalion.ttio.genomics
+                                .BlockView.readNames(mg, "chrom_names");
+                        }
+                    }
+                }
+
+                com.fasterxml.jackson.databind.ObjectMapper om =
+                    new com.fasterxml.jackson.databind.ObjectMapper();
+                byte[] attrsJson = om.writeValueAsBytes(attrs);
+                byte[] channelsJson = om.writeValueAsBytes(channels);
+
+                java.io.ByteArrayOutputStream p =
+                    new java.io.ByteArrayOutputStream();
+                putLEString(p, attrStr(run, "layout", ""));
+                putLEString(p, attrStr(run, "block_policy", ""));
+                putLE(p, longAttr(run, "read_count"), 8);
+                putLE(p, longAttr(run, "base_count"), 8);
+                putLE(p, attrsJson.length, 4);
+                p.writeBytes(attrsJson);
+                putLE(p, channelsJson.length, 4);
+                p.writeBytes(channelsJson);
+                putLE(p, chromNames.size(), 4);
+                for (String n : chromNames) putLEString(p, n);
+                putLE(p, mateNames.size(), 4);
+                for (String n : mateNames) putLEString(p, n);
+                writer.emitRawPacket(PacketType.GENOMIC_RUN_SIDECAR, 0,
+                                     datasetId, 0, p.toByteArray());
+
+                List<String> blockChannels =
+                    global.thalion.ttio.genomics.GenomicBlocks
+                        .BLOCK_CHANNELS;
+                for (int b = 0; b < t.count(); b++) {
+                    java.io.ByteArrayOutputStream bp =
+                        new java.io.ByteArrayOutputStream();
+                    putLE(bp, b, 4);
+                    putLE(bp, t.readStartAt(b), 8);
+                    putLE(bp, t.nReadsAt(b), 4);
+                    putLE(bp, t.baseStartAt(b), 8);
+                    putLE(bp, t.nBasesAt(b), 8);
+                    bp.write(blockChannels.size() & 0xFF);
+                    for (String ch : blockChannels) {
+                        putLEString(bp, ch);
+                        putLE(bp, t.offsetOf(ch, b), 8);
+                        putLE(bp, t.lengthOf(ch, b), 8);
+                        putLE(bp, t.hasCodecs() ? t.codecOf(ch, b) : 0, 4);
+                    }
+                    bp.write(blobDs.size() & 0xFF);
+                    for (Map.Entry<String, StorageDataset> e
+                            : blobDs.entrySet()) {
+                        String ch = e.getKey();
+                        long off = t.offsetOf(ch, b);
+                        long ln = t.lengthOf(ch, b);
+                        byte[] data = ln > 0
+                            ? (byte[]) e.getValue().readSlice(off, ln)
+                            : new byte[0];
+                        putLEString(bp, ch);
+                        putLE(bp, data.length, 4);
+                        bp.writeBytes(data);
+                    }
+                    writer.emitRawPacket(PacketType.BLOCK_SIDECAR, 0,
+                                         datasetId, b, bp.toByteArray());
+                }
+            } finally {
+                for (StorageDataset ds : blobDs.values()) ds.close();
+            }
+        }
+    }
+
+    private static long longAttr(StorageGroup g, String name) {
+        if (!g.hasAttribute(name)) return 0L;
+        Object v = g.getAttribute(name);
+        return v instanceof Number n ? n.longValue() : 0L;
+    }
+
+    /** Decoded GenomicRunSidecar packet (transport-spec §4.24). */
+    static final class RunSidecar {
+        String layout = "";
+        String blockPolicy = "";
+        long readCount;
+        long baseCount;
+        Map<String, Object> attrs = Map.of();
+        List<Map<String, Object>> channels = List.of();
+        List<String> chromNames = List.of();
+        List<String> mateChromNames = List.of();
+    }
+
+    /** Decoded BlockSidecar packet (transport-spec §4.24). */
+    static final class BlockSidecar {
+        int blockIndex;
+        long readStart;
+        int nReads;
+        long baseStart;
+        long nBases;
+        Map<String, long[]> channels = new LinkedHashMap<>();
+        Map<String, byte[]> blobs = new LinkedHashMap<>();
+    }
+
+    private static String getLEString(ByteBuffer bb) {
+        int n = bb.getShort() & 0xFFFF;
+        byte[] d = new byte[n];
+        bb.get(d);
+        return new String(d, StandardCharsets.UTF_8);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static RunSidecar parseRunSidecar(byte[] payload)
+            throws IOException {
+        ByteBuffer bb = ByteBuffer.wrap(payload)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        RunSidecar sc = new RunSidecar();
+        sc.layout = getLEString(bb);
+        sc.blockPolicy = getLEString(bb);
+        sc.readCount = bb.getLong();
+        sc.baseCount = bb.getLong();
+        com.fasterxml.jackson.databind.ObjectMapper om =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+        int jl = bb.getInt();
+        byte[] jd = new byte[jl];
+        bb.get(jd);
+        sc.attrs = om.readValue(jd, Map.class);
+        jl = bb.getInt();
+        jd = new byte[jl];
+        bb.get(jd);
+        sc.channels = om.readValue(jd, List.class);
+        int n = bb.getInt();
+        List<String> chroms = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) chroms.add(getLEString(bb));
+        sc.chromNames = chroms;
+        n = bb.getInt();
+        List<String> mates = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) mates.add(getLEString(bb));
+        sc.mateChromNames = mates;
+        return sc;
+    }
+
+    private static BlockSidecar parseBlockSidecar(byte[] payload) {
+        ByteBuffer bb = ByteBuffer.wrap(payload)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        BlockSidecar bs = new BlockSidecar();
+        bs.blockIndex = bb.getInt();
+        bs.readStart = bb.getLong();
+        bs.nReads = bb.getInt();
+        bs.baseStart = bb.getLong();
+        bs.nBases = bb.getLong();
+        int nch = bb.get() & 0xFF;
+        for (int i = 0; i < nch; i++) {
+            String name = getLEString(bb);
+            long off = bb.getLong();
+            long len = bb.getLong();
+            int codec = bb.getInt();
+            bs.channels.put(name, new long[]{ off, len, codec });
+        }
+        int nb = bb.get() & 0xFF;
+        for (int i = 0; i < nb; i++) {
+            String name = getLEString(bb);
+            int bl = bb.getInt();
+            byte[] data = new byte[bl];
+            bb.get(data);
+            bs.blobs.put(name, data);
+        }
+        return bs;
     }
 
     /** emit one ENCRYPTED ACCESS_UNIT packet per read.
@@ -489,6 +735,24 @@ public final class EncryptedTransport {
                         h.instrumentJson, isGenomic);
                     datasets.put(h.datasetId, acc);
                 }
+                case GENOMIC_RUN_SIDECAR -> {
+                    DatasetAccumulator acc = datasets.get(rec.header.datasetId);
+                    if (acc == null) {
+                        throw new IllegalStateException(
+                            "GenomicRunSidecar for unknown dataset_id "
+                            + rec.header.datasetId);
+                    }
+                    acc.runSidecar = parseRunSidecar(rec.payload);
+                }
+                case BLOCK_SIDECAR -> {
+                    DatasetAccumulator acc = datasets.get(rec.header.datasetId);
+                    if (acc == null) {
+                        throw new IllegalStateException(
+                            "BlockSidecar for unknown dataset_id "
+                            + rec.header.datasetId);
+                    }
+                    acc.blockSidecars.add(parseBlockSidecar(rec.payload));
+                }
                 case ACCESS_UNIT -> {
                     DatasetAccumulator acc = datasets.get(rec.header.datasetId);
                     if (acc == null) {
@@ -502,6 +766,9 @@ public final class EncryptedTransport {
         }
 
         TreeSet<String> featureSet = new TreeSet<>(features);
+        // The blocks_v1 wire token is transport-scoped and never a
+        // container feature flag.
+        featureSet.remove(PacketType.TRANSPORT_BLOCKS_V1_FEATURE);
         featureSet.add(FeatureFlags.OPT_PER_AU_ENCRYPTION);
         boolean anyHeaderEnc = datasets.values().stream()
             .anyMatch(d -> d.usedEncryptedHeaders);
@@ -1088,19 +1355,20 @@ public final class EncryptedTransport {
                     else msDs.put(e.getKey(), e.getValue());
                 }
 
-                if (!msDs.isEmpty()) {
-                    try (StorageGroup msRuns = study.createGroup("ms_runs")) {
-                        StringBuilder names = new StringBuilder();
-                        boolean first = true;
-                        for (DatasetAccumulator acc : msDs.values()) {
-                            if (!first) names.append(',');
-                            names.append(acc.name);
-                            first = false;
-                        }
-                        msRuns.setAttribute("_run_names", names.toString());
-                        for (Map.Entry<Integer, DatasetAccumulator> e : msDs.entrySet()) {
-                            materialiseRun(msRuns, e.getValue(), protection.get(e.getKey()));
-                        }
+                // Always present, even with zero MS datasets: the
+                // Python and ObjC receivers write it, and per-AU
+                // decrypt walkers expect it.
+                try (StorageGroup msRuns = study.createGroup("ms_runs")) {
+                    StringBuilder names = new StringBuilder();
+                    boolean first = true;
+                    for (DatasetAccumulator acc : msDs.values()) {
+                        if (!first) names.append(',');
+                        names.append(acc.name);
+                        first = false;
+                    }
+                    msRuns.setAttribute("_run_names", names.toString());
+                    for (Map.Entry<Integer, DatasetAccumulator> e : msDs.entrySet()) {
+                        materialiseRun(msRuns, e.getValue(), protection.get(e.getKey()));
                     }
                 }
 
@@ -1115,7 +1383,14 @@ public final class EncryptedTransport {
                         }
                         gRuns.setAttribute("_run_names", gnames.toString());
                         for (Map.Entry<Integer, DatasetAccumulator> e : gDs.entrySet()) {
-                            materialiseGenomicRun(gRuns, e.getValue(), protection.get(e.getKey()));
+                            if (e.getValue().runSidecar != null) {
+                                materialiseBlocksV1GenomicRun(gRuns,
+                                    e.getValue(),
+                                    protection.get(e.getKey()));
+                            } else {
+                                materialiseGenomicRun(gRuns, e.getValue(),
+                                    protection.get(e.getKey()));
+                            }
                         }
                     }
                 }
@@ -1272,6 +1547,218 @@ public final class EncryptedTransport {
                 writePrimitiveArray(idx, "flags", Enums.Precision.UINT32, flagsArr);
                 writeChromosomesCompound(idx, acc.genomicChromosomes);
             }
+        }
+    }
+
+    /** Materialise one blocks_v1 per-AU-encrypted genomic run from
+     *  its sidecar packets and AU stream, in the shape the stream
+     *  writer creates it, so decrypt-in-place restores it
+     *  (transport-spec §4.24). */
+    private static void materialiseBlocksV1GenomicRun(StorageGroup gRuns,
+                                                       DatasetAccumulator acc,
+                                                       ProtectionMeta pm) {
+        RunSidecar sc = acc.runSidecar;
+        try (StorageGroup run = gRuns.createGroup(acc.name)) {
+            run.setAttribute("acquisition_mode", (long) acc.acquisitionMode);
+            run.setAttribute("modality",
+                extractJsonField(acc.instrumentJson, "modality"));
+            run.setAttribute("spectrum_class", 5L);
+            run.setAttribute("reference_uri",
+                extractJsonField(acc.instrumentJson, "reference_uri"));
+            run.setAttribute("platform",
+                extractJsonField(acc.instrumentJson, "platform"));
+            String rxRole = extractJsonField(acc.instrumentJson, "read_role");
+            if (!rxRole.isEmpty()) run.setAttribute("read_role", rxRole);
+            run.setAttribute("sample_name",
+                extractJsonField(acc.instrumentJson, "sample_name"));
+            run.setAttribute("read_count", sc.readCount);
+            run.setAttribute("base_count", sc.baseCount);
+            run.setAttribute("layout", sc.layout);
+            run.setAttribute("block_policy", sc.blockPolicy);
+            Object slice = sc.attrs.get("ref_diff_slice_bytes");
+            if (slice instanceof Number sn && sn.longValue() != 0) {
+                run.setAttribute("ref_diff_slice_bytes", sn.longValue());
+            }
+            Object noV5 = sc.attrs.get("opt_disable_qualities_v5");
+            if (noV5 instanceof Number vn && vn.longValue() != 0) {
+                run.setAttribute("opt_disable_qualities_v5", 1L);
+            }
+            Object md5s = sc.attrs.get("reference_md5s");
+            if (md5s instanceof String ms && !ms.isEmpty()) {
+                run.setAttribute("reference_md5s", ms);
+            }
+
+            List<BlockSidecar> sidecars = new ArrayList<>(acc.blockSidecars);
+            sidecars.sort(java.util.Comparator.comparingInt(
+                b -> b.blockIndex));
+            List<String> order = global.thalion.ttio.genomics
+                .GenomicBlocks.BLOCK_CHANNELS;
+            int codecBase = 4 + 2 * order.size();
+            try (StorageGroup blocks = run.createGroup("blocks");
+                 StorageDataset idxDs = blocks.createCompoundDataset(
+                     "index",
+                     global.thalion.ttio.genomics.GenomicStreamWriter
+                         .INDEX_FIELDS,
+                     0, true, 1024)) {
+                List<Object[]> rows = new ArrayList<>(sidecars.size());
+                for (BlockSidecar bs : sidecars) {
+                    Object[] row = new Object[4 + 3 * order.size()];
+                    row[0] = bs.readStart;
+                    row[1] = bs.nReads;
+                    row[2] = bs.baseStart;
+                    row[3] = bs.nBases;
+                    for (int ci = 0; ci < order.size(); ci++) {
+                        long[] triple = bs.channels.get(order.get(ci));
+                        row[4 + 2 * ci] = triple == null ? 0L : triple[0];
+                        row[4 + 2 * ci + 1] = triple == null
+                            ? 0L : triple[1];
+                        row[codecBase + ci] = triple == null
+                            ? 0 : (int) triple[2];
+                    }
+                    rows.add(row);
+                }
+                if (!rows.isEmpty()) idxDs.append(rows);
+            }
+
+            List<ChannelSegment> firstSegs = acc.channelNames.isEmpty()
+                ? List.of()
+                : acc.channelSegments.get(acc.channelNames.get(0));
+            int n = firstSegs.size();
+            Map<String, Integer> nameToId = new LinkedHashMap<>();
+            for (int i = 0; i < sc.chromNames.size(); i++) {
+                nameToId.put(sc.chromNames.get(i), i);
+            }
+            int[] lengthsArr = new int[n];
+            long[] positionsArr = new long[n];
+            byte[] mqArr = new byte[n];
+            int[] flagsArr = new int[n];
+            short[] cidArr = new short[n];
+            for (int i = 0; i < n; i++) {
+                lengthsArr[i] = firstSegs.get(i).length();
+                positionsArr[i] = acc.genomicPositions.get(i);
+                mqArr[i] = (byte) (acc.genomicMapqs.get(i) & 0xFF);
+                flagsArr[i] = (int) (acc.genomicFlags.get(i) & 0xFFFFFFFFL);
+                Integer slot = nameToId.get(acc.genomicChromosomes.get(i));
+                if (slot == null) {
+                    throw new IllegalStateException(
+                        "AU chromosome '" + acc.genomicChromosomes.get(i)
+                        + "' is not in the sidecar chromosome_names "
+                        + "table");
+                }
+                cidArr[i] = slot.shortValue();
+            }
+            try (StorageGroup idx = run.createGroup("genomic_index")) {
+                // Extendable, chunked and zlib-6 like the stream
+                // writer's genomic_index arrays (GenomicIndex chunk).
+                Object[][] arrays = {
+                    {"lengths", Enums.Precision.UINT32, lengthsArr},
+                    {"positions", Enums.Precision.INT64, positionsArr},
+                    {"mapping_qualities", Enums.Precision.UINT8, mqArr},
+                    {"flags", Enums.Precision.UINT32, flagsArr},
+                    {"chromosome_ids", Enums.Precision.UINT16, cidArr},
+                };
+                for (Object[] a : arrays) {
+                    try (StorageDataset ds = idx.createDataset(
+                            (String) a[0], (Enums.Precision) a[1], 0,
+                            65536, Enums.Compression.ZLIB, 6, true)) {
+                        ds.append(a[2]);
+                    }
+                }
+                writeNameTable(idx, "chromosome_names", sc.chromNames);
+            }
+
+            try (StorageGroup sig = run.createGroup("signal_channels")) {
+                for (String cname : acc.channelNames) {
+                    List<ChannelSegment> segs =
+                        acc.channelSegments.get(cname);
+                    if (segs == null) continue;
+                    PerAUFile.writeChannelSegments(sig,
+                        cname + "_segments", segs);
+                    sig.setAttribute(cname + "_algorithm",
+                        pm != null && pm.cipherSuite != null
+                            ? pm.cipherSuite : "aes-256-gcm");
+                    if (pm != null && pm.wrappedDek != null
+                            && pm.wrappedDek.length > 0) {
+                        setWrappedDekAttr(sig, cname + "_wrapped_dek",
+                                          pm.wrappedDek);
+                        sig.setAttribute(cname + "_kek_algorithm",
+                            pm.kekAlgorithm == null ? "" : pm.kekAlgorithm);
+                        setWrappedDekAttr(sig,
+                            cname + "_wrapped_dek_recipients",
+                            encodeRecipientBlock(pm.additionalRecipients));
+                        if (pm.serverKekId != null
+                                && !pm.serverKekId.isEmpty()) {
+                            sig.setAttribute(cname + "_server_kek_id",
+                                             pm.serverKekId);
+                        }
+                    }
+                }
+
+                StorageGroup mateGroup = null;
+                try {
+                    for (Map<String, Object> centry : sc.channels) {
+                        String ch = (String) centry.get("name");
+                        StorageGroup parent;
+                        String dsName;
+                        if ("mate_info".equals(ch)) {
+                            mateGroup = sig.createGroup("mate_info");
+                            parent = mateGroup;
+                            dsName = "inline_v2";
+                        } else {
+                            parent = sig;
+                            dsName = ch;
+                        }
+                        long codec = centry.get("compression")
+                                instanceof Number cn ? cn.longValue() : 0L;
+                        try (StorageDataset ds = parent.createDataset(
+                                dsName, Enums.Precision.UINT8, 0,
+                                global.thalion.ttio.genomics
+                                    .GenomicStreamWriter.CHANNEL_CHUNK,
+                                codec == 0 ? Enums.Compression.ZLIB
+                                           : Enums.Compression.NONE,
+                                6, true)) {
+                            ds.setAttribute("compression", (int) codec);
+                            Object extra = centry.get("extra_attrs");
+                            if (extra instanceof Map<?, ?> em) {
+                                for (Map.Entry<?, ?> e : em.entrySet()) {
+                                    ds.setAttribute((String) e.getKey(),
+                                                    e.getValue());
+                                }
+                            }
+                            for (BlockSidecar bs : sidecars) {
+                                byte[] data = bs.blobs.get(ch);
+                                if (data != null && data.length > 0) {
+                                    ds.append(data);
+                                }
+                            }
+                        }
+                    }
+                    // The stream writer creates mate_info and its
+                    // chrom_names table at close even when no mate
+                    // blob was written; mirror that.
+                    if (!sc.mateChromNames.isEmpty()) {
+                        if (mateGroup == null) {
+                            mateGroup = sig.createGroup("mate_info");
+                        }
+                        writeNameTable(mateGroup, "chrom_names",
+                                       sc.mateChromNames);
+                    }
+                } finally {
+                    if (mateGroup != null) mateGroup.close();
+                }
+            }
+        }
+    }
+
+    private static void writeNameTable(StorageGroup parent, String name,
+                                       List<String> names) {
+        List<CompoundField> fields = List.of(new CompoundField(
+            "name", CompoundField.Kind.VL_STRING));
+        List<Object[]> rows = new ArrayList<>(names.size());
+        for (String s : names) rows.add(new Object[]{ s });
+        try (StorageDataset ds = parent.createCompoundDataset(
+                name, fields, rows.size())) {
+            ds.writeAll(rows);
         }
     }
 
@@ -1486,6 +1973,10 @@ public final class EncryptedTransport {
         List<Long> genomicPositions = new ArrayList<>();
         List<Integer> genomicMapqs = new ArrayList<>();
         List<Long> genomicFlags = new ArrayList<>();
+        // M99.1 blocks_v1 sidecars; runSidecar stays null for
+        // legacy-shaped genomic runs.
+        RunSidecar runSidecar;
+        List<BlockSidecar> blockSidecars = new ArrayList<>();
 
         DatasetAccumulator(String name, int acqMode, String spectrumClass,
                              List<String> channelNames) {
